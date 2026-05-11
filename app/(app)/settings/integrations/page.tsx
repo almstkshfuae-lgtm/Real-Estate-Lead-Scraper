@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+
 import { useState, useEffect } from "react";
 import { Link2, MessageCircle, Mail, Key, ShieldCheck, Database, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -29,7 +31,10 @@ export default function IntegrationsSettingsPage() {
 
   useEffect(() => {
     fetch("/api/settings/integrations")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (data.integrations) {
           setIntegrations(data.integrations);

@@ -72,10 +72,10 @@ export default function SearchPage() {
                       <ChevronRight className="w-4 h-4 text-[var(--color-text-disabled)] group-hover:text-[var(--color-primary)] transition-colors rtl-mirror" />
                     </div>
                     <p className="text-xs font-bold text-[var(--color-text-primary)] line-clamp-1">
-                      {search.criteria.propertyTypes.join(", ") || "All Types"}
+                      {(Array.isArray(search.criteria?.propertyTypes) ? search.criteria.propertyTypes : []).join(", ") || "All Types"}
                     </p>
                     <p className="text-[10px] text-[var(--color-text-secondary)] mt-1">
-                      {search.criteria.emirates.join(", ") || "All Emirates"}
+                      {(Array.isArray(search.criteria?.emirates) ? search.criteria.emirates : []).join(", ") || "All Emirates"}
                     </p>
                   </button>
                 ))

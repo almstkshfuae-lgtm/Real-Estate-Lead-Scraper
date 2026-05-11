@@ -64,8 +64,8 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lead, lang, style: pitchStyle }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
       setPitch(data.pitch);
     } catch (err: any) {
       toast.error(t("ai.pitchError", "Failed to generate pitch"));
@@ -82,8 +82,8 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leadId: lead.id }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
       setScoreResult(data);
       toast.success(t("ai.scoreRefined", "Score refined by AI"));
     } catch (err: any) {
@@ -101,8 +101,8 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lead, lang }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
       setSignals(data);
       toast.success(t("ai.signalsExtracted", "Signals extracted"));
     } catch (err: any) {

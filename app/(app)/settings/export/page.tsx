@@ -13,7 +13,10 @@ export default function ExportHistoryPage() {
 
   useEffect(() => {
     fetch("/api/export/history")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (data.history) {
           setHistory(data.history);

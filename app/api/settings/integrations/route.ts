@@ -38,9 +38,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ integrations }, { status: 200 });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Fetch integrations error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error", detail: error?.message || String(error), stack: error?.stack }, { status: 500 });
   }
 }
 
