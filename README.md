@@ -1,4 +1,4 @@
-# Real Estate Lead Scraper
+# Brilliance - Real Estate Lead Scraper
 ### Find the right buyer, faster — اعثر على المشتري المناسب بشكل أسرع
 
 A full-stack real estate lead intelligence platform for UAE agents. Scrapes, scores, qualifies, and pushes buyer leads from 11+ premium sources into Bitrix24 CRM with AI-powered pitch generation, WhatsApp Business outreach, and bilingual EN/AR support.
