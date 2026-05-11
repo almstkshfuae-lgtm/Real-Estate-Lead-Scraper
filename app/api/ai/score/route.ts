@@ -1,0 +1,97 @@
+import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
+import prisma from "@/lib/prisma";
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { leadId } = body;
+
+    if (!leadId) {
+      return NextResponse.json({ error: "leadId is required" }, { status: 400 });
+    }
+
+    const lead = await prisma.lead.findUnique({ where: { id: String(leadId) } });
+    if (!lead) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+
+    const signals = Array.isArray(lead.signals)
+      ? lead.signals.join(", ")
+      : JSON.stringify(lead.signals);
+
+    const prompt = `You are a UAE real estate lead scoring AI. Analyze the following lead and output a refined score from 0-100 and brief justification.
+
+Lead Profile:
+- Name: ${lead.name}
+- Company: ${lead.company}
+- Role: ${lead.role}
+- Current Score: ${lead.score}
+- Tier: T${lead.tier}
+- Status: ${lead.status}
+- Budget Min: ${lead.budgetMin ? `AED ${lead.budgetMin.toLocaleString()}` : "N/A"}
+- Budget Max: ${lead.budgetMax ? `AED ${lead.budgetMax.toLocaleString()}` : "N/A"}
+- Location: ${lead.location || "N/A"}
+- Signals: ${signals}
+- Notes: ${lead.notes || "None"}
+
+Scoring criteria:
+- Budget size (AED 2M+ = high value) → up to 30 pts
+- Role seniority (C-suite, Owner, Director) → up to 25 pts
+- Investment signals (UHNW, Investor) → up to 25 pts
+- Location desirability (Palm, Downtown, Marina) → up to 10 pts
+- Status momentum (qualified > contacted > new) → up to 10 pts
+
+Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "reasoning": "<1-2 sentence justification>", "recommendations": ["<action 1>", "<action 2>"]}`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 256,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const responseText =
+      message.content[0].type === "text" ? message.content[0].text.trim() : "{}";
+
+    let parsed: {
+      refinedScore: number;
+      delta: number;
+      reasoning: string;
+      recommendations: string[];
+    };
+
+    try {
+      // Extract JSON even if wrapped in markdown code blocks
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(responseText);
+    } catch {
+      return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
+    }
+
+    // Apply the refined score to the database
+    const newScore = Math.max(0, Math.min(100, Math.round(parsed.refinedScore)));
+    await prisma.lead.update({
+      where: { id: String(leadId) },
+      data: { score: newScore },
+    });
+
+    return NextResponse.json({
+      leadId: String(leadId),
+      previousScore: lead.score,
+      refinedScore: newScore,
+      delta: newScore - lead.score,
+      reasoning: parsed.reasoning,
+      recommendations: parsed.recommendations || [],
+    });
+  } catch (error: any) {
+    console.error("[AI Score Error]", error?.message || error);
+    return NextResponse.json(
+      { error: "Failed to refine score", detail: error?.message },
+      { status: 500 }
+    );
+  }
+}

@@ -11,17 +11,27 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    
+    const pageParam = searchParams.get("page");
+    const limitParam = searchParams.get("limit");
+    
+    const parsedPage = pageParam ? parseInt(pageParam) : 1;
+    const parsedLimit = limitParam ? parseInt(limitParam) : 50;
+    
+    const page = isNaN(parsedPage) ? 1 : Math.max(1, parsedPage);
+    const limit = isNaN(parsedLimit) ? 50 : Math.min(100, Math.max(1, parsedLimit));
+    
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
+    const tier = searchParams.get("tier") || "";
 
     const skip = (page - 1) * limit;
 
     const where: any = {};
     
     // Agents can only see their own leads, Admins see all
-    if (session.role !== 'ADMIN') {
+    // Use case-insensitive comparison for role
+    if (session.role?.toUpperCase() !== 'ADMIN') {
       where.agentId = session.id;
     }
 
@@ -34,6 +44,13 @@ export async function GET(request: Request) {
 
     if (status) {
       where.status = status;
+    }
+    
+    if (tier) {
+      const parsedTier = parseInt(tier);
+      if (!isNaN(parsedTier)) {
+        where.tier = parsedTier;
+      }
     }
 
     const [leads, total] = await Promise.all([
@@ -52,8 +69,11 @@ export async function GET(request: Request) {
       page,
       totalPages: Math.ceil(total / limit),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Leads fetch error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ 
+      error: "Internal Server Error", 
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined 
+    }, { status: 500 });
   }
 }

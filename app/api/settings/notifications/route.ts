@@ -1,0 +1,54 @@
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
+
+export async function GET(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { preferences: true }
+    });
+
+    const defaultPrefs = {
+      emailAlerts: true,
+      pushNotifications: false,
+      newLeadAlerts: true,
+      scrapeCompletion: true,
+      weeklyDigest: false,
+      whatsappAlerts: false
+    };
+
+    return NextResponse.json({ preferences: user?.preferences || defaultPrefs }, { status: 200 });
+
+  } catch (error) {
+    console.error("Fetch preferences error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { preferences } = await request.json();
+
+    await prisma.user.update({
+      where: { id: session.id },
+      data: { preferences }
+    });
+
+    return NextResponse.json({ success: true }, { status: 200 });
+
+  } catch (error) {
+    console.error("Update preferences error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}

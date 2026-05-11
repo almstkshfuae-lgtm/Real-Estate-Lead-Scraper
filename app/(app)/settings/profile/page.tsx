@@ -43,9 +43,9 @@ export default function ProfileSettingsPage() {
 
         <div className="space-y-4">
           {[
-            { icon: Shield, label: 'Security & Auth' },
-            { icon: Bell, label: 'Notifications' },
-            { icon: Settings, label: 'Preferences' }
+            { icon: Shield, label: t('settings.profile.security', 'Security & Auth') },
+            { icon: Bell, label: t('settings.profile.notifications', 'Notifications') },
+            { icon: Settings, label: t('settings.profile.preferences', 'Preferences') }
           ].map((item, idx) => (
             <div key={idx} className="p-4 bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl flex items-center gap-3 opacity-50 cursor-not-allowed">
               <item.icon className="w-5 h-5 text-[var(--color-text-secondary)]" />

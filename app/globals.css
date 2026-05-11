@@ -12,6 +12,7 @@
   }
 
   [dir="rtl"] {
+    @apply font-cairo;
     line-height: 1.8;
   }
 }

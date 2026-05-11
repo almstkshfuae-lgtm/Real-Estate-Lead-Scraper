@@ -4,9 +4,15 @@
     "leads": "Lead Pipeline",
     "map": "Map View",
     "search": "Intelligence Scrape",
+    "aiChat": "AI Assistant",
     "campaigns": "Campaign Manager",
     "settings": "Settings",
-    "logout": "Logout"
+    "scraperSettings": "Scraper Settings",
+    "exportHistory": "Export History",
+    "notifications": "Notifications",
+    "integrations": "Integrations",
+    "logout": "Logout",
+    "new": "NEW"
   },
   "leads": {
     "title": "Lead Intelligence",
@@ -26,14 +32,18 @@
       "pagination": "Showing {{count}} of {{total}} leads"
     },
     "tiers": {
+      "all": "All Tiers",
       "t1": "T1 — Elite",
       "t2": "T2 — Premium",
       "t3": "T3 — Standard"
     },
     "status": {
+      "all": "All Statuses",
       "new": "New",
       "contacted": "Contacted",
-      "qualified": "Qualified"
+      "qualified": "Qualified",
+      "proposal": "Proposal",
+      "closed": "Closed"
     },
     "signals": {
       "uhnw": "UHNW",
@@ -41,6 +51,10 @@
       "businessowner": "Business Owner",
       "privateclient": "Private Client",
       "highnetworth": "High Net Worth"
+    },
+    "pipeline": {
+      "empty": "No leads",
+      "roleAt": "{{role}} at {{company}}"
     },
     "sidebar": {
       "tabs": {
@@ -54,6 +68,7 @@
       "role": "Current Role",
       "signals": "Intelligence Signals",
       "recentActivity": "Recent Activity",
+      "recentActivityText": "Recently mentioned in Bloomberg MENA regarding new investment activity. Potential high-liquidity event linked to {{company}}.",
       "aiPitch": {
         "title": "AI-Powered Pitch",
         "subtitle": "Generate a personalized property pitch for {{name}} based on their UHNW status and recent investment signals.",
@@ -63,7 +78,8 @@
       },
       "notes": {
         "placeholder": "Add private notes about this lead...",
-        "save": "Save Notes"
+        "save": "Save Notes",
+        "saved": "Notes saved successfully"
       },
       "actions": {
         "bitrix": "Push to Bitrix24"
@@ -75,7 +91,12 @@
     "email": "Email Address",
     "password": "Password",
     "signIn": "Sign In",
-    "welcome": "Welcome back, Agent"
+    "welcome": "Welcome back, Agent",
+    "desc": "Sign in to your account to continue",
+    "loginDesc": "AI-powered real estate lead intelligence platform for UAE agents.",
+    "forgot": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "contactAdmin": "Contact Administrator"
   },
   "search": {
     "title": "Configure Intelligence Scrape",
@@ -89,6 +110,10 @@
     "startScrape": "Start Intelligence Scrape",
     "saveCriteria": "Save Criteria",
     "recent": "Recent Searches",
+    "refreshHistory": "Refresh History",
+    "noRecent": "No recent searches yet.",
+    "proTip": "Pro Tip",
+    "proTipDesc": "Targeting \"Recently Relocated\" buyers often results in a 3x higher conversion rate for luxury villas.",
     "types": {
       "apartment": "Apartment",
       "villa": "Villa",
@@ -102,30 +127,47 @@
     "estLeads": "Estimated Leads",
     "scrapeDepth": "Scrape Depth",
     "deepDepth": "Deep (11+ sources)",
-    "disclaimer": "* Scoring will be automatically adjusted based on Tier 1 source priority and your signals filter."
+    "disclaimer": "* Scoring will be automatically adjusted based on Tier 1 source priority and your signals filter.",
+    "savedSuccess": "Search criteria saved!",
+    "saveError": "Failed to save search criteria.",
+    "scrapeInitializing": "Initializing scrape job...",
+    "scrapeStarted": "Scrape job started! Leads will appear shortly.",
+    "scrapeOffline": "Scraper service offline. Job queued — it will run when the service comes back online.",
+    "scrapeError": "Failed to start scrape job."
   },
   "map": {
     "title": "Geo-Intelligence Map",
     "subtitle": "Visualize lead clusters and demand signals across the UAE.",
-    "comingSoon": "Map View is under development",
-    "description": "We are currently integrating Mapbox to provide high-precision lead clustering, heatmaps, and geo-fencing for your target scrapes.",
-    "feature1": "Lead Clustering",
-    "feature2": "Heatmaps",
-    "feature3": "Demand Signals",
-    "phase": "Phase 5: Geo-Intelligence",
-    "upcoming": {
-      "clusters": {
-        "title": "Regional Clustering",
-        "desc": "Identify high-value buyer clusters in specific communities like Palm Jumeirah, Downtown Dubai, and Yas Island."
-      },
-      "heatmap": {
-        "title": "Demand Heatmaps",
-        "desc": "Visualize where investors are currently searching for properties based on real-time scraper signals."
-      },
-      "geofence": {
-        "title": "Geo-Fenced Scrapes",
-        "desc": "Trigger intelligence scrapes for specific geographical areas to find local business owners and residents."
-      }
+    "layer": {
+      "markers": "Lead Clusters",
+      "markersDesc": "See all leads plotted by location",
+      "heatmap": "Demand Heatmap",
+      "heatmapDesc": "Visualize demand intensity across UAE"
+    },
+    "filter": {
+      "minScore": "Min Score"
+    },
+    "stats": {
+      "totalLeads": "Total Leads",
+      "avgScore": "Avg. Score",
+      "eliteLeads": "Elite (T1)",
+      "geofenced": "In Zone",
+      "hotZones": "Hot Zones"
+    },
+    "legend": {
+      "title": "Legend",
+      "score90": "Score ≥ 90",
+      "score75": "Score 75–89",
+      "scoreLow": "Score < 75"
+    },
+    "loading": "Loading leads...",
+    "drawing": "Drawing Zone...",
+    "drawZone": "Draw Zone",
+    "geofenceHint": "Click and drag on the map to draw a geo-fence zone. Release to see leads within the zone.",
+    "geofenceResult": "{{count}} leads found in your geo-fence zone.",
+    "clearZone": "Clear Zone",
+    "zone": {
+      "leads": "Zone Leads"
     }
   },
   "campaigns": {
@@ -143,13 +185,143 @@
       "title": "User Profile",
       "subtitle": "Manage your account settings and preferences.",
       "placeholder": "Settings Interface",
-      "comingSoon": "Profile and account management will be active in the next update."
+      "comingSoon": "Profile and account management will be active in the next update.",
+      "security": "Security & Auth",
+      "notifications": "Notifications",
+      "preferences": "Preferences"
+    },
+    "scraper": {
+      "title": "Scraper Settings",
+      "subtitle": "Manage property portal integrations and view run history.",
+      "triggerBtn": "Run Scraper Now",
+      "triggering": "Triggering...",
+      "recent": "Recent Scrape Runs",
+      "empty": "No scrape runs recorded yet.",
+      "table": {
+        "date": "Date",
+        "status": "Status",
+        "sources": "Sources",
+        "leadsFound": "Leads Found",
+        "duration": "Duration"
+      }
+    },
+    "exportHistory": {
+      "title": "Export History",
+      "subtitle": "View and download previously exported lead data."
+    },
+    "notifications": {
+      "title": "Notification Preferences",
+      "subtitle": "Control how and when you receive alerts from Brilliance.",
+      "saved": "Notification preferences saved successfully.",
+      "channels": "Delivery Channels",
+      "email": "Email Notifications",
+      "emailDesc": "Receive daily summaries and critical alerts via email.",
+      "push": "Push Notifications",
+      "pushDesc": "Real-time browser notifications for urgent events.",
+      "whatsapp": "WhatsApp Alerts",
+      "whatsappDesc": "Get notified of elite leads instantly on WhatsApp.",
+      "events": "Event Triggers",
+      "newLeads": "New Elite Leads",
+      "newLeadsDesc": "Alert me when new Tier 1 leads are discovered.",
+      "scrape": "Scrape Completion",
+      "scrapeDesc": "Notify me when an intelligence scrape job finishes.",
+      "digest": "Weekly Digest",
+      "digestDesc": "A weekly performance report of your lead pipeline."
+    },
+    "integrations": {
+      "title": "Integrations",
+      "subtitle": "Connect Brilliance to your CRM and outreach channels.",
+      "saved": "Integrations updated successfully.",
+      "bitrixDesc": "Push leads to Bitrix24 as Contacts or Deals.",
+      "bitrixDomain": "Bitrix24 Domain",
+      "apiToken": "API Token / Webhook ID",
+      "pushMode": "Push Mode",
+      "contactsOnly": "Contacts Only (Recommended)",
+      "contactsDeals": "Contacts + Deals",
+      "off": "Off",
+      "whatsappDesc": "Send templated messages directly to leads.",
+      "phoneId": "Phone Number ID",
+      "whatsappToken": "Access Token",
+      "smtpDesc": "Configure outgoing email for campaigns and alerts.",
+      "smtpHost": "SMTP Host",
+      "smtpUser": "SMTP Username",
+      "smtpPass": "SMTP Password",
+      "testConnection": "Test Connection",
+      "testSuccess": {
+        "bitrix": "Successfully connected to BITRIX24",
+        "whatsapp": "Successfully connected to WHATSAPP",
+        "smtp": "Successfully connected to SMTP"
+      },
+      "connected": "Connected"
     }
+  },
+  "exportHistory": {
+    "date": "Date",
+    "format": "Format",
+    "records": "Records",
+    "filters": "Filters Applied",
+    "action": "Action",
+    "empty": "No export history found.",
+    "noFilters": "None"
   },
   "common": {
     "maintenance": "Under Maintenance",
     "notAvailable": "N/A",
     "viewList": "List View",
-    "viewKanban": "Kanban View"
+    "viewKanban": "Kanban View",
+    "move": "Move to {{status}}",
+    "statusUpdated": "{{name}} moved successfully",
+    "bulkStatusUpdated": "Successfully updated {{count}} leads",
+    "bulkPushed": "Successfully pushed {{count}} leads to Bitrix24",
+    "leadsSelected": "{{count}} leads selected",
+    "markContacted": "Mark Contacted",
+    "pushBitrix": "Push to Bitrix24",
+    "delete": "Delete selected",
+    "previous": "Previous",
+    "next": "Next",
+    "roleAt": "{{role}} at {{company}}",
+    "saving": "Saving...",
+    "saveChanges": "Save Changes"
+  },
+  "ai": {
+    "pitchTitle": "AI Pitch Generator",
+    "pitchSubtitle": "Claude generates a personalized pitch for this lead",
+    "generatePitch": "Generate AI Pitch",
+    "generating": "Generating...",
+    "pitchError": "Failed to generate pitch",
+    "style": {
+      "professional": "Professional",
+      "formal": "Formal",
+      "casual": "Casual"
+    },
+    "refineScore": "AI Score Refinement",
+    "refineScoreDesc": "Claude re-evaluates lead quality",
+    "analyzeBtn": "Analyze",
+    "scoreDelta": "from original",
+    "scoreRefined": "Score refined by AI",
+    "scoreError": "Failed to refine score",
+    "signals": "Signal Extraction",
+    "signalsDesc": "Extract investment signals from news",
+    "scanBtn": "Scan",
+    "signalsExtracted": "Signals extracted",
+    "signalsError": "Failed to extract signals",
+    "confidence": "Confidence",
+    "chatError": "Chat failed, please try again",
+    "chat": {
+      "title": "Brilliance AI Assistant",
+      "subtitle": "UAE Real Estate Intelligence · Powered by Claude",
+      "welcome": "How can I help you today?",
+      "welcomeDesc": "Ask me anything about UAE real estate, leads, or market insights.",
+      "placeholder": "Ask about leads, UAE market, or strategies...",
+      "clear": "Clear chat",
+      "footer": "Powered by Claude · Press Enter to send · Shift+Enter for new line"
+    },
+    "page": {
+      "title": "AI Intelligence Hub",
+      "subtitle": "Multi-language AI assistant for UAE real estate agents · Powered by Claude",
+      "stat1": "Real-time Streaming",
+      "stat2": "Lead Intelligence",
+      "stat3": "EN / AR Bilingual"
+    }
   }
 }

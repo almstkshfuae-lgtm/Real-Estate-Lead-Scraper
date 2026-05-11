@@ -81,7 +81,7 @@ export default function SearchPage() {
                 ))
               ) : (
                 <div className="py-8 text-center">
-                  <p className="text-xs text-[var(--color-text-disabled)] italic">No recent searches yet.</p>
+                  <p className="text-xs text-[var(--color-text-disabled)] italic">{t('search.noRecent')}</p>
                 </div>
               )}
             </div>
@@ -91,15 +91,15 @@ export default function SearchPage() {
                 onClick={fetchRecent}
                 className="w-full mt-6 py-3 text-xs font-bold text-[var(--color-primary)] hover:underline"
               >
-                Refresh History
+                {t('search.refreshHistory')}
               </button>
             )}
           </div>
 
           <div className="p-6 rounded-3xl bg-blue-600 text-white shadow-xl shadow-blue-500/10">
-            <h4 className="font-bold mb-2">Pro Tip</h4>
+            <h4 className="font-bold mb-2">{t('search.proTip')}</h4>
             <p className="text-xs text-blue-100 leading-relaxed">
-              Targeting "Recently Relocated" buyers often results in a 3x higher conversion rate for luxury villas.
+              {t('search.proTipDesc')}
             </p>
           </div>
         </div>

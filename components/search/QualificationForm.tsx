@@ -14,8 +14,12 @@ import {
   Trash2
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+
+import { useRouter } from "next/navigation";
 
 export default function QualificationForm({ initialData }: { initialData?: any }) {
+  const router = useRouter();
   const { t } = useTranslation('common');
   const [propertyTypes, setPropertyTypes] = useState<string[]>(initialData?.propertyTypes || []);
   const [budgetMin, setBudgetMin] = useState<number>(initialData?.budgetMin || 1000000);
@@ -73,18 +77,44 @@ export default function QualificationForm({ initialData }: { initialData?: any }
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
         
-        if (isScrape) {
-          const scrapeRes = await fetch("/api/scrape", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ criteria }),
-          });
-          const scrapeData = await scrapeRes.json();
-          alert(scrapeData.message || "Scrape initialized!");
+        if (!isScrape) {
+          toast.success(t('search.savedSuccess', 'Search criteria saved!'));
+          return;
         }
+
+        const toastId = toast.loading(t('search.scrapeInitializing', 'Initializing scrape job...'));
+        
+        const scrapeRes = await fetch("/api/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ criteria }),
+        });
+        const scrapeData = await scrapeRes.json();
+
+        if (scrapeData.warning) {
+          // Scraper service is offline — job queued
+          toast.warning(
+            t('search.scrapeOffline', 'Scraper service offline. Job queued — it will run when the service comes back online.'),
+            { id: toastId, duration: 6000 }
+          );
+        } else if (scrapeRes.ok) {
+          toast.success(
+            t('search.scrapeStarted', 'Scrape job started! Leads will appear shortly.'),
+            { id: toastId, duration: 5000 }
+          );
+          setTimeout(() => router.push('/leads'), 1500);
+        } else {
+          toast.error(
+            scrapeData.error || t('search.scrapeError', 'Failed to start scrape job.'),
+            { id: toastId }
+          );
+        }
+      } else {
+        toast.error(t('search.saveError', 'Failed to save search criteria.'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Save error:", error);
+      toast.error(error?.message || t('search.saveError', 'An unexpected error occurred.'));
     } finally {
       setLoading(false);
     }
@@ -132,7 +162,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
                     className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
                       propertyTypes.includes(type.id)
                         ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-md"
-                        : "bg-white text-[var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-text-disabled)]"
+                        : "bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border-[var(--color-border)] hover:border-[var(--color-text-disabled)]"
                     }`}
                   >
                     {type.label}
@@ -182,8 +212,8 @@ export default function QualificationForm({ initialData }: { initialData?: any }
                     onClick={() => toggleEmirate(emirate)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                       emirates.includes(emirate)
-                        ? "bg-blue-50 text-[var(--color-primary)] border-[var(--color-primary)]"
-                        : "bg-white text-[var(--color-text-secondary)] border-[var(--color-border)]"
+                        ? "bg-blue-50 text-[var(--color-primary)] border-[var(--color-primary)] dark:bg-blue-900/30 dark:border-blue-700"
+                        : "bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border-[var(--color-border)]"
                     }`}
                   >
                     {emirate}
@@ -206,11 +236,11 @@ export default function QualificationForm({ initialData }: { initialData?: any }
                 <button 
                   onClick={() => setRelocated(!relocated)}
                   className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                    relocated ? "bg-green-50 border-green-200" : "bg-white border-[var(--color-border)]"
+                    relocated ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800" : "bg-[var(--color-bg-card)] border-[var(--color-border)]"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${relocated ? 'bg-green-200 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${relocated ? 'bg-green-200 text-green-700 dark:bg-green-800 dark:text-green-300' : 'bg-gray-100 text-gray-400 dark:bg-gray-800'}`}>
                       <Info className="w-4 h-4" />
                     </div>
                     <div className="text-start">
@@ -226,11 +256,11 @@ export default function QualificationForm({ initialData }: { initialData?: any }
                 <button 
                   onClick={() => setExcludeRental(!excludeRental)}
                   className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                    excludeRental ? "bg-blue-50 border-blue-200" : "bg-white border-[var(--color-border)]"
+                    excludeRental ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800" : "bg-[var(--color-bg-card)] border-[var(--color-border)]"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${excludeRental ? 'bg-blue-200 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${excludeRental ? 'bg-blue-200 text-blue-700 dark:bg-blue-800 dark:text-blue-300' : 'bg-gray-100 text-gray-400 dark:bg-gray-800'}`}>
                       <Trash2 className="w-4 h-4" />
                     </div>
                     <div className="text-start">
@@ -278,12 +308,12 @@ export default function QualificationForm({ initialData }: { initialData?: any }
             ) : (
               <Play className="w-5 h-5 fill-current" />
             )}
-            {loading ? "Initializing..." : t('search.startScrape')}
+            {loading ? t('search.scrapeInitializing') : t('search.startScrape')}
           </button>
           <button 
             disabled={loading}
             onClick={() => handleSave(false)}
-            className={`px-6 py-4 bg-white border border-[var(--color-border)] font-bold rounded-2xl hover:bg-[var(--color-bg-surface)] transition-all flex items-center justify-center ${saveSuccess ? 'text-green-500 border-green-200 bg-green-50' : 'text-[var(--color-text-secondary)]'}`}
+            className={`px-6 py-4 border border-[var(--color-border)] font-bold rounded-2xl transition-all flex items-center justify-center ${saveSuccess ? 'text-green-500 border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800' : 'bg-[var(--color-bg-card)] hover:bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]'}`}
           >
             {saveSuccess ? <CheckCircle2 className="w-5 h-5" /> : <Save className="w-5 h-5" />}
           </button>

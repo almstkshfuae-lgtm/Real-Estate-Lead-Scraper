@@ -73,10 +73,10 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 
         <button
           className="p-2 rounded-full hover:bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] relative transition-colors"
-          title={isRtl ? "التنبيهات" : "Notifications"}
+          title={t('nav.notifications')}
         >
           <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-[var(--color-danger)] rounded-full border-2 border-[var(--color-bg-card)]"></span>
+          <span className="absolute top-2 inset-inline-end-2 w-2 h-2 bg-[var(--color-danger)] rounded-full border-2 border-[var(--color-bg-card)]"></span>
         </button>
 
         <div className="h-8 w-px bg-[var(--color-border)] mx-2"></div>

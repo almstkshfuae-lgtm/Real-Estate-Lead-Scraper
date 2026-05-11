@@ -302,3 +302,78 @@ No bounce, no spring, no complex sequences — this is a productivity tool.
 | Lazy-load heavy views (map, campaign) | Import everything upfront |
 | Keep sidebar content scrollable | Let it overflow |
 | Animate only transform and opacity | Animate layout properties (width, height) |
+
+---
+
+## 14. Phase 5 — Geo-Intelligence Map (Implemented)
+
+### Technology
+- **Library**: Leaflet.js (`react-leaflet` not used — raw Leaflet with dynamic import for SSR safety)
+- **Tile Provider**: CARTO Dark Matter (`basemaps.cartocdn.com/dark_all`) — no API key required
+- **Dynamic import**: `dynamic(() => import('@/components/map/GeoMap'), { ssr: false })` — required for Next.js
+
+### Map Components
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `GeoMap` | `components/map/GeoMap.tsx` | Core map, markers, heatmap, geofence drawing |
+| `MapStats` | `components/map/MapStats.tsx` | Stats sidebar: totals, hot zones bar chart |
+| `MapLeadPanel` | `components/map/MapLeadPanel.tsx` | Floating lead detail card on marker click |
+| Map page | `app/(app)/map/page.tsx` | Full page: filters, layer switcher, geofence controls |
+
+### UAE Coordinate Database
+25 UAE communities with exact lat/lng defined in `GeoMap.tsx`. Leads matched by `location` string contains-check against community names. Unmatched leads get random UAE coordinates.
+
+### Marker Color Convention
+- Marker circle fill → **Tier color** (T1=#3C3489, T2=#085041, T3=#444441)
+- Score number → **Score color** (≥90=#1D9E75, 75–89=#BA7517, <75=#A32D2D)
+- Cluster badge → top tier of cluster leads
+
+### Heatmap Layer
+Uses filled `L.circle` with radius proportional to `(score/100) × tierWeight` and fill opacity proportional to intensity. Color: high=red, medium=amber, low=blue.
+
+### Geofence Drawing
+Mouse events (`mousedown`, `mousemove`, `mouseup`) on Leaflet map draw `L.rectangle`. On mouseup, bounding box coordinates filter leads whose area coordinates fall inside.
+
+### RTL Notes
+- Floating lead panel uses `inset-inline-start` (logical CSS) — auto mirrors in RTL
+- Zoom control position: `topright` in AR, `topleft` in EN
+- Layer badge uses `inset-inline-end` for correct RTL placement
+
+---
+
+## 15. Phase 6 — AI Intelligence Layer (Implemented)
+
+### Technology
+- **AI Model**: Anthropic Claude (`claude-sonnet-4-5` for pitch, `claude-haiku-4-5` for scoring/signals)
+- **SDK**: `@anthropic-ai/sdk` (official Anthropic Node SDK)
+- **Streaming**: Server-Sent Events (SSE) via `ReadableStream` in Next.js Route Handlers
+
+### AI API Routes
+| Route | Model | Purpose |
+|-------|-------|---------|
+| `POST /api/ai/pitch` | claude-sonnet-4-5 | Personalized lead pitch (EN/AR, 3 tone styles) |
+| `POST /api/ai/chat` | claude-sonnet-4-5 | Streaming bilingual agent chat |
+| `POST /api/ai/score` | claude-haiku-4-5 | Lead score refinement (0–100, auto-saved to DB) |
+| `POST /api/ai/signals` | claude-haiku-4-5 | Investment signal extraction from news |
+
+### Components
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `AIChatPanel` | `components/chat/AIChatPanel.tsx` | Full streaming chat UI; suggested prompts; SSR-safe |
+| Enhanced `LeadSidebar` | `components/leads/LeadSidebar.tsx` | AI tab: Pitch Generator + Score Refinement + Signal Extraction |
+| AI Chat page | `app/(app)/ai-chat/page.tsx` | `/ai-chat` route with feature badges |
+
+### LeadSidebar AI Tab Sections
+1. **Pitch Generator** — Style selector (Professional / Formal / Casual) → calls `/api/ai/pitch` → renders pitch with Copy + WhatsApp buttons
+2. **Score Refinement** — "Analyze" button calls `/api/ai/score` → shows refined score, delta, reasoning, and recommended next actions
+3. **Signal Extraction** — "Scan" button calls `/api/ai/signals` → shows extracted signal tags, intelligence summary, confidence %, news snippets
+
+### Chat Streaming Architecture
+- Client uses `fetch()` + `ReadableStream` reader to consume SSE
+- Each `data: {"delta": "<text>"}` chunk appended to current assistant message in state
+- `data: [DONE]` closes the stream
+- Typing indicator (3 animated dots) shown while first tokens arrive
+
+### i18n
+All AI keys live under the `"ai"` namespace in both `en/common.json` and `ar/common.json`.
+System prompts are fully bilingual: Arabic prompt for `lang=ar`, English for `lang=en`.

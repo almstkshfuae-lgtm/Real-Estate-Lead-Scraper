@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Cairo } from "next/font/google";
 import "./globals.css";
 import I18nProvider from "@/components/I18nProvider";
+import { Toaster } from "sonner";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -13,6 +14,7 @@ const cairo = Cairo({
   subsets: ["arabic"],
   weight: ["400", "500", "600"],
   variable: "--font-cairo",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -30,6 +32,7 @@ export default function RootLayout({
       <body className="font-inter antialiased">
         <I18nProvider>
           {children}
+          <Toaster position="top-right" richColors />
         </I18nProvider>
       </body>
     </html>

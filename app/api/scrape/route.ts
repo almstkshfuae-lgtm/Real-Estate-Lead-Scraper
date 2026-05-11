@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from "@/lib/auth";
-import prisma from "../../../lib/prisma";
+import prisma from "@/lib/prisma";
+import { triggerApifyScrape } from "@/lib/apify";
+import { processNewsToLeads } from "@/lib/serpapi";
+import { runRegistryScrapes } from "@/lib/registry";
+import { SearchCriteria } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +14,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Allow both Admins and Agents to trigger new scrapes
     const role = session.role.toUpperCase();
     if (role !== 'ADMIN' && role !== 'AGENT') {
       return NextResponse.json({ error: "Forbidden: Higher privileges required" }, { status: 403 });
@@ -22,51 +25,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Criteria required' }, { status: 400 });
     }
 
-    const SCRAPER_URL = process.env.SCRAPER_SERVICE_URL || "http://localhost:3002";
-    const SCRAPER_SECRET = process.env.SCRAPER_SECRET;
-
     // Create a ScrapeRun record first
     const scrapeRun = await prisma.scrapeRun.create({
       data: {
         triggeredBy: session.id,
-        sources: ["Bayut", "Property Finder"],
+        sources: ["Apify", "SerpAPI", "Registries"],
         criteria: criteria,
-        status: "PENDING",
+        status: "PROCESSING",
       }
     });
 
-    console.log(`Triggering scrape at ${SCRAPER_URL} for run ${scrapeRun.id}`);
+    // Fire and forget pipeline
+    runScrapePipeline(session.id, scrapeRun.id).catch(console.error);
 
-    // Call the decoupled scraper service
-    const scraperRes = await fetch(`${SCRAPER_URL}/scrape`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        scrapeRunId: scrapeRun.id,
-        criteria,
-        secret: SCRAPER_SECRET 
-      }),
-    }).catch(err => {
-      console.error("Scraper service connection failed:", err.message);
-      return null;
-    });
-
-    if (scraperRes && scraperRes.ok) {
-      // Update status to processing if successfully sent
-      await prisma.scrapeRun.update({
-        where: { id: scrapeRun.id },
-        data: { status: "PROCESSING" }
-      });
-      return NextResponse.json({ message: 'Scrape job started successfully', runId: scrapeRun.id });
-    } else {
-      return NextResponse.json({ 
-        message: 'Scrape request received',
-        warning: 'Scraper worker currently offline, job queued for later processing.',
-        runId: scrapeRun.id
-      });
-    }
+    return NextResponse.json({ message: 'Scrape job started successfully', runId: scrapeRun.id });
   } catch (error: any) {
     console.error("Scrape trigger error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+}
+
+async function runScrapePipeline(agentId: string, runId: string) {
+  let totalLeadsFound = 0;
+
+  try {
+    const criteria: SearchCriteria = {
+      propertyTypes: ["apartment", "villa"],
+      budgetMin: 2000000,
+      recentlyRelocated: false,
+      excludeRental: false,
+      emirates: ["Dubai"],
+      signals: [],
+      tierMin: 2,
+    };
+
+    const apifyRunId = await triggerApifyScrape(criteria);
+    console.log(`Apify Scrape Triggered with runId: ${apifyRunId}`);
+  } catch (err: any) {
+    console.error("Apify scrape failed:", err.message);
+  }
+
+  try {
+    const queries = ["UAE investor relocate", "DIFC company launch", "Abu Dhabi family office"];
+    const saved = await processNewsToLeads(queries, agentId, runId);
+    totalLeadsFound += saved;
+  } catch (err: any) {
+    console.error("SerpAPI extraction failed:", err.message);
+  }
+
+  try {
+    const saved = await runRegistryScrapes(agentId, runId);
+    totalLeadsFound += saved;
+  } catch (err: any) {
+    console.error("Registry extraction failed:", err.message);
+  }
+
+  await prisma.scrapeRun.update({
+    where: { id: runId },
+    data: {
+      status: "COMPLETED",
+      leadsFound: totalLeadsFound,
+      completedAt: new Date(),
+    }
+  });
 }

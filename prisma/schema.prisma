@@ -20,6 +20,8 @@ model User {
   chatHistory  ChatMessage[]
   leads        Lead[]
   searches     Search[]
+  exports      ExportHistory[]
+  preferences  Json?
 }
 
 model Lead {
@@ -87,4 +89,17 @@ model ChatMessage {
   agent     User     @relation(fields: [agentId], references: [id])
 
   @@index([agentId], map: "ChatMessage_agentId_fkey")
+}
+
+model ExportHistory {
+  id          String   @id @default(cuid())
+  agentId     String
+  format      String
+  filters     Json
+  recordCount Int
+  fileUrl     String   @db.Text
+  createdAt   DateTime @default(now())
+  agent       User     @relation(fields: [agentId], references: [id])
+
+  @@index([agentId])
 }
