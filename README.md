@@ -28,7 +28,8 @@ A full-stack real estate lead intelligence platform for UAE agents. Scrapes, sco
 | Deployment | Vercel (frontend + API routes) + Railway (scraper service + MySQL) |
 | PWA / APK | PWABuilder — Android APK + iOS Add to Home Screen (no app store) |
 | i18n | next-i18next — EN/AR, RTL/LTR via `<html dir>` |
-| Map | Custom SVG UAE emirate map (no external map library) |
+| Map | Mapbox as the map library with the hybrid SVG + Mapbox approach|
+
 
 ---
 
@@ -123,7 +124,7 @@ signal_bonus:
 
 ### Export
 - CSV (UTF-8 BOM, bilingual EN/AR columns)
-- XLSX (native, no library, bold headers, auto-width)
+- XLSX (library, bold headers, auto-width)
 - Both respect active filters
 
 ### CRM & Outreach (Bitrix24)

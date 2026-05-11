@@ -1,0 +1,17 @@
+{
+  "name": "brilliance-scraper-service",
+  "version": "1.0.0",
+  "description": "Playwright-based scraper service for UAE real estate leads.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "axios": "^1.7.9"
+  }
+}

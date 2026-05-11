@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  nameAr       String?
+  role         String        @default("agent")
+  theme        String        @default("system")
+  language     String        @default("en")
+  createdAt    DateTime      @default(now())
+  chatHistory  ChatMessage[]
+  leads        Lead[]
+  searches     Search[]
+}
+
+model Lead {
+  id           String    @id @default(cuid())
+  name         String
+  nameAr       String?
+  company      String
+  companyAr    String?
+  role         String
+  roleAr       String?
+  source       String
+  tier         Int
+  phone        String?
+  email        String?
+  location     String
+  score        Int
+  signals      Json
+  propertyPref Json
+  budgetMin    Float?
+  budgetMax    Float?
+  relocated    Boolean   @default(false)
+  rentalFlag   Boolean   @default(false)
+  status       String    @default("new")
+  notes        String?
+  bitrix24Id   String?
+  agentId      String
+  scrapeRunId  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  agent        User      @relation(fields: [agentId], references: [id])
+  scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
+
+  @@index([agentId], map: "Lead_agentId_fkey")
+  @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
+}
+
+model ScrapeRun {
+  id          String    @id @default(cuid())
+  triggeredBy String
+  sources     Json
+  criteria    Json
+  status      String
+  leadsFound  Int       @default(0)
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  leads       Lead[]
+}
+
+model Search {
+  id        String   @id @default(cuid())
+  agentId   String
+  criteria  Json
+  createdAt DateTime @default(now())
+  agent     User     @relation(fields: [agentId], references: [id])
+
+  @@index([agentId], map: "Search_agentId_fkey")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  agentId   String
+  role      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  agent     User     @relation(fields: [agentId], references: [id])
+
+  @@index([agentId], map: "ChatMessage_agentId_fkey")
+}

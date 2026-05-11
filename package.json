@@ -1,0 +1,55 @@
+{
+  "name": "real-estate-lead-scraper",
+  "version": "1.0.0",
+  "description": "A full-stack real estate lead intelligence platform for UAE agents. Scrapes, scores, qualifies, and pushes buyer leads from 11+ premium sources into Bitrix24 CRM with AI-powered pitch generation, WhatsApp Business outreach, and bilingual EN/AR support.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/almstkshfuae-lgtm/Real-Estate-Lead-Scraper.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/almstkshfuae-lgtm/Real-Estate-Lead-Scraper/issues"
+  },
+  "homepage": "https://github.com/almstkshfuae-lgtm/Real-Estate-Lead-Scraper#readme",
+  "dependencies": {
+    "@ai-sdk/deepinfra": "^2.0.51",
+    "@prisma/client": "^5.22.0",
+    "@vercel/blob": "^2.3.3",
+    "ai": "^6.0.177",
+    "autoprefixer": "^10.5.0",
+    "bcryptjs": "^3.0.3",
+    "i18next": "^26.0.10",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "i18next-resources-to-backend": "^1.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.14.0",
+    "next": "^16.2.6",
+    "next-i18next": "^16.0.6",
+    "postcss": "^8.5.14",
+    "prisma": "^5.22.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-i18next": "^17.0.7",
+    "tailwindcss": "^3.4.17",
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.6.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3"
+  }
+}

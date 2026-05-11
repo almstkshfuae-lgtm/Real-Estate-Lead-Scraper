@@ -1,0 +1,155 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "leads": "Lead Pipeline",
+    "map": "Map View",
+    "search": "Intelligence Scrape",
+    "campaigns": "Campaign Manager",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "leads": {
+    "title": "Lead Intelligence",
+    "subtitle": "Manage and qualify your real estate leads from across the UAE.",
+    "export": "Export CSV",
+    "newScrape": "New Scrape",
+    "searchPlaceholder": "Search leads by name or company...",
+    "filters": "Filters",
+    "dateRange": "Date Range",
+    "table": {
+      "score": "Score",
+      "detail": "Lead Detail",
+      "tier": "Tier & Source",
+      "signals": "Signals",
+      "status": "Status",
+      "empty": "No leads found matching your search.",
+      "pagination": "Showing {{count}} of {{total}} leads"
+    },
+    "tiers": {
+      "t1": "T1 — Elite",
+      "t2": "T2 — Premium",
+      "t3": "T3 — Standard"
+    },
+    "status": {
+      "new": "New",
+      "contacted": "Contacted",
+      "qualified": "Qualified"
+    },
+    "signals": {
+      "uhnw": "UHNW",
+      "investor": "Investor",
+      "businessowner": "Business Owner",
+      "privateclient": "Private Client",
+      "highnetworth": "High Net Worth"
+    },
+    "sidebar": {
+      "tabs": {
+        "details": "Details",
+        "ai": "AI Pitch",
+        "notes": "Notes"
+      },
+      "contact": "Contact Information",
+      "professional": "Professional Profile",
+      "company": "Company",
+      "role": "Current Role",
+      "signals": "Intelligence Signals",
+      "recentActivity": "Recent Activity",
+      "aiPitch": {
+        "title": "AI-Powered Pitch",
+        "subtitle": "Generate a personalized property pitch for {{name}} based on their UHNW status and recent investment signals.",
+        "copy": "Copy Pitch",
+        "whatsapp": "Send WhatsApp",
+        "template": "Hello {{name}}, I saw the recent news about your work at {{company}}—congratulations! Given your focus on premium UAE real estate, I have an off-market opportunity that aligns perfectly with your current portfolio. Would you be open to a brief call?"
+      },
+      "notes": {
+        "placeholder": "Add private notes about this lead...",
+        "save": "Save Notes"
+      },
+      "actions": {
+        "bitrix": "Push to Bitrix24"
+      }
+    }
+  },
+  "auth": {
+    "login": "Login",
+    "email": "Email Address",
+    "password": "Password",
+    "signIn": "Sign In",
+    "welcome": "Welcome back, Agent"
+  },
+  "search": {
+    "title": "Configure Intelligence Scrape",
+    "subtitle": "Select your target profile below. Brilliance will scan premium sources, news, and registries to find matching leads.",
+    "propertyType": "Property Types",
+    "budget": "Budget Range (AED)",
+    "emirates": "Target Emirates",
+    "options": "Search Options",
+    "relocated": "Recently Relocated",
+    "excludeRental": "Exclude Rental Behavior",
+    "startScrape": "Start Intelligence Scrape",
+    "saveCriteria": "Save Criteria",
+    "recent": "Recent Searches",
+    "types": {
+      "apartment": "Apartment",
+      "villa": "Villa",
+      "townhouse": "Townhouse",
+      "penthouse": "Penthouse",
+      "commercial": "Commercial"
+    },
+    "relocatedDesc": "Filter for leads new to the UAE",
+    "excludeRentalDesc": "Hide leads with rental inquiry history",
+    "intelligenceTitle": "Search Intelligence",
+    "estLeads": "Estimated Leads",
+    "scrapeDepth": "Scrape Depth",
+    "deepDepth": "Deep (11+ sources)",
+    "disclaimer": "* Scoring will be automatically adjusted based on Tier 1 source priority and your signals filter."
+  },
+  "map": {
+    "title": "Geo-Intelligence Map",
+    "subtitle": "Visualize lead clusters and demand signals across the UAE.",
+    "comingSoon": "Map View is under development",
+    "description": "We are currently integrating Mapbox to provide high-precision lead clustering, heatmaps, and geo-fencing for your target scrapes.",
+    "feature1": "Lead Clustering",
+    "feature2": "Heatmaps",
+    "feature3": "Demand Signals",
+    "phase": "Phase 5: Geo-Intelligence",
+    "upcoming": {
+      "clusters": {
+        "title": "Regional Clustering",
+        "desc": "Identify high-value buyer clusters in specific communities like Palm Jumeirah, Downtown Dubai, and Yas Island."
+      },
+      "heatmap": {
+        "title": "Demand Heatmaps",
+        "desc": "Visualize where investors are currently searching for properties based on real-time scraper signals."
+      },
+      "geofence": {
+        "title": "Geo-Fenced Scrapes",
+        "desc": "Trigger intelligence scrapes for specific geographical areas to find local business owners and residents."
+      }
+    }
+  },
+  "campaigns": {
+    "title": "Campaign Manager",
+    "subtitle": "Manage Bitrix24 campaigns and automated outreach.",
+    "comingSoon": "Campaign Manager is under development",
+    "description": "We are finalizing the Bitrix24 OAuth handshake and WhatsApp Business API integration to enable seamless lead distribution.",
+    "feature1": "Lead Distribution",
+    "feature2": "CRM Sync",
+    "feature3": "Outreach Analytics",
+    "phase": "Phase 4: Pipeline Management"
+  },
+  "settings": {
+    "profile": {
+      "title": "User Profile",
+      "subtitle": "Manage your account settings and preferences.",
+      "placeholder": "Settings Interface",
+      "comingSoon": "Profile and account management will be active in the next update."
+    }
+  },
+  "common": {
+    "maintenance": "Under Maintenance",
+    "notAvailable": "N/A",
+    "viewList": "List View",
+    "viewKanban": "Kanban View"
+  }
+}
