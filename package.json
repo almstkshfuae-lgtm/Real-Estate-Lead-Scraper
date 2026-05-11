@@ -34,6 +34,7 @@
     "ai": "^6.0.177",
     "autoprefixer": "^10.5.0",
     "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "i18next": "^26.0.10",
     "i18next-browser-languagedetector": "^8.2.1",
