@@ -7,6 +7,7 @@
 - [x] **Hardened**: Fixed Scraper Service URL and added API secret logic.
 - [x] **Hardened**: Scraper service architecture (Decoupled Node.js).
 - [x] **Hardened**: Secure Scraper communication (Shared Secret).
+- [x] **Hardened**: Fixed Prisma initialization crash during Next.js static build evaluation.
 
 ## Phase 1: Authentication & Layout 🔐
 - [x] Login page (multi-language support)
