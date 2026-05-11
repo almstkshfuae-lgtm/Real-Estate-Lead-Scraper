@@ -1,31 +1,79 @@
 # Real-Estate-Lead-Scraper
-Find the right buyer, faster — اعثر على المشتري المناسب بشكل أسرع
+### Find the right buyer, faster — اعثر على المشتري المناسب بشكل أسرع
+
 A full-stack real estate lead intelligence platform for UAE agents. Scrapes, scores, qualifies, and pushes buyer leads from 11+ premium sources into Bitrix24 CRM with AI-powered pitch generation, WhatsApp Business outreach, and bilingual EN/AR support.
 
-Tech Stack
-LayerTechnologyFrameworkNext.js 14 (App Router) + TypeScriptStylingTailwind CSS + CSS variables (design system tokens)AuthBuilt-in login (JWT + bcrypt) — no third-party auth serviceDatabaseRailway MySQL via Prisma ORMFile storageVercel Blob (exports, scraped snapshots, lead attachments)SchedulingVercel Cron (daily scrape jobs)AIAnthropic Claude API — claude-sonnet-4-20250514ChatbotClaude API with conversation memory (stored in MySQL)MLTensorFlow.js — in-app learning from agent behavior and lead outcomesScraperNode.js + Playwright (server-side, Railway hosted)CRMBitrix24 REST APIMessagingWhatsApp Business Cloud APIDeploymentVercel (frontend + API routes) + Railway (scraper service + MySQL)PWA / APKPWABuilder — Android APK + iOS Add to Home Screen (no app store)i18nnext-i18next — EN/AR, RTL/LTR via <html dir>MapCustom SVG UAE emirate map (no external map library)
+---
 
-Lead Qualification Criteria
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16.2 (App Router) + TypeScript |
+| Bundler | Turbopack (stable default in v16 — no flags needed) |
+| Styling | Tailwind CSS + CSS variables (design system tokens) |
+| Auth | Built-in login (JWT + bcrypt) — no third-party auth service |
+| Network boundary | `proxy.ts` (replaces `middleware.ts` in Next.js 16) |
+| Caching | `use cache` directive — explicit Cache Components model |
+| Database | Railway MySQL via Prisma ORM |
+| File storage | Vercel Blob (exports, scraped snapshots, lead attachments) |
+| Scheduling | Vercel Cron (daily scrape jobs) |
+| AI | Anthropic Claude API — `claude-sonnet-4-20250514` |
+| AI debugging | Next.js DevTools MCP (built into v16) |
+| Chatbot | Claude API with conversation memory (stored in MySQL) |
+| ML | TensorFlow.js — in-app learning from agent behavior and lead outcomes |
+| Scraper | Node.js + Playwright (server-side, Railway hosted) |
+| CRM | Bitrix24 REST API (simplified — Phase A contacts push only at launch) |
+| Messaging | WhatsApp Business Cloud API |
+| Deployment | Vercel (frontend + API routes) + Railway (scraper service + MySQL) |
+| PWA / APK | PWABuilder — Android APK + iOS Add to Home Screen (no app store) |
+| i18n | next-i18next — EN/AR, RTL/LTR via `<html dir>` |
+| Map | Custom SVG UAE emirate map (no external map library) |
+
+---
+
+## Next.js 16.2 — Key Behaviors to Know
+
+These are breaking or architectural changes from v14/v15 that affect how this project is built.
+
+| Change | Detail |
+|--------|--------|
+| Turbopack is default | No `--turbopack` flag needed. Do not add custom webpack config — builds will fail. Check all plugins for Turbopack compatibility before installing. |
+| `proxy.ts` replaces `middleware.ts` | Route protection and network boundary logic lives in `proxy.ts`. Export the function as `proxy`, not `middleware`. |
+| `use cache` directive | Explicit opt-in caching only. No implicit caching on fetch or routes. Use `"use cache"` at the top of any component, function, or page that should be cached. |
+| Async request APIs | `cookies()`, `headers()`, `params`, `searchParams` are all async — must be `await`ed. This was introduced in v15 and carries into v16. |
+| React Compiler (stable) | `reactCompiler: true` in `next.config.ts` is available but not enabled by default. Leave off until build performance is measured — it increases compile time. |
+| `next lint` removed | Use Biome or ESLint directly. Do not rely on `next lint` in CI pipeline. |
+| PPR flag removed | `experimental.ppr` is gone. Cache Components (`use cache`) is the replacement model. |
+
+---
+
 Agents configure search criteria before scraping. Leads are scored and filtered based on:
-Property Preference
 
-Off-plan apartment
-Villa
-Townhouse
-Penthouse
-Commercial unit
+### Property Preference
+- Off-plan apartment
+- Villa
+- Townhouse
+- Penthouse
+- Commercial unit
 
-Buyer Profile
+### Buyer Profile
+- Budget range: AED `from` → `to`
+- Recently relocated to UAE (flag from LinkedIn / press / registry date)
+- Exclude rental behavior (filters out leads with rental-only inquiry history)
 
-Budget range: AED from → to
-Recently relocated to UAE (flag from LinkedIn / press / registry date)
-Exclude rental behavior (filters out leads with rental-only inquiry history)
+### Source Tier
+| Tier | Sources | Score Boost |
+|------|---------|-------------|
+| T1 — Elite | Private Banking, Family Office, ADGM/DIFC Registry, DED Registry | +12 |
+| T2 — Premium | Zawya Invest, Bloomberg MENA, Forbes ME, Elite Lifestyle & Concierge | +6 |
+| T3 — Standard | Bayut, Dubizzle, Business Directories, News & Press | +0 |
 
-Source Tier
-TierSourcesScore BoostT1 — ElitePrivate Banking, Family Office, ADGM/DIFC Registry, DED Registry+12T2 — PremiumZawya Invest, Bloomberg MENA, Forbes ME, Elite Lifestyle & Concierge+6T3 — StandardBayut, Dubizzle, Business Directories, News & Press+0
-Signals
-UHNW · High Net Worth · Investor · Private Client · Business Owner · Executive
-Scoring Formula
+### Signals
+`UHNW` · `High Net Worth` · `Investor` · `Private Client` · `Business Owner` · `Executive`
+
+### Scoring Formula
+```
 final_score = min(99, base_score + tier_boost + signal_bonus)
 
 signal_bonus:
@@ -35,90 +83,83 @@ signal_bonus:
   Private Client → +3
   Business Owner → +2
   Executive      → +1
+```
 
-Features
-Lead Management
+---
 
-Filterable, sortable lead table (tier, source, signal, location, budget, property type)
-Lead detail sidebar (RTL-aware, full contact + AI pitch inline)
-UAE SVG map view — lead density per emirate, click-to-filter
-Score badge (color-coded: green ≥90, amber 75–89, red <75)
-Tier badge (T1/T2/T3) on every lead
-"Exclude rental behavior" toggle per search
+## Features
 
-Search & Qualification
+### Lead Management
+- Filterable, sortable lead table (tier, source, signal, location, budget, property type)
+- Lead detail sidebar (RTL-aware, full contact + AI pitch inline)
+- UAE SVG map view — lead density per emirate, click-to-filter
+- Score badge (color-coded: green ≥90, amber 75–89, red <75)
+- Tier badge (T1/T2/T3) on every lead
+- "Exclude rental behavior" toggle per search
 
-Advanced qualification form before each scrape:
+### Search & Qualification
+- Advanced qualification form before each scrape:
+  - Property type (multi-select)
+  - Budget range (AED slider + manual input)
+  - Relocation flag
+  - Exclude rental behavior
+  - Target emirate(s)
+  - Signal filter
+  - Tier minimum
 
-Property type (multi-select)
-Budget range (AED slider + manual input)
-Relocation flag
-Exclude rental behavior
-Target emirate(s)
-Signal filter
-Tier minimum
+### AI Features
+- **AI pitch generation** — Claude API, responds in EN or AR based on active language
+- **AI chatbot** — persistent, memory-aware assistant for agents (conversation stored in MySQL)
+- **ML lead scoring** — TensorFlow.js model trained on historical lead outcomes and agent interactions; improves over time
+- **AI signal extraction** — Claude API parses scraped raw text to assign signals automatically
 
+### Scraper
+- Sources: Bayut, Dubizzle, Zawya Invest, Bloomberg MENA, Forbes ME, ADGM/DIFC Registry, DED Registry, Private Banking directories, Family Office networks, Elite Lifestyle/Concierge, News & Press
+- Playwright (Node.js) — headless, proxy-rotated
+- Incremental scrape — new leads appended, previous data never overwritten
+- Optional: save selected leads only (agent manually flags before committing to DB)
+- Vercel Cron: daily at 02:00 GST
+- Scrape history log stored in MySQL
 
+### Export
+- CSV (UTF-8 BOM, bilingual EN/AR columns)
+- XLSX (native, no library, bold headers, auto-width)
+- Both respect active filters
 
-AI Features
+### CRM & Outreach (Bitrix24)
+- Push qualified leads to Bitrix24 as contacts/deals via REST API
+- Sync lead status bidirectionally (New → Contacted → Qualified → Won/Lost)
+- Campaign manager view — group leads by property type or tier into campaigns
+- WhatsApp Business Cloud API — send templated outreach messages directly from the app
+- Email outreach — compose and send via Bitrix24 or direct SMTP
+- Calendar sync — Bitrix24 calendar for follow-up scheduling
+- Bitrix24 app integrations supported:
+  - Task importer
+  - Export app
+  - SPA importer
+  - 2-way SMS
+  - Public links
+  - OA Chat
 
-AI pitch generation — Claude API, responds in EN or AR based on active language
-AI chatbot — persistent, memory-aware assistant for agents (conversation stored in MySQL)
-ML lead scoring — TensorFlow.js model trained on historical lead outcomes and agent interactions; improves over time
-AI signal extraction — Claude API parses scraped raw text to assign signals automatically
+### UI & Layout
+- Fully responsive — mobile, tablet, desktop
+- Dark mode (system-detected + manual override)
+- EN/AR toggle — full RTL flip, logical CSS properties, Arabic font (Cairo/Tajawal)
+- Built-in login page (email + password, JWT)
+- Settings interface: profile, scraper config, integrations, notifications, theme
 
-Scraper
+### PWA & Distribution
+- Installable as PWA on any browser
+- Android APK via PWABuilder (no Google Play Store)
+- iOS: Add to Home Screen via Safari (no App Store)
+- Offline: cached app shell + last lead dataset via Service Worker
 
-Sources: Bayut, Dubizzle, Zawya Invest, Bloomberg MENA, Forbes ME, ADGM/DIFC Registry, DED Registry, Private Banking directories, Family Office networks, Elite Lifestyle/Concierge, News & Press
-Playwright (Node.js) — headless, proxy-rotated
-Incremental scrape — new leads appended, previous data never overwritten
-Optional: save selected leads only (agent manually flags before committing to DB)
-Vercel Cron: daily at 02:00 GST
-Scrape history log stored in MySQL
+---
 
-Export
+## Database Schema (MySQL / Prisma)
 
-CSV (UTF-8 BOM, bilingual EN/AR columns)
-XLSX (native, no library, bold headers, auto-width)
-Both respect active filters
-
-CRM & Outreach (Bitrix24)
-
-Push qualified leads to Bitrix24 as contacts/deals via REST API
-Sync lead status bidirectionally (New → Contacted → Qualified → Won/Lost)
-Campaign manager view — group leads by property type or tier into campaigns
-WhatsApp Business Cloud API — send templated outreach messages directly from the app
-Email outreach — compose and send via Bitrix24 or direct SMTP
-Calendar sync — Bitrix24 calendar for follow-up scheduling
-Bitrix24 app integrations supported:
-
-Task importer
-Export app
-SPA importer
-2-way SMS
-Public links
-OA Chat
-
-
-
-UI & Layout
-
-Fully responsive — mobile, tablet, desktop
-Dark mode (system-detected + manual override)
-EN/AR toggle — full RTL flip, logical CSS properties, Arabic font (Cairo/Tajawal)
-Built-in login page (email + password, JWT)
-Settings interface: profile, scraper config, integrations, notifications, theme
-
-PWA & Distribution
-
-Installable as PWA on any browser
-Android APK via PWABuilder (no Google Play Store)
-iOS: Add to Home Screen via Safari (no App Store)
-Offline: cached app shell + last lead dataset via Service Worker
-
-
-Database Schema (MySQL / Prisma)
-prismamodel User {
+```prisma
+model User {
   id          String   @id @default(cuid())
   email       String   @unique
   passwordHash String
@@ -191,9 +232,14 @@ model ChatMessage {
   createdAt DateTime @default(now())
   agent     User     @relation(fields:[agentId], references:[id])
 }
+```
 
-Environment Variables
-env# Database
+---
+
+## Environment Variables
+
+```env
+# Database
 DATABASE_URL=mysql://user:pass@railway.internal:3306/leadpulse
 
 # Auth
@@ -216,8 +262,13 @@ WHATSAPP_PHONE_NUMBER_ID=
 # Scraper
 SCRAPER_SERVICE_URL=
 SCRAPER_SECRET=
+```
 
-Project Structure
+---
+
+## Project Structure
+
+```
 leadpulse-uae/
 ├── app/
 │   ├── (auth)/
@@ -298,13 +349,22 @@ leadpulse-uae/
 │   ├── en.json
 │   └── ar.json
 └── design-system.md
+```
 
-Integrations
-Bitrix24 — Simplified REST Integration (3 phases)
+---
+
+## Integrations
+
+### Bitrix24 — Simplified REST Integration (3 phases)
+
 No webhooks, no bidirectional sync initially. Complexity added only after the basic push is stable.
-Phase A — Push leads as contacts (launch scope)
+
+**Phase A — Push leads as contacts (launch scope)**
+```
 POST https://{domain}.bitrix24.ae/rest/crm.contact.add
-ts// lib/bitrix24.ts
+```
+```ts
+// lib/bitrix24.ts
 export async function pushContact(lead: Lead) {
   const res = await fetch(
     `${process.env.BITRIX24_DOMAIN}/rest/crm.contact.add.json`,
@@ -325,19 +385,25 @@ export async function pushContact(lead: Lead) {
   );
   return res.json();
 }
-Phase B — Push as Deal (post-launch, after Phase A is stable)
+```
+
+**Phase B — Push as Deal (post-launch, after Phase A is stable)**
+```
 POST https://{domain}.bitrix24.ae/rest/crm.deal.add
+```
 Link the deal to the contact created in Phase A. Add property type, budget, and emirate as deal fields.
-Phase C — Bidirectional sync (optional, only if agents request it)
+
+**Phase C — Bidirectional sync (optional, only if agents request it)**
 Inbound webhook from Bitrix24 → update lead status in MySQL.
 Only implement if agents are actively managing deals inside Bitrix24 and need status to reflect back in LeadPulse.
-WhatsApp Business Cloud API
 
-Send approved message templates to leads directly from the lead sidebar
-Inbound reply webhook → surface in app notification (Phase C equivalent — post-launch)
-Connected to Bitrix24 contact record via shared phone number
+### WhatsApp Business Cloud API
+- Send approved message templates to leads directly from the lead sidebar
+- Inbound reply webhook → surface in app notification (Phase C equivalent — post-launch)
+- Connected to Bitrix24 contact record via shared phone number
 
-Settings → Integrations Page
+### Settings → Integrations Page
+```
 Bitrix24 Domain   [yourcompany.bitrix24.ae]
 API Token         [______________________ ]
 [ Test connection ]   [ Save ]
@@ -345,18 +411,20 @@ API Token         [______________________ ]
 Push mode:        ● Contacts only (recommended)
                   ○ Contacts + Deals
                   ○ Off
-Reference Portals (for scraping inspiration)
+```
 
-opr.ae/map — property map UI reference
-opr.ae/video-overviews — media overlay reference
+### Reference Portals (for scraping inspiration)
+- [opr.ae/map](https://opr.ae/map) — property map UI reference
+- [opr.ae/video-overviews](https://opr.ae/video-overviews) — media overlay reference
 
+---
 
-Languages
+## Languages
+- English (LTR) — `en`
+- Arabic / العربية (RTL) — `ar`
+- All UI strings, AI responses, signals, roles, and locations translated
 
-English (LTR) — en
-Arabic / العربية (RTL) — ar
-All UI strings, AI responses, signals, roles, and locations translated
+---
 
-
-License
+## License
 Private — internal tooling for real estate sales teams.
