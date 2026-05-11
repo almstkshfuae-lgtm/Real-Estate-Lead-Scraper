@@ -23,11 +23,22 @@ export async function GET(request: Request) {
       whatsappAlerts: false
     };
 
-    return NextResponse.json({ preferences: user?.preferences || defaultPrefs }, { status: 200 });
+    let prefs: any = {};
+    if (user?.preferences) {
+      if (typeof user.preferences === 'string') {
+        try { prefs = JSON.parse(user.preferences); } catch { prefs = {}; }
+      } else {
+        prefs = user.preferences as any;
+      }
+    }
 
-  } catch (error) {
-    console.error("Fetch preferences error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const preferences = prefs.notifications ?? prefs.emailAlerts !== undefined ? prefs : defaultPrefs;
+
+    return NextResponse.json({ preferences }, { status: 200 });
+
+  } catch (error: any) {
+    console.error("Fetch preferences error:", error?.message || error);
+    return NextResponse.json({ error: "Internal Server Error", detail: error?.message }, { status: 500 });
   }
 }
 
