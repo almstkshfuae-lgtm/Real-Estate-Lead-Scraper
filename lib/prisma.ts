@@ -2,6 +2,11 @@ import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
   return new PrismaClient({
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL,
+      },
+    },
     log: ['query', 'info', 'warn', 'error'],
   })
 }
