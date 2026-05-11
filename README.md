@@ -1,4 +1,4 @@
-# Real-Estate-Lead-Scraper
+# Real Estate Lead Scraper
 ### Find the right buyer, faster — اعثر على المشتري المناسب بشكل أسرع
 
 A full-stack real estate lead intelligence platform for UAE agents. Scrapes, scores, qualifies, and pushes buyer leads from 11+ premium sources into Bitrix24 CRM with AI-powered pitch generation, WhatsApp Business outreach, and bilingual EN/AR support.
@@ -419,7 +419,59 @@ Push mode:        ● Contacts only (recommended)
 
 ---
 
-## Languages
+## Distribution
+
+### Strategy — No App Store Required
+
+LeadPulse UAE is distributed directly to agents. No Play Store, no App Store, no review process, no annual fees.
+
+| Platform | Method | Cost | Store |
+|----------|--------|------|-------|
+| Desktop (Windows / Mac / Linux) | Install PWA from browser via install prompt | Free | No |
+| Android | Sideload signed `.apk` from download link | Free | No |
+| iOS | Safari → Share → Add to Home Screen | Free | No |
+
+Every new agent receives an onboarding message with a single link to `/install`. The page auto-detects their device and shows the correct installation flow.
+
+---
+
+### `/install` — Agent Onboarding Page
+
+Route: `app/(app)/install/page.tsx` — **public, no auth required**
+
+Device detection via `navigator.userAgent` on load. Three panels:
+
+**Android** — "Download App" button → Vercel Blob APK URL. One tap, sideload directly. Agent enables "Install from unknown sources" once on their device.
+
+**iOS** — 4-step visual guide:
+1. Open this link in **Safari** (not Chrome)
+2. Tap the **Share** icon
+3. Tap **Add to Home Screen**
+4. Tap **Add** — LeadPulse appears on your home screen
+
+**Desktop** — "Install from browser" button triggering the intercepted `beforeinstallprompt` event.
+
+Page is fully bilingual EN/AR with RTL layout. Includes a QR code linking to `/install` itself for sharing via WhatsApp or email.
+
+---
+
+### Android APK — Technical Notes
+
+- Generated via **PWABuilder** (Trusted Web Activity — full Chrome engine, not WebView)
+- Requires Lighthouse PWA score ≥ 80 before packaging
+- Requires `/.well-known/assetlinks.json` on Vercel for TWA domain verification
+- `.apk` hosted on **Vercel Blob** — stable download URL never changes
+- Re-generate on each major version release
+
+### iOS — Technical Notes
+
+- **Must use Safari** — Chrome on iOS cannot trigger Add to Home Screen
+- Requires `apple-touch-icon` meta tags in `app/layout.tsx` (iOS ignores manifest icons)
+- Requires `apple-mobile-web-app-capable` and `apple-mobile-web-app-status-bar-style` meta tags
+- Push notifications work on iOS 16.4+ only after Home Screen install — opt-in rates are low; not a primary notification channel for this app
+- Tested on iOS 16, 17, and 18
+
+---
 - English (LTR) — `en`
 - Arabic / العربية (RTL) — `ar`
 - All UI strings, AI responses, signals, roles, and locations translated
