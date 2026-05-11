@@ -7,7 +7,7 @@
 
 | Attribute | Value |
 |-----------|-------|
-| Product name | LeadPulse UAE |
+| Product name | Brilliance |
 | Tagline (EN) | Find the right buyer, faster |
 | Tagline (AR) | اعثر على المشتري المناسب بشكل أسرع |
 | Tone | Professional, precise, data-driven — never flashy |
