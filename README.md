@@ -480,3 +480,7 @@ Page is fully bilingual EN/AR with RTL layout. Includes a QR code linking to `/i
 
 ## License
 Private — internal tooling for real estate sales teams.
+
+## ALL RIGHTS RESERVED FOR ALMSTKSHF FOR MEDIA MONITORING AND DEVELOPMENT 
+HTTPS://ALMSTKSHF.COM
+TECH TEAM: +971585952035
