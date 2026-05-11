@@ -30,7 +30,7 @@ export default function LoginPage() {
       if (res.ok) {
         router.push("/leads");
       } else {
-        setError(data.error || "Login failed");
+        setError(data.details ? `${data.error}: ${data.details}` : (data.error || "Login failed"));
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
