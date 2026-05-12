@@ -68,7 +68,7 @@
       "role": "Current Role",
       "signals": "Intelligence Signals",
       "recentActivity": "Recent Activity",
-      "recentActivityText": "Recently mentioned in Bloomberg MENA regarding new investment activity. Potential high-liquidity event linked to {{company}}.",
+      "recentActivityText": "Financial reports indicate a 12% revenue growth for {{company}} in Q3. Executive profiles suggest a high capacity for luxury real estate investment (Estimated liquid budget: 15M-25M AED).",
       "aiPitch": {
         "title": "AI-Powered Pitch",
         "subtitle": "Generate a personalized property pitch for {{name}} based on their UHNW status and recent investment signals.",
@@ -182,7 +182,15 @@
     "feature1": "Lead Distribution",
     "feature2": "CRM Sync",
     "feature3": "Outreach Analytics",
-    "phase": "Phase 4: Pipeline Management"
+    "phase": "Phase 4: Pipeline Management",
+    "groups": {
+      "propertyType": "Group by Property Type",
+      "tier": "Group by Tier"
+    },
+    "totalLeads": "{{count}} Leads",
+    "grouping": "Grouping",
+    "pushGroup": "Push Group to Bitrix24",
+    "emptyGroups": "No leads found for grouping."
   },
   "settings": {
     "profile": {

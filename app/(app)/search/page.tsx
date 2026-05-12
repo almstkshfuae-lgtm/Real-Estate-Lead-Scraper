@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import QualificationForm from "@/components/search/QualificationForm";
-import { Clock, History, ChevronRight } from "lucide-react";
+import { Clock, History, ChevronRight, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import Link from "next/link";
 
 export default function SearchPage() {
   const { t } = useTranslation('common');
@@ -12,10 +13,10 @@ export default function SearchPage() {
 
   const fetchRecent = async () => {
     try {
-      const res = await fetch("/api/search");
+      const res = await fetch("/api/scrape-runs");
       if (res.ok) {
         const data = await res.json();
-        setRecentSearches(data);
+        setRecentSearches(data.runs.slice(0, 5));
       }
     } catch (error) {
       console.error("Fetch error:", error);
@@ -54,30 +55,44 @@ export default function SearchPage() {
 
             <div className="space-y-4">
               {recentSearches.length > 0 ? (
-                recentSearches.map((search) => (
-                  <button 
-                    key={search.id}
-                    onClick={() => setSelectedCriteria(search.criteria)}
-                    className={`w-full text-start p-4 rounded-2xl border transition-all group ${
-                      selectedCriteria === search.criteria 
-                        ? "bg-[var(--color-primary-subtle)] border-[var(--color-primary)]" 
-                        : "border-[var(--color-border)] bg-[var(--color-bg-surface)]/30 hover:bg-[var(--color-bg-surface)] hover:border-[var(--color-primary)]"
-                    }`}
+                recentSearches.map((run) => (
+                  <div
+                    key={run.id}
+                    className={`w-full text-start p-4 rounded-2xl border transition-all group ${selectedCriteria === run.criteria
+                        ? "bg-[var(--color-primary-subtle)] border-[var(--color-primary)]"
+                        : "border-[var(--color-border)] bg-[var(--color-bg-surface)]/30"
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[10px] font-bold text-[var(--color-text-disabled)] uppercase flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {new Date(search.createdAt).toLocaleDateString()}
+                        {new Date(run.startedAt).toLocaleDateString()}
                       </span>
-                      <ChevronRight className="w-4 h-4 text-[var(--color-text-disabled)] group-hover:text-[var(--color-primary)] transition-colors rtl-mirror" />
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${run.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          run.status === 'PROCESSING' || run.status === 'PENDING' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                            'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                        {run.status}
+                      </span>
                     </div>
-                    <p className="text-xs font-bold text-[var(--color-text-primary)] line-clamp-1">
-                      {(Array.isArray(search.criteria?.propertyTypes) ? search.criteria.propertyTypes : []).join(", ") || "All Types"}
+                    <p className="text-xs font-bold text-[var(--color-text-primary)] line-clamp-1 mb-1">
+                      {(Array.isArray(run.criteria?.propertyTypes) ? run.criteria.propertyTypes : []).join(", ") || "All Types"}
                     </p>
-                    <p className="text-[10px] text-[var(--color-text-secondary)] mt-1">
-                      {(Array.isArray(search.criteria?.emirates) ? search.criteria.emirates : []).join(", ") || "All Emirates"}
-                    </p>
-                  </button>
+                    <div className="flex items-center justify-between mt-3 gap-2">
+                      <button
+                        onClick={() => setSelectedCriteria(run.criteria)}
+                        className="text-[10px] font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition-colors px-2 py-1.5 bg-[var(--color-bg-card)] rounded-lg border border-[var(--color-border)] flex-1 text-center"
+                      >
+                        {t('search.loadCriteria', 'Load Criteria')}
+                      </button>
+                      <Link
+                        href={`/leads?scrapeRunId=${run.id}`}
+                        className="text-[10px] font-bold text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] transition-colors px-2 py-1.5 rounded-lg flex-1 text-center shadow-md shadow-blue-500/20"
+                      >
+                        {t('search.viewLeads', 'View Leads')} ({run.leadsFound})
+                      </Link>
+                    </div>
+                  </div>
                 ))
               ) : (
                 <div className="py-8 text-center">
@@ -85,9 +100,9 @@ export default function SearchPage() {
                 </div>
               )}
             </div>
-            
+
             {recentSearches.length > 0 && (
-              <button 
+              <button
                 onClick={fetchRecent}
                 className="w-full mt-6 py-3 text-xs font-bold text-[var(--color-primary)] hover:underline"
               >

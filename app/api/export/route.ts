@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
     const tier = searchParams.get("tier") || "";
+    const scrapeRunId = searchParams.get("scrapeRunId") || "";
     const format = (searchParams.get("format") || "xlsx").toLowerCase();
 
     const where: any = {};
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
     }
     if (status) where.status = status;
     if (tier) where.tier = parseInt(tier);
+    if (scrapeRunId) where.scrapeRunId = scrapeRunId;
 
     const leads = await prisma.lead.findMany({
       where,

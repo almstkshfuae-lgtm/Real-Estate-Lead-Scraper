@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
     const tier = searchParams.get("tier") || "";
+    const scrapeRunId = searchParams.get("scrapeRunId") || "";
 
     const skip = (page - 1) * limit;
 
@@ -51,6 +52,10 @@ export async function GET(request: Request) {
       if (!isNaN(parsedTier)) {
         where.tier = parsedTier;
       }
+    }
+
+    if (scrapeRunId) {
+      where.scrapeRunId = scrapeRunId;
     }
 
     const [leads, total] = await Promise.all([

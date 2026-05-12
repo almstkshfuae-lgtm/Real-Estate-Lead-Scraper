@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import CsvUpload from "@/components/leads/CsvUpload";
 
 export default function LeadsPage() {
   const { t } = useTranslation('common');
+  const searchParams = useSearchParams();
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -27,6 +29,7 @@ export default function LeadsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [tierFilter, setTierFilter] = useState<number | "">("");
+  const [scrapeRunIdFilter, setScrapeRunIdFilter] = useState(searchParams?.get("scrapeRunId") || "");
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function LeadsPage() {
       let url = "/api/export?format=" + format + "&search=" + encodeURIComponent(searchTerm);
       if (statusFilter) url += "&status=" + statusFilter;
       if (tierFilter) url += "&tier=" + tierFilter;
+      if (scrapeRunIdFilter) url += "&scrapeRunId=" + scrapeRunIdFilter;
       const res = await fetch(url);
       const data = await res.json();
       if (data.url) {
@@ -163,12 +167,12 @@ export default function LeadsPage() {
         {view === 'list' ? (
           <LeadTable 
             onSelectLead={(lead) => setSelectedLead(lead)} 
-            filters={{ searchTerm, statusFilter, tierFilter }}
+            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter }}
           />
         ) : (
           <LeadPipeline 
             onSelectLead={(lead) => setSelectedLead(lead)} 
-            filters={{ searchTerm, statusFilter, tierFilter }}
+            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter }}
           />
         )}
       </div>

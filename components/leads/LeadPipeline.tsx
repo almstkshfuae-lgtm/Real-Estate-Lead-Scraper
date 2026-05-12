@@ -20,6 +20,7 @@ interface LeadPipelineProps {
     searchTerm: string;
     statusFilter: string;
     tierFilter: number | "";
+    scrapeRunId?: string;
   };
 }
 
@@ -33,10 +34,11 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
   const fetchLeads = async () => {
     try {
       setLoading(true);
-      const { searchTerm, statusFilter, tierFilter } = filters;
+      const { searchTerm, statusFilter, tierFilter, scrapeRunId } = filters;
       let url = `/api/leads?search=${encodeURIComponent(searchTerm)}`;
       if (statusFilter) url += `&status=${statusFilter}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
+      if (scrapeRunId) url += `&scrapeRunId=${scrapeRunId}`;
       
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch leads");
