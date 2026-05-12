@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import MapStats from "@/components/map/MapStats";
 import MapLeadPanel from "@/components/map/MapLeadPanel";
+import LeadSidebar from "@/components/leads/LeadSidebar";
+import type { Lead } from "@/components/leads/LeadTable";
 import type { MapLead } from "@/components/map/GeoMap";
 
 // Dynamically import the map to avoid SSR issues
@@ -45,6 +47,7 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [activeLayer, setActiveLayer] = useState<LayerType>("markers");
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
+  const [sidebarLead, setSidebarLead] = useState<Lead | null>(null);
   const [geofenceActive, setGeofenceActive] = useState(false);
   const [geofencedLeads, setGeofencedLeads] = useState<MapLead[]>([]);
   const [geofenceBounds, setGeofenceBounds] = useState<{
@@ -142,6 +145,39 @@ export default function MapPage() {
   const clearGeofence = () => {
     setGeofenceBounds(null);
     setGeofencedLeads([]);
+  };
+
+  const handleTargetedScrape = async () => {
+    if (!geofenceBounds) return;
+    
+    setLoading(true);
+    try {
+      const res = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          criteria: {
+            propertyTypes: ["apartment", "villa"],
+            emirates: ["Dubai"],
+            bounds: geofenceBounds,
+            recentlyRelocated: false,
+            excludeRental: false,
+            tierMin: 1
+          }
+        }),
+      });
+
+      if (!res.ok) throw new Error("Scrape trigger failed");
+      const data = await res.json();
+      const { toast } = await import("sonner");
+      toast.success(t("search.scrapeStarted", "Scrape job started successfully"));
+    } catch (err) {
+      console.error(err);
+      const { toast } = await import("sonner");
+      toast.error(t("search.scrapeError", "Failed to start scrape job"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const layers: { id: LayerType; label: string; icon: any; desc: string }[] = [
@@ -296,16 +332,26 @@ export default function MapPage() {
 
       {/* Geofence result banner */}
       {geofenceBounds && !geofenceActive && (
-        <div className="flex items-center gap-3 p-3 bg-[#E1F5EE] border border-[#1D9E75]/30 rounded-xl">
+        <div className="flex items-center gap-3 p-3 bg-[#E1F5EE] border border-[#1D9E75]/30 rounded-xl shadow-sm">
           <Target className="w-4 h-4 text-[#1D9E75] flex-shrink-0" />
-          <span className="text-sm text-[#1D9E75] font-medium">
-            {t("map.geofenceResult", "{{count}} leads found in your geo-fence zone.", {
-              count: geofencedLeads.length,
-            })}
-          </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-1">
+            <span className="text-sm text-[#1D9E75] font-medium">
+              {t("map.geofenceResult", "{{count}} leads found in your geo-fence zone.", {
+                count: geofencedLeads.length,
+              })}
+            </span>
+            <button
+              onClick={handleTargetedScrape}
+              disabled={loading}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1D9E75] text-white text-xs font-bold hover:bg-[#188562] transition-colors shadow-sm disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {t("map.targetScrape", "Targeted Scrape for this Zone")}
+            </button>
+          </div>
           <button
             onClick={clearGeofence}
-            className="ms-auto flex items-center gap-1 px-3 py-1 rounded-lg bg-[#1D9E75]/10 hover:bg-[#1D9E75]/20 text-[#1D9E75] text-xs font-bold transition-colors"
+            className="ms-auto flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/50 hover:bg-white text-[#1D9E75] text-xs font-bold border border-[#1D9E75]/20 transition-colors"
           >
             <X className="w-3 h-3" />
             {t("map.clearZone", "Clear Zone")}
@@ -336,8 +382,15 @@ export default function MapPage() {
             <MapLeadPanel
               lead={selectedLead}
               onClose={() => setSelectedLead(null)}
+              onAction={(lead) => setSidebarLead(lead as unknown as Lead)}
             />
           )}
+
+          {/* Full Lead Sidebar */}
+          <LeadSidebar 
+            lead={sidebarLead} 
+            onClose={() => setSidebarLead(null)} 
+          />
 
           {/* Layer indicator badge */}
           <div className="absolute top-4 inset-inline-end-4 z-[900] flex items-center gap-2 px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-full text-white text-xs font-bold">

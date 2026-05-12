@@ -36,13 +36,16 @@ export async function POST(request: Request) {
     }
 
     for (const raw of leads) {
-      const email = (raw.email || raw.Email || "").trim();
-      const phone = (raw.phone || raw.Phone || "").trim();
-      const name = (raw.name || raw.Name || "Unknown Contact").trim();
+      // Handle both raw field names and exported headers
+      const email = (raw.email || raw.Email || raw["Email"] || "").trim();
+      const phone = (raw.phone || raw.Phone || raw["Phone"] || "").trim();
+      const name = (raw.name || raw.Name || raw["Name (EN)"] || raw["Name (AR)"] || "Unknown Contact").trim();
+      const company = (raw.company || raw.Company || raw["Company (EN)"] || raw["Company (AR)"] || "Manual Entry").trim();
+      const role = (raw.role || raw.Role || raw["Role (EN)"] || raw["Role (AR)"] || "Imported Lead").trim();
+      const location = (raw.location || raw.Location || raw["Location"] || "UAE").trim();
 
       // Skip empty
       if (!email && !phone && name === "Unknown Contact") continue;
-
       const existing = await prisma.lead.findFirst({
         where: {
           OR: [
@@ -56,16 +59,16 @@ export async function POST(request: Request) {
         await prisma.lead.create({
           data: {
             name,
-            company: (raw.company || raw.Company || "Manual Entry").trim(),
-            role: (raw.role || raw.Role || "Imported Lead").trim(),
+            company,
+            role,
             source: "Manual Import",
             tier: 1,
             email: email || null,
             phone: phone || null,
-            location: (raw.location || raw.Location || "UAE").trim(),
+            location,
             score: 50,
             signals: ["Manual Import"],
-            propertyPref: { type: "apartment" }, // Placeholder
+            propertyPref: { type: "apartment" },
             status: "new",
             agentId: session.id,
             scrapeRunId: importRun.id,

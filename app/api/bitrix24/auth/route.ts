@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUrl } from '@/lib/bitrix';
+import { getAuthUrl } from '@/lib/bitrix24';
 
 export async function GET() {
   try {

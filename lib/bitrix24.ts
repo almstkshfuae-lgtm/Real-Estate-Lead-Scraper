@@ -1,0 +1,171 @@
+/**
+ * Bitrix24 CRM Integration Library
+ * 
+ * Supports both Webhook and OAuth authentication for pushing leads to Bitrix24.
+ * 
+ * Reference: https://training.bitrix24.com/rest_help/crm/contacts/crm_contact_add.php
+ */
+
+export interface BitrixSession {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  domain: string;
+}
+
+export interface BitrixContactParams {
+  NAME: string;
+  LAST_NAME?: string;
+  SECOND_NAME?: string;
+  PHONE?: { VALUE: string; VALUE_TYPE: 'WORK' | 'MOBILE' | 'HOME' | 'OTHER' }[];
+  EMAIL?: { VALUE: string; VALUE_TYPE: 'WORK' | 'MAILING' | 'HOME' | 'OTHER' }[];
+  COMPANY_TITLE?: string;
+  COMMENTS?: string;
+  SOURCE_ID?: string;
+  OPENED?: 'Y' | 'N';
+}
+
+/**
+ * Pushes a lead to Bitrix24 as a Contact
+ */
+export async function pushContact(domain: string, token: string, lead: any) {
+  if (!domain || !token) {
+    throw new Error('Bitrix24 configuration missing');
+  }
+
+  // Construct base URL
+  // If token is a webhook, URL usually looks like: https://DOMAIN/rest/USER_ID/TOKEN/
+  // Since we don't have USER_ID in the UI yet, we assume token is either the full path or the domain is correct.
+  // Standard Webhook format: https://[your_domain]/rest/[user_id]/[webhook_code]/[method]
+  
+  // For simplicity, we'll try to detect if token is just the code or contains more
+  const baseUrl = token.startsWith('http') 
+    ? token 
+    : `https://${domain.replace(/\/$/, '')}/rest/1/${token}/`;
+
+  const method = 'crm.contact.add.json';
+  const url = baseUrl.endsWith('/') ? `${baseUrl}${method}` : `${baseUrl}/${method}`;
+
+  // Map lead to Bitrix contact fields
+  const [firstName, ...lastNames] = lead.name.split(' ');
+  const lastName = lastNames.join(' ') || 'Lead';
+
+  const params: BitrixContactParams = {
+    NAME: firstName,
+    LAST_NAME: lastName,
+    COMPANY_TITLE: lead.company,
+    COMMENTS: `Lead from Brilliance UAE.\nTier: T${lead.tier}\nScore: ${lead.score}\nSource: ${lead.source}\nLocation: ${lead.location}\nBudget: ${lead.budgetMin || 0} - ${lead.budgetMax || 0} AED\nNotes: ${lead.notes || 'No notes'}`,
+    SOURCE_ID: 'ADVERTISING',
+    OPENED: 'Y',
+  };
+
+  if (lead.phone) {
+    params.PHONE = [{ VALUE: lead.phone, VALUE_TYPE: 'MOBILE' }];
+  }
+
+  if (lead.email) {
+    params.EMAIL = [{ VALUE: lead.email, VALUE_TYPE: 'WORK' }];
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: params }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error_description || `Bitrix24 error: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  return result.result; // Returns the ID of the created contact
+}
+
+/**
+ * Pushes a lead to Bitrix24 as a Deal linked to a Contact
+ */
+export async function pushDeal(domain: string, token: string, contactId: string, lead: any) {
+  if (!domain || !token || !contactId) {
+    throw new Error('Bitrix24 configuration or contact ID missing');
+  }
+
+  const baseUrl = token.startsWith('http') 
+    ? token 
+    : `https://${domain.replace(/\/$/, '')}/rest/1/${token}/`;
+
+  const method = 'crm.deal.add.json';
+  const url = baseUrl.endsWith('/') ? `${baseUrl}${method}` : `${baseUrl}/${method}`;
+
+  // Construct deal parameters
+  const params = {
+    TITLE: `Deal: ${lead.name} - ${lead.propertyPref?.type || 'Property'}`,
+    CONTACT_ID: contactId,
+    OPPORTUNITY: lead.budgetMax || lead.budgetMin || 0,
+    CURRENCY_ID: 'AED',
+    COMMENTS: `Lead from Brilliance UAE.\nTier: T${lead.tier}\nScore: ${lead.score}\nLocation: ${lead.location}\nProperty: ${lead.propertyPref?.type} (${lead.propertyPref?.beds || 0} beds)`,
+    OPENED: 'Y',
+    SOURCE_ID: 'ADVERTISING',
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: params }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error_description || `Bitrix24 error: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  return result.result; // Returns the ID of the created deal
+}
+
+/**
+ * Tests the connection to Bitrix24
+ */
+export async function testConnection(domain: string, token: string) {
+  try {
+    const baseUrl = token.startsWith('http') 
+      ? token 
+      : `https://${domain.replace(/\/$/, '')}/rest/1/${token}/`;
+
+    const method = 'app.info.json';
+    const url = baseUrl.endsWith('/') ? `${baseUrl}${method}` : `${baseUrl}/${method}`;
+
+    const response = await fetch(url);
+    if (!response.ok) return false;
+    
+    const data = await response.json();
+    return !!data.result;
+  } catch (e) {
+    return false;
+  }
+}
+
+// OAuth methods (keep for future use/refactoring)
+
+export async function getAuthUrl() {
+  const clientId = process.env.BITRIX24_CLIENT_ID;
+  const redirectUri = process.env.BITRIX24_REDIRECT_URI;
+  
+  if (!clientId || !redirectUri) {
+    throw new Error('Bitrix24 credentials missing');
+  }
+
+  return `https://oauth.bitrix.info/oauth/authorize/?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}`;
+}
+
+export async function exchangeCode(code: string) {
+  const clientId = process.env.BITRIX24_CLIENT_ID;
+  const clientSecret = process.env.BITRIX24_CLIENT_SECRET;
+  
+  const res = await fetch(`https://oauth.bitrix.info/oauth/token/`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  return res.json();
+}

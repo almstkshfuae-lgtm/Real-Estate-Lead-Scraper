@@ -135,13 +135,19 @@
 - [x] **Create `app/api/cron/scrape/route.ts`** — cron endpoint
 - [x] **Cron runs: trigger 7A (Apify) + 7B (SerpAPI) sequentially**
 - [x] **Configure Vercel Cron in `vercel.json`** — daily at 02:00 GST
-- [x] **Error handling** — if one fails, continue to next
-- [x] **Manual trigger button in Settings → Scraper page**
-- [x] **Scrape run history table in Settings → Scraper page**
-
----
+### 7F — Apollo Prospecting Integration ✅
+- [x] 7F.1 Create Apollo lead prospecting service <!-- id: 7F.1 -->
+- [x] 7F.2 Integrate Apollo into Scraper Cron job <!-- id: 7F.2 -->
+- [x] 7F.3 Implement Apollo dynamic settings <!-- id: 7F.3 -->
+- [x] **Filtering UI** — Add Apollo source toggle to Scraper Settings ✅
 
 ## Phase 8 — Export ✅ (COMPLETED)
+- [x] 8A.1 Standardize export fields (EN/AR parity) <!-- id: 8A.1 -->
+- [x] 8A.2 Fix ExcelJS/CSV export routes <!-- id: 8A.2 -->
+- [x] 8B.1 Integrate Vercel Blob for secure CSV/Excel storage <!-- id: 8B.1 -->
+- [x] 8B.2 Implement Scraper log storage in Vercel Blob <!-- id: 8B.2 -->
+- [x] 8C.1 Align Import mapping with Export headers (Reverse Fix) <!-- id: 8C.1 -->
+- [x] 8C.2 Create Export/Import Guide <!-- id: 8C.2 -->
 
 - [x] **CSV export (UTF-8 BOM, bilingual)** — Respects active filters
 - [x] **XLSX export (native, bold headers)**
@@ -159,23 +165,23 @@
 
 | # | Task | Status | Priority | Notes |
 |---|------|--------|----------|-------|
-| 9A.1 | `lib/bitrix24.ts` — `pushContact()` using `crm.contact.add` | 🔲 Todo | High | Single endpoint, no webhooks |
-| 9A.2 | "Push to Bitrix24" button in lead sidebar | 🔲 Todo | High | One-click per lead |
-| 9A.3 | Bulk push — selected leads from table | 🔲 Todo | High | Checkbox select + push action |
-| 9A.4 | Push confirmation + error handling in UI | 🔲 Todo | High | Show success/fail per lead |
-| 9A.5 | Store `bitrix24ContactId` on Lead record in MySQL | 🔲 Todo | Medium | Prevents duplicate pushes |
-| 9A.6 | Settings page — Bitrix24 domain + token + test connection | 🔲 Todo | High | Validate before saving |
-| 9A.7 | WhatsApp Business API client (`lib/whatsapp.ts`) | 🔲 Todo | High | Send template messages |
-| 9A.8 | Send WhatsApp message from lead sidebar | 🔲 Todo | High | Uses lead phone number |
-| 9A.9 | Email outreach — compose + send via SMTP | 🔲 Todo | Medium | Resend or nodemailer |
+| 9A.1 | `lib/bitrix24.ts` — `pushContact()` using `crm.contact.add` | ✅ Done | High | Single endpoint, no webhooks |
+| 9A.2 | "Push to Bitrix24" button in lead sidebar | ✅ Done | High | One-click per lead |
+| 9A.3 | Bulk push — selected leads from table | ✅ Done | High | Checkbox select + push action |
+| 9A.4 | Push confirmation + error handling in UI | ✅ Done | High | Show success/fail per lead |
+| 9A.5 | Store `bitrix24ContactId` on Lead record in MySQL | ✅ Done | Medium | Prevents duplicate pushes |
+| 9A.6 | Settings page — Bitrix24 domain + token + test connection | ✅ Done | High | Validate before saving |
+| 9A.7 | WhatsApp Business API client (`lib/whatsapp.ts`) | ✅ Done | High | Send template messages |
+| 9A.8 | Send WhatsApp message from lead sidebar | ✅ Done | High | Uses lead phone number |
+| 9A.9 | Email outreach — compose + send via SMTP | ✅ Done | Medium | Resend or nodemailer |
 
 ### Phase 9B — Deals Push (Post-launch, after 9A stable) 🔲
 
 | # | Task | Status | Priority | Notes |
 |---|------|--------|----------|-------|
-| 9B.1 | `pushDeal()` using `crm.deal.add` — linked to contact | 🔲 Todo | Medium | Add after 9A confirmed working |
-| 9B.2 | Map property type + budget + emirate → Bitrix24 deal fields | 🔲 Todo | Medium | |
-| 9B.3 | Settings: push mode toggle (Contacts only / Contacts + Deals) | 🔲 Todo | Medium | Default: Contacts only |
+| 9B.1 | `pushDeal()` using `crm.deal.add` — linked to contact | ✅ Done | Medium | Add after 9A confirmed working |
+| 9B.2 | Map property type + budget + emirate → Bitrix24 deal fields | ✅ Done | Medium | |
+| 9B.3 | Settings: push mode toggle (Contacts only / Contacts + Deals) | ✅ Done | Medium | Default: Contacts only |
 | 9B.4 | Campaign manager view — group leads by property type or tier | 🔲 Todo | Medium | |
 | 9B.5 | Bitrix24 calendar sync — schedule follow-ups | 🔲 Todo | Low | |
 
@@ -207,10 +213,10 @@
 
 | # | Task | Status | Priority | Notes |
 |---|------|--------|----------|-------|
-| 11A.1 | `manifest.json` — name, short_name, theme_color `#185FA5`, background_color `#F7F8FA`, display `standalone` | 🔲 Todo | High | |
-| 11A.2 | App icons — 192×192 and 512×512 PNG, maskable variant for Android | 🔲 Todo | High | EN + AR wordmark variants |
-| 11A.3 | Service worker — cache app shell + last lead dataset offline | 🔲 Todo | Medium | Use Workbox or hand-rolled |
-| 11A.4 | Offline fallback page — shows last cached leads, blocks new scrape | 🔲 Todo | Medium | |
+| 11A.1 | `manifest.json` — name, short_name, theme_color `#185FA5`, background_color `#F7F8FA`, display `standalone` | ✅ Done | High | |
+| 11A.2 | App icons — 192×192 and 512×512 PNG, maskable variant for Android | ✅ Done | High | EN + AR wordmark variants |
+| 11A.3 | Service worker — cache app shell + last lead dataset offline | ✅ Done | Medium | Use Workbox or hand-rolled |
+| 11A.4 | Offline fallback page — shows last cached leads, blocks new scrape | ✅ Done | Medium | |
 | 11A.5 | Browser install prompt — intercept `beforeinstallprompt`, show custom UI | 🔲 Todo | Medium | Desktop + Android Chrome |
 
 ### 11B — Android APK 🔲
@@ -230,21 +236,21 @@
 |---|------|--------|----------|-------|
 | 11C.1 | Test Add to Home Screen on iOS 16, 17, 18 via Safari | 🔲 Todo | High | Must use Safari — Chrome on iOS will not prompt |
 | 11C.2 | Confirm standalone fullscreen mode on iPhone + iPad | 🔲 Todo | High | `display: standalone` in manifest |
-| 11C.3 | Add `apple-touch-icon` meta tags in `app/layout.tsx` | 🔲 Todo | High | iOS ignores manifest icons — needs own tag |
-| 11C.4 | Add `apple-mobile-web-app-capable` and `apple-mobile-web-app-status-bar-style` meta tags | 🔲 Todo | Medium | Controls status bar appearance |
+| 11C.3 | Add `apple-touch-icon` meta tags in `app/layout.tsx` | ✅ Done | High | iOS ignores manifest icons — needs own tag |
+| 11C.4 | Add `apple-mobile-web-app-capable` and `apple-mobile-web-app-status-bar-style` meta tags | ✅ Done | Medium | Controls status bar appearance |
 | 11C.5 | Test push notifications on iOS (requires Home Screen install) | 🔲 Todo | Low | iOS 16.4+ only, opt-in rates low |
 
 ### 11D — Agent Onboarding Install Page 🔲
 
 | # | Task | Status | Priority | Notes |
 |---|------|--------|----------|-------|
-| 11D.1 | Create `/install` route in `app/(app)/install/page.tsx` | 🔲 Todo | High | Public route — no auth required |
-| 11D.2 | Device detection — auto-detect Android / iOS / Desktop on load | 🔲 Todo | High | Use `navigator.userAgent` — no library needed |
+| 11D.1 | Create `/install` route in `app/(app)/install/page.tsx` | ✅ Done | High | Public route — no auth required |
+| 11D.2 | Device detection — auto-detect Android / iOS / Desktop on load | ✅ Done | High | Use `navigator.userAgent` — no library needed |
 | 11D.3 | Android panel — "Download App" button linking to Vercel Blob APK URL | 🔲 Todo | High | One tap install |
-| 11D.4 | iOS panel — 4-step visual guide: Open in Safari → Tap Share → Add to Home Screen → Open LeadPulse | 🔲 Todo | High | Screenshots in AR + EN |
+| 11D.4 | iOS panel — 4-step visual guide: Open in Safari → Tap Share → Add to Home Screen → Open LeadPulse | ✅ Done | High | Screenshots in AR + EN |
 | 11D.5 | Desktop panel — "Install from browser" button triggering PWA install prompt | 🔲 Todo | Medium | Uses intercepted `beforeinstallprompt` |
-| 11D.6 | `/install` page in EN + AR with full RTL layout | 🔲 Todo | High | First page many agents will see |
-| 11D.7 | QR code on `/install` page linking to itself — for sharing in WhatsApp/email | 🔲 Todo | Medium | Generate via `qrcode` npm package |
+| 11D.6 | `/install` page in EN + AR with full RTL layout | ✅ Done | High | First page many agents will see |
+| 11D.7 | QR code on `/install` page linking to itself — for sharing in WhatsApp/email | ✅ Done | Medium | Generate via `qrcode` npm package |
 | 11D.8 | Add `/install` link to agent onboarding email template | 🔲 Todo | Medium | Sent when admin creates a new agent account |
 
 ---

@@ -8,6 +8,12 @@ export type SearchCriteria = {
   emirates: string[];
   signals: string[];
   tierMin: 1 | 2 | 3;
+  bounds?: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  };
 };
 
 export type LeadStatus = 'new' | 'contacted' | 'qualified' | 

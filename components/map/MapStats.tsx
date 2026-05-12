@@ -1,5 +1,4 @@
-"use client";
-
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { MapPin, TrendingUp, Users, Target, Zap } from "lucide-react";
 import type { MapLead } from "./GeoMap";
@@ -13,51 +12,57 @@ interface MapStatsProps {
 export default function MapStats({ leads, filteredCount, geofencedCount }: MapStatsProps) {
   const { t } = useTranslation("common");
 
-  const totalLeads = leads.length;
-  const avgScore = totalLeads > 0
-    ? Math.round(leads.reduce((s, l) => s + l.score, 0) / totalLeads)
-    : 0;
-  const t1Count = leads.filter((l) => l.tier === 1).length;
-  const topLocations = Object.entries(
-    leads.reduce((acc: Record<string, number>, l) => {
-      const key = l.location?.split(",")[0]?.trim() || "Unknown";
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {})
-  )
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 3);
+  const { avgScore, t1Count, topLocations, stats } = useMemo(() => {
+    const totalLeads = leads.length;
+    const avg = totalLeads > 0
+      ? Math.round(leads.reduce((s, l) => s + l.score, 0) / totalLeads)
+      : 0;
+    
+    const t1 = leads.filter((l) => l.tier === 1).length;
+    
+    const locations = Object.entries(
+      leads.reduce((acc: Record<string, number>, l) => {
+        const key = l.location?.split(",")[0]?.trim() || "Unknown";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {})
+    )
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3);
 
-  const stats = [
-    {
-      icon: Users,
-      label: t("map.stats.totalLeads", "Total Leads"),
-      value: totalLeads,
-      color: "#185FA5",
-      bg: "#E6F1FB",
-    },
-    {
-      icon: TrendingUp,
-      label: t("map.stats.avgScore", "Avg. Score"),
-      value: avgScore,
-      color: avgScore >= 90 ? "#1D9E75" : avgScore >= 75 ? "#BA7517" : "#A32D2D",
-      bg: avgScore >= 90 ? "#E1F5EE" : avgScore >= 75 ? "#FAEEDA" : "#FAECE7",
-    },
-    {
-      icon: Zap,
-      label: t("map.stats.eliteLeads", "Elite (T1)"),
-      value: t1Count,
-      color: "#3C3489",
-      bg: "#EEEDFE",
-    },
-    {
-      icon: Target,
-      label: t("map.stats.geofenced", "In Zone"),
-      value: geofencedCount,
-      color: "#1D9E75",
-      bg: "#E1F5EE",
-    },
-  ];
+    const statsList = [
+      {
+        icon: Users,
+        label: t("map.stats.totalLeads", "Total Leads"),
+        value: totalLeads,
+        color: "#185FA5",
+        bg: "#E6F1FB",
+      },
+      {
+        icon: TrendingUp,
+        label: t("map.stats.avgScore", "Avg. Score"),
+        value: avg,
+        color: avg >= 90 ? "#1D9E75" : avg >= 75 ? "#BA7517" : "#A32D2D",
+        bg: avg >= 90 ? "#E1F5EE" : avg >= 75 ? "#FAEEDA" : "#FAECE7",
+      },
+      {
+        icon: Zap,
+        label: t("map.stats.eliteLeads", "Elite (T1)"),
+        value: t1,
+        color: "#3C3489",
+        bg: "#EEEDFE",
+      },
+      {
+        icon: Target,
+        label: t("map.stats.geofenced", "In Zone"),
+        value: geofencedCount,
+        color: "#1D9E75",
+        bg: "#E1F5EE",
+      },
+    ];
+
+    return { avgScore: avg, t1Count: t1, topLocations: locations, stats: statsList };
+  }, [leads, geofencedCount, t]);
 
   return (
     <div className="space-y-4">
@@ -122,7 +127,7 @@ export default function MapStats({ leads, filteredCount, geofencedCount }: MapSt
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
-                        width: `${(count / totalLeads) * 100}%`,
+                        width: `${(count / leads.length) * 100}%`,
                         background: idx === 0 ? "#3C3489" : idx === 1 ? "#085041" : "#444441",
                       }}
                     />

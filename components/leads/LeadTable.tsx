@@ -112,11 +112,59 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
 
   const handlePushToBitrix = async () => {
     setBulkUpdating(true);
-    setTimeout(() => {
-      toast.success(t('common.bulkPushed', { count: selectedIds.length }));
-      setBulkUpdating(false);
+    try {
+      const res = await fetch("/api/leads/bulk-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || "Bulk push failed");
+      
+      if (data.failed > 0) {
+        toast.warning(t('common.bulkPushPartial', { 
+          success: data.count, 
+          failed: data.failed,
+          defaultValue: `Pushed ${data.count} leads, ${data.failed} failed.`
+        }));
+      } else {
+        toast.success(t('common.bulkPushed', { count: selectedIds.length }));
+      }
+      
       setSelectedIds([]);
-    }, 2000);
+      fetchLeads();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(t('common.confirmDelete', { count: selectedIds.length, defaultValue: `Are you sure you want to delete ${selectedIds.length} leads?` }))) return;
+    
+    setBulkUpdating(true);
+    try {
+      const res = await fetch("/api/leads/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete leads");
+      }
+      
+      toast.success(t('common.bulkDeleted', { count: selectedIds.length, defaultValue: `Successfully deleted ${selectedIds.length} leads` }));
+      setSelectedIds([]);
+      fetchLeads();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBulkUpdating(false);
+    }
   };
 
   return (
@@ -150,7 +198,12 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
               {bulkUpdating ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
               {t('common.pushBitrix')}
             </button>
-            <button className="p-2 hover:bg-red-500 rounded-lg transition-colors text-white" title={t('common.delete')}>
+            <button 
+              onClick={handleBulkDelete}
+              disabled={bulkUpdating}
+              className="p-2 hover:bg-red-500 rounded-lg transition-colors text-white disabled:opacity-50" 
+              title={t('common.delete')}
+            >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>

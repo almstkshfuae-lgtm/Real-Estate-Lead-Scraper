@@ -1,12 +1,14 @@
 import { SearchCriteria } from "./types";
 import prisma from "./prisma";
+import { getSecret } from "./secrets";
 
-const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN || "";
-const ACTOR_ID = "example-author/dubai-real-estate-scraper"; // Placeholder for the actual Apify actor
+const ACTOR_ID = "tamer_almstkshf/Real-Estate-Lead-Scraper";
 
 export async function triggerApifyScrape(criteria: SearchCriteria): Promise<string> {
+  const APIFY_API_TOKEN = await getSecret("apifyToken");
+
   if (!APIFY_API_TOKEN) {
-    throw new Error("Missing APIFY_API_TOKEN in environment variables");
+    throw new Error("Missing Apify API Token in settings or environment");
   }
 
   const response = await fetch(
@@ -30,6 +32,8 @@ export async function triggerApifyScrape(criteria: SearchCriteria): Promise<stri
 }
 
 export async function getApifyRunResults(runId: string): Promise<any[]> {
+  const APIFY_API_TOKEN = await getSecret("apifyToken");
+
   if (!APIFY_API_TOKEN) {
     throw new Error("Missing APIFY_API_TOKEN in environment variables");
   }
@@ -38,7 +42,7 @@ export async function getApifyRunResults(runId: string): Promise<any[]> {
   const runResponse = await fetch(
     `https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_TOKEN}`
   );
-  
+
   if (!runResponse.ok) {
     throw new Error(`Failed to fetch run status for ${runId}`);
   }
@@ -108,13 +112,13 @@ export function normalizeApifyLead(raw: any, agentId: string, scrapeRunId: strin
 // Sync leads to database
 export async function syncLeadsToDb(rawLeads: any[], agentId: string, scrapeRunId: string) {
   let savedCount = 0;
-  
+
   // Import dynamically or at top level to avoid circular dependencies if any
   const { mlAdjustScore } = await import('./ml/lead-model');
 
   for (const raw of rawLeads) {
     const normalized = normalizeApifyLead(raw, agentId, scrapeRunId);
-    
+
     // Apply ML score adjustment based on learned weights
     normalized.score = await mlAdjustScore(normalized, normalized.score);
 

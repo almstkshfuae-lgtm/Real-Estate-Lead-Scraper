@@ -7,6 +7,7 @@ import type { MapLead } from "./GeoMap";
 interface MapLeadPanelProps {
   lead: MapLead | null;
   onClose: () => void;
+  onAction: (lead: MapLead) => void;
 }
 
 const SIGNAL_STYLES: Record<string, { bg: string; text: string }> = {
@@ -46,7 +47,7 @@ function getTierColor(tier: number): string {
   return "#444441";
 }
 
-export default function MapLeadPanel({ lead, onClose }: MapLeadPanelProps) {
+export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelProps) {
   const { t, i18n } = useTranslation("common");
   const language = i18n.language;
   const isRtl = language === "ar";
@@ -143,6 +144,15 @@ export default function MapLeadPanel({ lead, onClose }: MapLeadPanelProps) {
             })}
           </div>
         )}
+
+        {/* Action Button */}
+        <button
+          onClick={() => onAction(lead)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 mt-2 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all shadow-md shadow-blue-500/10"
+        >
+          <Star className="w-3.5 h-3.5" />
+          {t("map.viewDetails", "View Full Profile")}
+        </button>
       </div>
     </div>
   );

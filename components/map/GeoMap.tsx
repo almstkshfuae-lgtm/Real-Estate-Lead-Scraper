@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, memo } from "react";
 import { useTranslation } from "react-i18next";
 import "leaflet/dist/leaflet.css";
 
@@ -60,13 +60,19 @@ export interface MapLead {
   name: string;
   nameAr?: string;
   company: string;
+  role: string;
+  source: string;
   location: string;
   score: number;
   tier: number;
   status: string;
   signals: string[];
+  phone?: string;
+  email?: string;
+  notes?: string;
   budgetMin?: number;
   budgetMax?: number;
+  createdAt: string;
 }
 
 interface GeoMapProps {
@@ -78,7 +84,7 @@ interface GeoMapProps {
   onGeofenceDrawn: (bounds: { north: number; south: number; east: number; west: number }) => void;
 }
 
-export default function GeoMap({
+function GeoMap({
   leads,
   language,
   activeLayer,
@@ -493,3 +499,5 @@ export default function GeoMap({
     </>
   );
 }
+
+export default memo(GeoMap);

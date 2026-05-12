@@ -3,7 +3,7 @@
 import {
   X, Phone, Mail, Building2, Briefcase, ExternalLink,
   MessageSquare, Sparkles, Copy, CheckCircle2, Clock,
-  Send, Loader2, Zap, TrendingUp, RefreshCw, Brain
+  Send, Loader2, Zap, TrendingUp, RefreshCw, Brain, Trash2
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -109,6 +109,32 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
       toast.error(t("ai.signalsError", "Failed to extract signals"));
     } finally {
       setSignalsLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(t('common.confirmDeleteSingle', { name: lead.name, defaultValue: `Are you sure you want to delete ${lead.name}?` }))) return;
+    
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete lead");
+      }
+      
+      toast.success(t('common.deleted', { name: lead.name, defaultValue: "Lead deleted successfully" }));
+      onClose();
+      // We should probably trigger a refresh of the leads list here, 
+      // but since we don't have a global state, we'll rely on the user refreshing or the next fetch.
+      window.location.reload(); 
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -272,9 +298,52 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                     {copied === "pitch" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                     {t("leads.sidebar.aiPitch.copy")}
                   </button>
-                  <button className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--color-primary)] text-white rounded-xl text-xs font-bold hover:bg-[var(--color-primary-hover)] transition-all">
-                    <Send className="w-3 h-3" />
+                  <button 
+                    onClick={async () => {
+                      if (!pitch) return;
+                      const toastId = toast.loading(t("common.sending", "Sending..."));
+                      try {
+                        const res = await fetch(`/api/leads/${lead.id}/whatsapp`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ text: pitch })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Failed to send");
+                        toast.success(t("common.whatsappSent", "WhatsApp message sent"), { id: toastId });
+                      } catch (err: any) {
+                        toast.error(err.message, { id: toastId });
+                      }
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#128C7E] transition-all"
+                  >
+                    <MessageSquare className="w-3 h-3" />
                     {t("leads.sidebar.aiPitch.whatsapp")}
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      if (!pitch) return;
+                      const toastId = toast.loading(t("common.sending", "Sending..."));
+                      try {
+                        const res = await fetch(`/api/leads/${lead.id}/email`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ 
+                            subject: `Investment Opportunity: ${lead.company}`,
+                            body: pitch 
+                          })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Failed to send");
+                        toast.success(t("common.emailSent", "Email sent successfully"), { id: toastId });
+                      } catch (err: any) {
+                        toast.error(err.message, { id: toastId });
+                      }
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--color-primary)] text-white rounded-xl text-xs font-bold hover:bg-[var(--color-primary-hover)] transition-all"
+                  >
+                    <Mail className="w-3 h-3" />
+                    {t("leads.sidebar.aiPitch.email")}
                   </button>
                 </div>
               </div>
@@ -395,14 +464,31 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
       {/* Footer */}
       <div className="p-6 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]/50 flex gap-3">
         <button
+          onClick={handleDelete}
+          disabled={saving || pushing}
+          className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-all border border-red-100 dark:border-red-900/30 disabled:opacity-50"
+          title={t('common.delete')}
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
+        <button
           onClick={async () => {
             setPushing(true);
-            setTimeout(() => {
+            try {
+              const res = await fetch(`/api/leads/${lead.id}/push`, { method: "POST" });
+              const data = await res.json();
+              
+              if (!res.ok) throw new Error(data.error || "Failed to push");
+              
+              toast.success(t("common.pushedToBitrix", "Pushed to Bitrix24 successfully"));
+              // Optionally update lead object locally if we want to show bitrix24Id
+            } catch (err: any) {
+              toast.error(err.message);
+            } finally {
               setPushing(false);
-              toast.success(t("common.bulkPushed", { count: 1 }));
-            }, 2000);
+            }
           }}
-          disabled={pushing}
+          disabled={pushing || saving}
           className="flex-1 py-4 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all shadow-lg shadow-blue-500/10 flex items-center justify-center gap-2 disabled:opacity-70"
         >
           {pushing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}

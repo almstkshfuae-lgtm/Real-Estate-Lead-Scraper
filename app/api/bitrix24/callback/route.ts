@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exchangeCode } from '@/lib/bitrix';
+import { exchangeCode } from '@/lib/bitrix24';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;

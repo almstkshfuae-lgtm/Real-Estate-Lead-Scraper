@@ -10,6 +10,9 @@
     "postinstall": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/almstkshfuae-lgtm/Real-Estate-Lead-Scraper.git"
@@ -25,11 +28,13 @@
   "dependencies": {
     "@ai-sdk/deepinfra": "^2.0.51",
     "@anthropic-ai/sdk": "^0.95.1",
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@hello-pangea/dnd": "^18.0.1",
     "@prisma/client": "^5.22.0",
     "@tensorflow/tfjs": "^4.22.0",
     "@types/leaflet": "^1.9.21",
     "@types/papaparse": "^5.5.2",
+    "@types/qrcode": "^1.5.6",
     "@vercel/blob": "^2.3.3",
     "ai": "^6.0.177",
     "autoprefixer": "^10.5.0",
@@ -44,9 +49,11 @@
     "lucide-react": "^1.14.0",
     "next": "^16.2.6",
     "next-i18next": "^16.0.6",
+    "nodemailer": "^8.0.7",
     "papaparse": "^5.5.3",
     "postcss": "^8.5.14",
     "prisma": "^5.22.0",
+    "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-i18next": "^17.0.7",
@@ -60,8 +67,10 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.6.2",
+    "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
 }

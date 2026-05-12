@@ -74,6 +74,7 @@
         "subtitle": "Generate a personalized property pitch for {{name}} based on their UHNW status and recent investment signals.",
         "copy": "Copy Pitch",
         "whatsapp": "Send WhatsApp",
+        "email": "Send Email",
         "template": "Hello {{name}}, I saw the recent news about your work at {{company}}—congratulations! Given your focus on premium UAE real estate, I have an off-market opportunity that aligns perfectly with your current portfolio. Would you be open to a brief call?"
       },
       "notes": {
@@ -168,6 +169,9 @@
     "clearZone": "Clear Zone",
     "zone": {
       "leads": "Zone Leads"
+    },
+    "panel": {
+      "viewProfile": "View Full Profile"
     }
   },
   "campaigns": {
@@ -273,10 +277,19 @@
     "statusUpdated": "{{name}} moved successfully",
     "bulkStatusUpdated": "Successfully updated {{count}} leads",
     "bulkPushed": "Successfully pushed {{count}} leads to Bitrix24",
+    "bulkPushPartial": "Pushed {{success}} leads, {{failed}} failed.",
+    "emailSent": "Email sent successfully",
+    "whatsappSent": "WhatsApp message sent",
+    "sending": "Sending...",
     "leadsSelected": "{{count}} leads selected",
     "markContacted": "Mark Contacted",
     "pushBitrix": "Push to Bitrix24",
     "delete": "Delete selected",
+    "confirmDelete": "Are you sure you want to delete the selected leads? This action cannot be undone.",
+    "bulkDeleted": "Successfully deleted {{count}} leads",
+    "deleted": "Lead {{name}} deleted successfully",
+    "confirmDeleteSingle": "Are you sure you want to delete {{name}}? This action cannot be undone.",
+    "deleteError": "Failed to delete leads",
     "previous": "Previous",
     "next": "Next",
     "roleAt": "{{role}} at {{company}}",

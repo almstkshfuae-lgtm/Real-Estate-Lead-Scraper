@@ -11,7 +11,6 @@ export async function GET(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.id },
-      select: { preferences: true }
     });
 
     const defaultPrefs = {
@@ -22,15 +21,19 @@ export async function GET(request: Request) {
       whatsappToken: "",
       smtpHost: "",
       smtpUser: "",
-      smtpPass: ""
+      smtpPass: "",
+      apifyToken: "",
+      serpApiKey: "",
+      apolloApiKey: "",
+      anthropicApiKey: ""
     };
 
     let prefs: any = {};
-    if (user && user.preferences) {
-      if (typeof user.preferences === 'string') {
-        try { prefs = JSON.parse(user.preferences); } catch (e) {}
+    if (user && (user as any).preferences) {
+      if (typeof (user as any).preferences === 'string') {
+        try { prefs = JSON.parse((user as any).preferences); } catch (e) {}
       } else {
-        prefs = user.preferences;
+        prefs = (user as any).preferences;
       }
     }
     
@@ -53,16 +56,15 @@ export async function POST(request: Request) {
 
     const { integrations } = await request.json();
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.id },
-      select: { preferences: true }
+    const user = await prisma.user.findFirst({
+      where: { role: "admin" }
     });
 
-    const newPrefs = { ...(user?.preferences as any || {}), integrations };
+    const newPrefs = { ...((user as any)?.preferences || {}), integrations };
 
     await prisma.user.update({
       where: { id: session.id },
-      data: { preferences: newPrefs }
+      data: { preferences: newPrefs } as any
     });
 
     return NextResponse.json({ success: true }, { status: 200 });

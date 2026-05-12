@@ -11,14 +11,18 @@ export default function IntegrationsSettingsPage() {
   const { t } = useTranslation('common');
   
   const [integrations, setIntegrations] = useState({
-    bitrixDomain: "yourcompany.bitrix24.ae",
-    bitrixToken: "**********************",
-    bitrixPushMode: "contacts", // contacts, deals, off
-    whatsappPhoneId: "123456789012345",
-    whatsappToken: "**********************",
-    smtpHost: "smtp.mailgun.org",
-    smtpUser: "postmaster@mg.yourdomain.com",
-    smtpPass: "**********************"
+    apifyToken: "",
+    serpApiKey: "",
+    apolloApiKey: "",
+    anthropicApiKey: "",
+    bitrixDomain: "",
+    bitrixToken: "",
+    bitrixPushMode: "contacts",
+    whatsappPhoneId: "",
+    whatsappToken: "",
+    smtpHost: "",
+    smtpUser: "",
+    smtpPass: ""
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -75,15 +79,35 @@ export default function IntegrationsSettingsPage() {
 
   const handleTest = async (system: 'bitrix' | 'whatsapp' | 'smtp') => {
     setTestStatus(prev => ({ ...prev, [system]: 'testing' }));
-    // Simulate test API call
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    setTestStatus(prev => ({ ...prev, [system]: 'success' }));
-    toast.success(t(`settings.integrations.testSuccess.${system}`, `Successfully connected to ${system.toUpperCase()}`));
     
-    // Reset status after a few seconds
-    setTimeout(() => {
-      setTestStatus(prev => ({ ...prev, [system]: 'idle' }));
-    }, 3000);
+    try {
+      const res = await fetch("/api/settings/integrations/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          system, 
+          config: integrations 
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        setTestStatus(prev => ({ ...prev, [system]: 'success' }));
+        toast.success(t(`settings.integrations.testSuccess.${system}`, `Successfully connected to ${system.toUpperCase()}`));
+      } else {
+        setTestStatus(prev => ({ ...prev, [system]: 'error' }));
+        toast.error(t(`settings.integrations.testError.${system}`, `Failed to connect to ${system.toUpperCase()}`));
+      }
+    } catch (err: any) {
+      setTestStatus(prev => ({ ...prev, [system]: 'error' }));
+      toast.error(err.message);
+    } finally {
+      // Reset status after a few seconds
+      setTimeout(() => {
+        setTestStatus(prev => ({ ...prev, [system]: 'idle' }));
+      }, 3000);
+    }
   };
 
   return (
@@ -105,6 +129,93 @@ export default function IntegrationsSettingsPage() {
           <Save className="w-4 h-4" />
           {isSaving ? t('common.saving', 'Saving...') : t('common.saveChanges', 'Save Changes')}
         </button>
+      </div>
+
+      {/* Intelligence & Scraping */}
+      <div className="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] space-y-6">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[var(--color-text-primary)]">Intelligence & Scraping</h2>
+              <p className="text-sm text-[var(--color-text-secondary)]">Core AI brain and data extraction engine settings.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Anthropic API Key (Claude)</label>
+              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">The Brain</span>
+            </div>
+            <div className="relative">
+              <input
+                type="password"
+                placeholder="sk-ant-..."
+                value={integrations.anthropicApiKey}
+                onChange={(e) => handleChange('anthropicApiKey', e.target.value)}
+                className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+              />
+              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+            </div>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Powers lead analysis, pitch generation, and the AI chatbot.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Apify API Token</label>
+              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Property Scraper</span>
+            </div>
+            <div className="relative">
+              <input
+                type="password"
+                placeholder="apify_api_..."
+                value={integrations.apifyToken}
+                onChange={(e) => handleChange('apifyToken', e.target.value)}
+                className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+              />
+              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+            </div>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Enables automated scraping of property portals like PropertyFinder.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">SerpAPI Key</label>
+              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">News Signals</span>
+            </div>
+            <div className="relative">
+              <input
+                type="password"
+                value={integrations.serpApiKey}
+                onChange={(e) => handleChange('serpApiKey', e.target.value)}
+                className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+              />
+              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+            </div>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Used to find market-moving news and UAE investment signals.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Apollo API Key</label>
+              <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Prospecting</span>
+            </div>
+            <div className="relative">
+              <input
+                type="password"
+                value={integrations.apolloApiKey}
+                onChange={(e) => handleChange('apolloApiKey', e.target.value)}
+                className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+              />
+              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+            </div>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Connects to Apollo B2B database for executive investor discovery.</p>
+          </div>
+        </div>
       </div>
 
       {/* Bitrix24 Integration */}

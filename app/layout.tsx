@@ -20,6 +20,23 @@ const cairo = Cairo({
 export const metadata: Metadata = {
   title: "Brilliance - UAE Real Estate Lead Scraper",
   description: "AI-powered real estate lead intelligence platform for UAE agents.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Brilliance",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport = {
+  themeColor: "#185FA5",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

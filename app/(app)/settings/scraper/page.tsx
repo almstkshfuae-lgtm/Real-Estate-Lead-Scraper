@@ -12,6 +12,7 @@ interface ScrapeRun {
   startedAt: string;
   completedAt: string | null;
   sources: string[];
+  logUrl?: string | null;
 }
 
 export default function ScraperSettingsPage() {
@@ -115,6 +116,7 @@ export default function ScraperSettingsPage() {
                   <th className="px-4 py-3 font-medium">{t('settings.scraper.table.sources', 'Sources')}</th>
                   <th className="px-4 py-3 font-medium">{t('settings.scraper.table.leadsFound', 'Leads Found')}</th>
                   <th className="px-4 py-3 font-medium">{t('settings.scraper.table.duration', 'Duration')}</th>
+                  <th className="px-4 py-3 font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
@@ -145,6 +147,18 @@ export default function ScraperSettingsPage() {
                       {run.completedAt ? (
                         `${Math.max(1, Math.round((new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()) / 1000))}s`
                       ) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-end">
+                      {run.logUrl && (
+                        <a 
+                          href={run.logUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[var(--color-primary)] hover:underline font-medium"
+                        >
+                          View Logs
+                        </a>
+                      )}
                     </td>
                   </tr>
                 ))}

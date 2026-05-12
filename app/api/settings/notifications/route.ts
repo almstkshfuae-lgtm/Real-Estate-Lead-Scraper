@@ -11,7 +11,6 @@ export async function GET(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.id },
-      select: { preferences: true }
     });
 
     const defaultPrefs = {
@@ -24,11 +23,11 @@ export async function GET(request: Request) {
     };
 
     let prefs: any = {};
-    if (user?.preferences) {
-      if (typeof user.preferences === 'string') {
-        try { prefs = JSON.parse(user.preferences); } catch { prefs = {}; }
+    if (user && (user as any).preferences) {
+      if (typeof (user as any).preferences === 'string') {
+        try { prefs = JSON.parse((user as any).preferences); } catch { prefs = {}; }
       } else {
-        prefs = user.preferences as any;
+        prefs = (user as any).preferences as any;
       }
     }
 
@@ -53,7 +52,7 @@ export async function POST(request: Request) {
 
     await prisma.user.update({
       where: { id: session.id },
-      data: { preferences }
+      data: { preferences } as any
     });
 
     return NextResponse.json({ success: true }, { status: 200 });

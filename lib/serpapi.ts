@@ -1,10 +1,11 @@
 import prisma from "./prisma";
-
-const SERPAPI_API_KEY = process.env.SERPAPI_API_KEY || "";
+import { getSecret } from "./secrets";
 
 export async function searchNewsForSignals(query: string) {
+  const SERPAPI_API_KEY = await getSecret("serpApiKey");
+
   if (!SERPAPI_API_KEY) {
-    throw new Error("Missing SERPAPI_API_KEY in environment variables");
+    throw new Error("Missing SerpAPI Key in settings or environment");
   }
 
   // E.g., "UAE investor relocate", "DIFC company launch"
@@ -19,26 +20,7 @@ export async function searchNewsForSignals(query: string) {
   return data.news_results || [];
 }
 
-export function extractLeadFromArticle(article: any) {
-  // In a real implementation, we'd send the article text/snippet to Claude API here (Task 7B.4)
-  // For now, we mock the extraction to satisfy the database schema
-  const mockName = "Executive " + Math.floor(Math.random() * 1000);
-  const mockCompany = article.source || "News Organization";
-
-  return {
-    name: mockName,
-    company: mockCompany,
-    role: "Director",
-    source: article.source || "News Outlet",
-    tier: 2, // Default
-    location: "UAE",
-    score: 60,
-    signals: ["News Mention", "Business Expansion"],
-    propertyPref: { type: "apartment" },
-    status: "new",
-    notes: `Found via SerpAPI query in article: ${article.title} - ${article.link}`,
-  };
-}
+import { extractLeadsFromText, enrichLeadWithAI } from "./ai";
 
 export async function processNewsToLeads(queries: string[], agentId: string, scrapeRunId: string) {
   let savedCount = 0;
@@ -46,18 +28,35 @@ export async function processNewsToLeads(queries: string[], agentId: string, scr
   for (const query of queries) {
     try {
       const articles = await searchNewsForSignals(query);
+      
+      // Combine article titles and snippets for context
+      const context = articles.slice(0, 10).map((a: any) => `${a.title}: ${a.snippet}`).join("\n---\n");
+      const extractedLeads = await extractLeadsFromText(context);
 
-      for (const article of articles.slice(0, 5)) { // process top 5 per query
-        const newLead = extractLeadFromArticle(article);
+      for (const leadData of extractedLeads) {
+        // Find the article that match this lead (roughly) to get the source
+        const matchingArticle = articles.find((a: any) => 
+          a.title.includes(leadData.company) || a.snippet.includes(leadData.name)
+        ) || articles[0];
 
-        // Apply ML score adjustment based on learned weights
+        const baseLead = {
+          ...leadData,
+          source: matchingArticle?.source || "News Outlet",
+          location: "UAE",
+          propertyPref: { type: "apartment" },
+          status: "new",
+          notes: `Extracted from news query: ${query}. Mentioned in: ${matchingArticle?.title}`,
+        };
+
+        const enriched = await enrichLeadWithAI(baseLead);
+        
+        // Apply ML score adjustment
         const { mlAdjustScore } = await import('./ml/lead-model');
-        newLead.score = await mlAdjustScore(newLead, newLead.score);
+        enriched.score = await mlAdjustScore(enriched, enriched.score || 60);
 
-        // Save to DB (Task 7B.6 deduplication logic could be added here, but name/company matching is fuzzy)
         await prisma.lead.create({
           data: {
-            ...newLead,
+            ...enriched,
             agentId,
             scrapeRunId,
           }

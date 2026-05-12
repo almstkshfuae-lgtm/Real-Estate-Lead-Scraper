@@ -68,12 +68,14 @@ export default function LeadsPage() {
         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
           <div className="flex bg-[var(--color-bg-surface)] p-1 rounded-xl border border-[var(--color-border)]">
             <button 
+              onClick={() => setView('list')}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'list' ? 'bg-[var(--color-bg-card)] shadow-sm text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'}`}
             >
               <List className="w-3.5 h-3.5" />
               {t('common.viewList')}
             </button>
             <button 
+              onClick={() => setView('kanban')}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === 'kanban' ? 'bg-[var(--color-bg-card)] shadow-sm text-[var(--color-primary)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'}`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
