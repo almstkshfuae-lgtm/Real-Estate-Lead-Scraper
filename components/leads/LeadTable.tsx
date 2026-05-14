@@ -27,6 +27,7 @@ export type Lead = {
   notes?: string;
   phone?: string;
   email?: string;
+  bitrix24Id?: string | null;
   createdAt: string;
 };
 

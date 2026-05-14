@@ -60,7 +60,8 @@
       "tabs": {
         "details": "التفاصيل",
         "ai": "عرض الذكاء الاصطناعي",
-        "notes": "الملاحظات"
+        "notes": "الملاحظات",
+        "followup": "المتابعة"
       },
       "contact": "معلومات الاتصال",
       "professional": "الملف المهني",
@@ -84,6 +85,17 @@
       },
       "actions": {
         "bitrix": "إرسال إلى Bitrix24"
+      },
+      "followup": {
+        "title": "جدولة المتابعة",
+        "subtitle": "يزامن مباشرة مع تقويم Bitrix24 الخاص بك",
+        "needsPush": "يرجى دفع هذا العميل إلى Bitrix24 أولاً قبل جدولة المتابعة.",
+        "eventTitle": "عنوان الحدث",
+        "description": "الوصف (اختياري)",
+        "missingDate": "يرجى تحديد التاريخ والوقت",
+        "defaultTitle": "اجتماع متابعة",
+        "success": "تم جدولة المتابعة في Bitrix24",
+        "scheduleBtn": "جدولة في Bitrix24"
       }
     }
   },

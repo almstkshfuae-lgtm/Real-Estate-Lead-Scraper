@@ -60,7 +60,8 @@
       "tabs": {
         "details": "Details",
         "ai": "AI Pitch",
-        "notes": "Notes"
+        "notes": "Notes",
+        "followup": "Follow-up"
       },
       "contact": "Contact Information",
       "professional": "Professional Profile",
@@ -84,6 +85,17 @@
       },
       "actions": {
         "bitrix": "Push to Bitrix24"
+      },
+      "followup": {
+        "title": "Schedule Follow-up",
+        "subtitle": "Syncs directly to your Bitrix24 Calendar",
+        "needsPush": "Please push this lead to Bitrix24 first before scheduling a follow-up.",
+        "eventTitle": "Event Title",
+        "description": "Description (optional)",
+        "missingDate": "Please select a date and time",
+        "defaultTitle": "Follow-up Meeting",
+        "success": "Follow-up scheduled in Bitrix24",
+        "scheduleBtn": "Schedule in Bitrix24"
       }
     }
   },

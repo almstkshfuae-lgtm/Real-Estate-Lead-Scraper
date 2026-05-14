@@ -16,7 +16,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
   const lang = i18n.language === "ar" ? "ar" : "en";
 
   const [copied, setCopied] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "ai" | "notes">("details");
+  const [activeTab, setActiveTab] = useState<"details" | "ai" | "notes" | "followup">("details");
   const [notes, setNotes] = useState(lead?.notes || "");
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
@@ -37,6 +37,13 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
     extractedSignals: string[]; summary: string; confidenceScore: number; newsSnippets: string[];
   } | null>(null);
   const [signalsLoading, setSignalsLoading] = useState(false);
+
+  // Follow-up state
+  const [followUpTitle, setFollowUpTitle] = useState("");
+  const [followUpDesc, setFollowUpDesc] = useState("");
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpTime, setFollowUpTime] = useState("");
+  const [scheduling, setScheduling] = useState(false);
 
   useEffect(() => {
     if (lead) {
@@ -142,6 +149,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
     { id: "details", label: t("leads.sidebar.tabs.details"), icon: Briefcase },
     { id: "ai", label: t("leads.sidebar.tabs.ai"), icon: Sparkles },
     { id: "notes", label: t("leads.sidebar.tabs.notes"), icon: MessageSquare },
+    { id: "followup", label: t("leads.sidebar.tabs.followup", "Follow-up"), icon: Clock },
   ];
 
   const currentScore = scoreResult?.refinedScore ?? lead.score;
@@ -457,6 +465,100 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {t("leads.sidebar.notes.save")}
             </button>
+          </div>
+        )}
+
+        {/* FOLLOWUP TAB */}
+        {activeTab === "followup" && (
+          <div className="space-y-4 text-start">
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-blue-700 text-white relative overflow-hidden">
+              <div className="absolute -inset-x-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+              <Clock className="w-5 h-5 mb-3 text-blue-200" />
+              <h3 className="text-base font-bold mb-1">{t("leads.sidebar.followup.title", "Schedule Follow-up")}</h3>
+              <p className="text-xs text-blue-100">{t("leads.sidebar.followup.subtitle", "Syncs directly to your Bitrix24 Calendar")}</p>
+            </div>
+
+            {!lead.bitrix24Id ? (
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30 rounded-xl text-sm font-medium">
+                {t("leads.sidebar.followup.needsPush", "Please push this lead to Bitrix24 first before scheduling a follow-up.")}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder={t("leads.sidebar.followup.eventTitle", "Event Title")}
+                  className="w-full p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                  value={followUpTitle}
+                  onChange={(e) => setFollowUpTitle(e.target.value)}
+                />
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="date"
+                    className="w-full p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                  />
+                  <input
+                    type="time"
+                    className="w-full p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    value={followUpTime}
+                    onChange={(e) => setFollowUpTime(e.target.value)}
+                  />
+                </div>
+
+                <textarea
+                  className="w-full h-24 p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all resize-none"
+                  placeholder={t("leads.sidebar.followup.description", "Description (optional)")}
+                  value={followUpDesc}
+                  onChange={(e) => setFollowUpDesc(e.target.value)}
+                />
+
+                <button
+                  onClick={async () => {
+                    if (!followUpDate || !followUpTime) {
+                      toast.error(t("leads.sidebar.followup.missingDate", "Please select a date and time"));
+                      return;
+                    }
+
+                    setScheduling(true);
+                    try {
+                      const start = new Date(`${followUpDate}T${followUpTime}`);
+                      const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+                      const res = await fetch(`/api/leads/${lead.id}/followup`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ 
+                          title: followUpTitle || t("leads.sidebar.followup.defaultTitle", "Follow-up Meeting"),
+                          description: followUpDesc,
+                          startTime: start.toISOString(),
+                          endTime: end.toISOString()
+                        }),
+                      });
+                      
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || "Failed to schedule");
+                      
+                      toast.success(t("leads.sidebar.followup.success", "Follow-up scheduled in Bitrix24"));
+                      setFollowUpTitle("");
+                      setFollowUpDesc("");
+                      setFollowUpDate("");
+                      setFollowUpTime("");
+                    } catch (err: any) {
+                      toast.error(err.message);
+                    } finally {
+                      setScheduling(false);
+                    }
+                  }}
+                  disabled={scheduling}
+                  className="w-full py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {scheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
+                  {t("leads.sidebar.followup.scheduleBtn", "Schedule in Bitrix24")}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

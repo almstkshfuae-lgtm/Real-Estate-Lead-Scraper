@@ -183,7 +183,7 @@
 | 9B.2 | Map property type + budget + emirate → Bitrix24 deal fields | ✅ Done | Medium | |
 | 9B.3 | Settings: push mode toggle (Contacts only / Contacts + Deals) | ✅ Done | Medium | Default: Contacts only |
 | 9B.4 | Campaign manager view — group leads by property type or tier | 🔲 Todo | Medium | |
-| 9B.5 | Bitrix24 calendar sync — schedule follow-ups | 🔲 Todo | Low | |
+| 9B.5 | Bitrix24 calendar sync — schedule follow-ups | 🔄 In progress | Low | |
 
 ### Phase 9C — Bidirectional Sync (Optional, only if agents request it) 🔲
 

@@ -147,6 +147,60 @@ export async function testConnection(domain: string, token: string) {
 
 // OAuth methods (keep for future use/refactoring)
 
+/**
+ * Schedules a follow-up calendar event linked to the Contact in Bitrix24
+ */
+export async function scheduleFollowUp(
+  domain: string, 
+  token: string, 
+  contactId: string, 
+  eventDetails: { title: string; description: string; startTime: string; endTime: string }
+) {
+  if (!domain || !token || !contactId) {
+    throw new Error('Bitrix24 configuration or contact ID missing');
+  }
+
+  const baseUrl = token.startsWith('http') 
+    ? token 
+    : `https://${domain.replace(/\/$/, '')}/rest/1/${token}/`;
+
+  // We use crm.activity.add to create a meeting (TYPE_ID: 1)
+  const method = 'crm.activity.add.json';
+  const url = baseUrl.endsWith('/') ? `${baseUrl}${method}` : `${baseUrl}/${method}`;
+
+  // First, we optionally need the assigned employee to make them responsible. 
+  // For now, if we don't know the RESPONSIBLE_ID, Bitrix usually defaults to the token owner, 
+  // or we can fetch the contact to get its ASSIGNED_BY_ID.
+  // To keep it simple and efficient, we will let Bitrix assign it to the token owner.
+
+  const params = {
+    SUBJECT: eventDetails.title || 'Follow-up Meeting',
+    DESCRIPTION: eventDetails.description || 'Scheduled follow-up from Brilliance UAE',
+    DESCRIPTION_TYPE: 1, // 1 is plain text
+    OWNER_ID: contactId,
+    OWNER_TYPE_ID: 3, // 3 is Contact
+    TYPE_ID: 1, // 1 is Meeting
+    START_TIME: eventDetails.startTime,
+    END_TIME: eventDetails.endTime,
+    // Note: If you want to link communications (like phone), you can add the COMMUNICATIONS array here.
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: params }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error_description || `Bitrix24 error: ${response.statusText}`);
+  }
+
+  const result = await response.json();
+  return result.result; // Returns the ID of the created activity/event
+}
+
+
 export async function getAuthUrl() {
   const clientId = process.env.BITRIX24_CLIENT_ID;
   const redirectUri = process.env.BITRIX24_REDIRECT_URI;
