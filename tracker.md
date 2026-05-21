@@ -65,8 +65,9 @@
 
 ## Phase 6 — AI Features ✅ (COMPLETED)
 
-- [x] **AI pitch API route (`/api/ai/pitch`)** — Claude API, EN/AR prompt
+- [x] **AI pitch API route (`/api/ai/pitch`)** — Gemini API, EN/AR prompt
 - [x] **Pitch renders in sidebar inline**
+
 - [x] **Pitch language follows active UI language**
 - [x] **AI signal extraction** — parse scraped text → assign signals
 - [x] **Chatbot component (`AgentChatbot`)** — Floating, persistent
@@ -78,68 +79,16 @@
 
 ---
 
-## Phase 7 — Scraper Service ✅ (COMPLETED)
+## Phase 7 — Scraper Service [DEPRECATED - MOVED TO STATIC PIVOT] ⚠️
 
-> Architecture: No Redis, no BullMQ, no proxy rotation, no custom Playwright for portals.
-> All three property portals handled by ONE Apify actor.
-> Triggered by Vercel Cron only. Simple, cheap, maintainable.
+> Architecture: Reliance on third-party scrapers (Apify, Apollo, SerpAPI) has been removed.
+> The system now uses a "Golden Dataset" static database model with AI-powered persona analysis.
 
-### 7A — Apify Integration (Property Portals) ✅
-
-- [x] **Create Apify account + get API token** — Free credits to start
-- [x] **Connect to "Dubai Real Estate Scraper" Apify actor** — Single actor covers all 3 portals
-- [x] **Create `lib/apify.ts`** — Apify API client
-- [x] **Pass `SearchCriteria` as actor input**
-- [x] **Parse actor JSON output → map to `Lead` schema**
-- [x] **Deduplicate leads by phone + email before saving to MySQL**
-- [x] **Save new leads to MySQL** — append only, never overwrite existing
-- [x] **Create `ScrapeRun` record on start, update on finish** — Full audit trail in DB
-
----
-
-### 7B — News Aggregation (SerpAPI) ✅
-
-- [x] **Create SerpAPI account + get API key** — 100 free searches/month
-- [x] **Create `lib/serpapi.ts`** — news search client
-- [x] **Build keyword query set** — covering UAE business/investment signals
-- [x] **Send results to Claude API for signal extraction**
-- [x] **Map extracted entities → `Lead` schema + score**
-- [x] **Deduplicate against existing leads before saving**
-- [x] **Tag lead `source` as news outlet name**
-
----
-
-### 7C — Public Registry Scraping (Playwright) ✅
-
-- [x] **Playwright script for ADGM public register** — Company name + license type only
-- [x] **Playwright script for DIFC public register**
-- [x] **Playwright script for DED license portal**
-- [x] **Send company names to Claude API for enrichment**
-- [x] **Store enriched company leads in MySQL with `source`**
-
----
-
-### 7D — CSV Manual Import ✅
-
-- [x] **CSV upload UI in `/leads` page** — drag + drop or file picker
-- [x] **Parse CSV on upload** — validate required columns
-- [x] **Preview parsed rows before confirming import**
-- [x] **On confirm — save to MySQL, tag `source = "Manual Import"`**
-- [x] **Claude API enrichment on import** — assign signals + score per row
-- [x] **Deduplicate against existing leads on import**
-
----
-
-### 7E — Vercel Cron Scheduler ✅
-
-- [x] **Create `app/api/cron/scrape/route.ts`** — cron endpoint
-- [x] **Cron runs: trigger 7A (Apify) + 7B (SerpAPI) sequentially**
-- [x] **Configure Vercel Cron in `vercel.json`** — daily at 02:00 GST
-### 7F — Apollo Prospecting Integration ✅
-- [x] 7F.1 Create Apollo lead prospecting service <!-- id: 7F.1 -->
-- [x] 7F.2 Integrate Apollo into Scraper Cron job <!-- id: 7F.2 -->
-- [x] 7F.3 Implement Apollo dynamic settings <!-- id: 7F.3 -->
-- [x] **Filtering UI** — Add Apollo source toggle to Scraper Settings ✅
+### 7A-7F — Legacy Integrations [REMOVED]
+- [x] Apify integration (Removed)
+- [x] SerpAPI news (Removed)
+- [x] Public Registry (Removed)
+- [x] Apollo Prospecting (Removed)
 
 ## Phase 8 — Export ✅ (COMPLETED)
 - [x] 8A.1 Standardize export fields (EN/AR parity) <!-- id: 8A.1 -->
@@ -253,7 +202,14 @@
 | 11D.7 | QR code on `/install` page linking to itself — for sharing in WhatsApp/email | ✅ Done | Medium | Generate via `qrcode` npm package |
 | 11D.8 | Add `/install` link to agent onboarding email template | 🔲 Todo | Medium | Sent when admin creates a new agent account |
 
----
+## Phase 12 — Static Data Pivot & AI Persona 🚀
+
+- [x] **Decommission External Services** — Removed Apify, Apollo, SerpAPI.
+- [x] **Static Retrieval Engine** — Replaced scrapers with high-quality database query logic.
+- [x] **Unlimited Result Extraction** — Removed "25 leads" hardcoded limit.
++ [x] **Gemini Persona Field** — Added `persona` column to Lead model in MySQL.
++ [x] **Deep Persona Analysis** — Integrated Gemini logic to analyze behavior and investor profiles.
+- [x] **Ingestion Failure Resilience** — Static model ensures 100% data availability without API timeouts.
 
 ## Legend
 

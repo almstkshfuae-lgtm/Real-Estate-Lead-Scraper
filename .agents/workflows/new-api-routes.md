@@ -67,10 +67,10 @@ typescriptexport async function POST(req: NextRequest) {
 Never use NextResponse.json() on a streaming endpoint.
 8.5 AI model strings — exact values currently in codebase
 typescript// Pitch generation (/api/ai/pitch) and chat (/api/ai/chat):
-model: "claude-sonnet-4-5"
+model: "gemini-1"
 
 // Score refinement (/api/ai/score) and signal extraction (/api/ai/signals):
-model: "claude-haiku-4-5"
+model: "gemini-1"
 Do not change these without explicit instruction.
 8.6 Test the route
 bash# Must return 401 without auth:

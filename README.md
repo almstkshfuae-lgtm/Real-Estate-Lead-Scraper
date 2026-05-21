@@ -18,9 +18,9 @@ A full-stack real estate lead intelligence platform for UAE agents. Scrapes, sco
 | Database | Railway MySQL via Prisma ORM |
 | File storage | Vercel Blob (exports, scraped snapshots, lead attachments) |
 | Scheduling | Vercel Cron (daily scrape jobs) |
-| AI | Anthropic Claude API — `claude-sonnet-4-20250514` |
+| AI | Google Gemini API — `gemini-1.0` |
 | AI debugging | Next.js DevTools MCP (built into v16) |
-| Chatbot | Claude API with conversation memory (stored in MySQL) |
+| Chatbot | Gemini API with conversation memory (stored in MySQL) |
 | ML | TensorFlow.js — in-app learning from agent behavior and lead outcomes |
 | Scraper | Node.js + Playwright (server-side, Railway hosted) |
 | CRM | Bitrix24 REST API (simplified — Phase A contacts push only at launch) |
@@ -109,10 +109,10 @@ signal_bonus:
   - Tier minimum
 
 ### AI Features
-- **AI pitch generation** — Claude API, responds in EN or AR based on active language
+- **AI pitch generation** — Gemini API, responds in EN or AR based on active language
 - **AI chatbot** — persistent, memory-aware assistant for agents (conversation stored in MySQL)
 - **ML lead scoring** — TensorFlow.js model trained on historical lead outcomes and agent interactions; improves over time
-- **AI signal extraction** — Claude API parses scraped raw text to assign signals automatically
+- **AI signal extraction** — Gemini API parses scraped raw text to assign signals automatically
 
 ### Scraper
 - Sources: Bayut, Dubizzle, Zawya Invest, Bloomberg MENA, Forbes ME, ADGM/DIFC Registry, DED Registry, Private Banking directories, Family Office networks, Elite Lifestyle/Concierge, News & Press
@@ -246,8 +246,8 @@ DATABASE_URL=mysql://user:pass@railway.internal:3306/leadpulse
 # Auth
 JWT_SECRET=
 
-# Anthropic
-ANTHROPIC_API_KEY=
+# Google Gemini
+GOOGLE_AI_API_KEY=
 
 # Vercel Blob
 BLOB_READ_WRITE_TOKEN=
@@ -317,7 +317,7 @@ leadpulse-uae/
 │       └── Modal.tsx
 ├── lib/
 │   ├── prisma.ts
-│   ├── claude.ts
+│   ├── ai.ts
 │   ├── bitrix24.ts
 │   ├── whatsapp.ts
 │   ├── scraper-client.ts

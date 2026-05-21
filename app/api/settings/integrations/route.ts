@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       apifyToken: "",
       serpApiKey: "",
       apolloApiKey: "",
-      anthropicApiKey: ""
+      googleAiApiKey: ""
     };
 
     let prefs: any = {};
@@ -37,7 +37,12 @@ export async function GET(request: Request) {
       }
     }
     
-    const integrations = prefs.integrations || defaultPrefs;
+    const savedIntegrations = prefs.integrations || {};
+    const integrations = {
+      ...defaultPrefs,
+      ...savedIntegrations,
+      googleAiApiKey: savedIntegrations.googleAiApiKey || ""
+    };
 
     return NextResponse.json({ integrations }, { status: 200 });
 

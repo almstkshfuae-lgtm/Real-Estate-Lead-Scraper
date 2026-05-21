@@ -1,9 +1,5 @@
 import { NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { generateGeminiText } from "@/lib/ai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,26 +42,16 @@ Always respond in English unless the user writes in Arabic. Be precise, actionab
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const streamResponse = await anthropic.messages.stream({
-            model: "claude-sonnet-4-5",
-            max_tokens: 1024,
-            system: systemPrompt,
-            messages: messages.map((m: { role: string; content: string }) => ({
-              role: m.role as "user" | "assistant",
-              content: m.content,
-            })),
-          });
+          const text = await generateGeminiText(
+            systemPrompt,
+            `Chat messages:\n${messages
+              .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
+              .join("\n")}`,
+            1024
+          );
 
-          for await (const chunk of streamResponse) {
-            if (
-              chunk.type === "content_block_delta" &&
-              chunk.delta.type === "text_delta"
-            ) {
-              const data = JSON.stringify({ delta: chunk.delta.text });
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-            }
-          }
-
+          const data = JSON.stringify({ delta: text || "" });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (err: any) {

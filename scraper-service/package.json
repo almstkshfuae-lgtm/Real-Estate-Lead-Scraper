@@ -12,6 +12,8 @@
     "playwright": "^1.49.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.1",
-    "axios": "^1.7.9"
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0-rc.12",
+    "@prisma/client": "^5.22.0"
   }
 }

@@ -318,7 +318,7 @@
   },
   "ai": {
     "pitchTitle": "AI Pitch Generator",
-    "pitchSubtitle": "Claude generates a personalized pitch for this lead",
+    "pitchSubtitle": "Gemini generates a personalized pitch for this lead",
     "generatePitch": "Generate AI Pitch",
     "generating": "Generating...",
     "pitchError": "Failed to generate pitch",
@@ -328,7 +328,7 @@
       "casual": "Casual"
     },
     "refineScore": "AI Score Refinement",
-    "refineScoreDesc": "Claude re-evaluates lead quality",
+    "refineScoreDesc": "Gemini re-evaluates lead quality",
     "analyzeBtn": "Analyze",
     "scoreDelta": "from original",
     "scoreRefined": "Score refined by AI",
@@ -342,16 +342,16 @@
     "chatError": "Chat failed, please try again",
     "chat": {
       "title": "Brilliance AI Assistant",
-      "subtitle": "UAE Real Estate Intelligence · Powered by Claude",
+      "subtitle": "UAE Real Estate Intelligence · Powered by Gemini",
       "welcome": "How can I help you today?",
       "welcomeDesc": "Ask me anything about UAE real estate, leads, or market insights.",
       "placeholder": "Ask about leads, UAE market, or strategies...",
       "clear": "Clear chat",
-      "footer": "Powered by Claude · Press Enter to send · Shift+Enter for new line"
+      "footer": "Powered by Gemini · Press Enter to send · Shift+Enter for new line"
     },
     "page": {
       "title": "AI Intelligence Hub",
-      "subtitle": "Multi-language AI assistant for UAE real estate agents · Powered by Claude",
+      "subtitle": "Multi-language AI assistant for UAE real estate agents · Powered by Gemini",
       "stat1": "Real-time Streaming",
       "stat2": "Lead Intelligence",
       "stat3": "EN / AR Bilingual"

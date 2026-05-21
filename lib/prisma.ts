@@ -15,11 +15,24 @@ const prismaClientSingleton = () => {
     errorFormat: 'minimal',
   })
 
-  // Eagerly connect so the pool is warm before the first request,
-  // and to surface bad-credential / bad-URL errors at startup.
-  client.$connect().catch((err: Error) => {
-    console.error('[Prisma] Initial $connect failed:', err.message)
-  })
+  // Eagerly connect with retry logic
+  const connectWithRetry = async (maxRetries = 5, delay = 3000) => {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await client.$connect()
+        console.log('[Prisma] Connected successfully')
+        return
+      } catch (err) {
+        console.error(`[Prisma] Connection attempt ${attempt}/${maxRetries} failed:`, (err as Error).message)
+        if (attempt < maxRetries) {
+          console.log(`[Prisma] Retrying in ${delay}ms...`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      }
+    }
+  }
+
+  connectWithRetry()
 
   return client
 }

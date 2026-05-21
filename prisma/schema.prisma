@@ -33,6 +33,7 @@ model Lead {
   role         String
   roleAr       String?
   source       String
+  sourceType   String?
   tier         Int
   phone        String?
   email        String?
@@ -46,16 +47,46 @@ model Lead {
   rentalFlag   Boolean   @default(false)
   status       String    @default("new")
   notes        String?
+  persona      String?   @db.Text
   bitrix24Id   String?
   agentId      String
   scrapeRunId  String
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  updatedAt    DateTime @updatedAt
   agent        User      @relation(fields: [agentId], references: [id])
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
 
+  @@unique([name, company, source])
   @@index([agentId], map: "Lead_agentId_fkey")
   @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
+}
+
+model SourceConfig {
+  id                    String   @id @default(cuid())
+  key                   String   @unique
+  url                   String
+  name                  String
+  type                  String
+  signals               Json
+  navigationSelectors   Json
+  contentSelectors      Json
+  crawlDepth            Int?
+  maxPages              Int?
+  delayBetweenPages     Int?
+  active                Boolean  @default(true)
+  
+  // Verification Pipeline Fields
+  verificationStatus    String   @default("pending") // pending, verified, rejected, manual_review
+  verificationReport    Json?
+  verifiedAt            DateTime?
+  technicalAccessPassed Boolean?
+  domDataPassed         Boolean?
+  interactionsPassed    Boolean?
+  aiExtractionPassed    Boolean?
+  verificationNotes     String?  @db.Text
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 model ScrapeRun {

@@ -2,15 +2,15 @@
 
 This document clarifies the purpose, usage, and optimization of each API key used in the Brilliance platform to ensure maximum performance and zero conflicts.
 
-## 1. Core Intelligence: Anthropic (Claude)
-- **Key**: `ANTHROPIC_API_KEY`
+## 1. Core Intelligence: Google Gemini
+- **Key**: `GOOGLE_AI_API_KEY`
 - **Purpose**: The "Brain" of the platform.
 - **Usage**:
     - **Signal Extraction**: Analyzing news snippets and scraped text to identify "Buy" signals.
     - **Lead Enrichment**: Mapping raw data to the Lead schema.
     - **AI Pitch Generation**: Creating personalized sales pitches in English and Arabic.
     - **Agent Chatbot**: Powering the persistent AI assistant.
-- **Optimization**: We use `claude-3-5-sonnet` for the best balance of speed and intelligence.
+- **Optimization**: We use `gemini-1.0` for the best balance of speed and intelligence.
 
 ## 2. Real Estate Scraper: Apify
 - **Key**: `APIFY_API_TOKEN`
@@ -29,7 +29,7 @@ This document clarifies the purpose, usage, and optimization of each API key use
 - **Key**: `SERPAPI_API_KEY`
 - **Purpose**: Signal extraction from current events.
 - **Usage**: Scans Google News for keywords like "UAE relocation", "Dubai luxury investment", and "New company launch".
-- **Optimization**: Feeds results into Claude for entity extraction, turning news mentions into actionable leads.
+- **Optimization**: Feeds results into Gemini for entity extraction, turning news mentions into actionable leads.
 
 ## 5. CRM Integration: Bitrix24
 - **Key**: `BITRIX24_TOKEN` (Inbound Webhook)

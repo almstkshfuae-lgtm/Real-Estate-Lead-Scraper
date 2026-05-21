@@ -7,8 +7,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "postinstall": "prisma generate",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -27,7 +26,6 @@
   "homepage": "https://github.com/almstkshfuae-lgtm/Real-Estate-Lead-Scraper#readme",
   "dependencies": {
     "@ai-sdk/deepinfra": "^2.0.51",
-    "@anthropic-ai/sdk": "^0.95.1",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@hello-pangea/dnd": "^18.0.1",
     "@prisma/client": "^5.22.0",
@@ -64,6 +62,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.6.2",

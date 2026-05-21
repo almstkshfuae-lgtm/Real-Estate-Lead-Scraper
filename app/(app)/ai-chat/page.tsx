@@ -21,7 +21,7 @@ export default function AIChatPage() {
             {t("ai.page.title", "AI Intelligence Hub")}
           </h1>
           <p className="text-[var(--color-text-secondary)] mt-1">
-            {t("ai.page.subtitle", "Multi-language AI assistant for UAE real estate agents · Powered by Claude")}
+            {t("ai.page.subtitle", "Multi-language AI assistant for UAE real estate agents · Powered by Gemini")}
           </p>
         </div>
         <div className="flex gap-3 flex-wrap">

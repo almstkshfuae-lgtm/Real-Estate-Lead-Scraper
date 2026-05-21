@@ -23,7 +23,9 @@ export async function getSecret(keyName: string): Promise<string> {
 
   // 2. Fallback to Environment Variables
   const envMap: Record<string, string | undefined> = {
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    googleAiApiKey:
+      process.env.GOOGLE_AI_API_KEY ||
+      process.env.GOOGLE_API_KEY,
     apifyToken: process.env.APIFY_API_TOKEN,
     serpApiKey: process.env.SERPAPI_API_KEY,
     apolloApiKey: process.env.APOLLO_API_KEY,

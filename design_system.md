@@ -344,17 +344,17 @@ Mouse events (`mousedown`, `mousemove`, `mouseup`) on Leaflet map draw `L.rectan
 ## 15. Phase 6 — AI Intelligence Layer (Implemented)
 
 ### Technology
-- **AI Model**: Anthropic Claude (`claude-sonnet-4-5` for pitch, `claude-haiku-4-5` for scoring/signals)
-- **SDK**: `@anthropic-ai/sdk` (official Anthropic Node SDK)
+- **AI Model**: Google Gemini (`gemini-1.0` for pitch, scoring, and signals)
+- **SDK**: Google AI REST / Gemini interface
 - **Streaming**: Server-Sent Events (SSE) via `ReadableStream` in Next.js Route Handlers
 
 ### AI API Routes
 | Route | Model | Purpose |
 |-------|-------|---------|
-| `POST /api/ai/pitch` | claude-sonnet-4-5 | Personalized lead pitch (EN/AR, 3 tone styles) |
-| `POST /api/ai/chat` | claude-sonnet-4-5 | Streaming bilingual agent chat |
-| `POST /api/ai/score` | claude-haiku-4-5 | Lead score refinement (0–100, auto-saved to DB) |
-| `POST /api/ai/signals` | claude-haiku-4-5 | Investment signal extraction from news |
+| `POST /api/ai/pitch` | gemini-1.0 | Personalized lead pitch (EN/AR, 3 tone styles) |
+| `POST /api/ai/chat` | gemini-1.0 | Streaming bilingual agent chat |
+| `POST /api/ai/score` | gemini-1.0 | Lead score refinement (0–100, auto-saved to DB) |
+| `POST /api/ai/signals` | gemini-1.0 | Investment signal extraction from news |
 
 ### Components
 | Component | Location | Purpose |

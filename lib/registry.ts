@@ -26,13 +26,13 @@ export async function fetchDedCompanies() {
   ];
 }
 
-// 7C.4: Send company names to Claude API for enrichment
+// 7C.4: Send company names to Gemini API for enrichment
 export async function enrichCompanyData(companies: any[], source: string, agentId: string, scrapeRunId: string) {
   let savedCount = 0;
   
   for (const company of companies) {
-    // Mocking Claude Enrichment
-    // In reality, we would send company.name to Anthropic API to guess role/signals
+    // Mocking Gemini enrichment
+    // In reality, we would send company.name to the Gemini API to guess role/signals
     const enrichedLead = {
       name: "Managing Director", // Unknown person, focus on title
       company: company.name,

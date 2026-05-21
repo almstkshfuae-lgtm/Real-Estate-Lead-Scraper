@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { generateGeminiText } from "@/lib/ai";
 import prisma from "@/lib/prisma";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,14 +44,8 @@ Scoring criteria:
 
 Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "reasoning": "<1-2 sentence justification>", "recommendations": ["<action 1>", "<action 2>"]}`;
 
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 256,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const responseText =
-      message.content[0].type === "text" ? message.content[0].text.trim() : "{}";
+    const responseText = await generateGeminiText("", prompt, 256);
+    const trimmedResponse = responseText?.trim() || "{}";
 
     let parsed: {
       refinedScore: number;
@@ -66,8 +56,8 @@ Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "rea
 
     try {
       // Extract JSON even if wrapped in markdown code blocks
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(responseText);
+      const jsonMatch = trimmedResponse.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(trimmedResponse);
     } catch {
       return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
     }

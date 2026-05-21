@@ -266,7 +266,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
               <div className="absolute -inset-x-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
               <Sparkles className="w-5 h-5 mb-3 text-blue-200" />
               <h3 className="text-base font-bold mb-1">{t("ai.pitchTitle", "AI Pitch Generator")}</h3>
-              <p className="text-xs text-blue-100">{t("ai.pitchSubtitle", "Claude generates a personalized pitch for this lead")}</p>
+              <p className="text-xs text-blue-100">{t("ai.pitchSubtitle", "Gemini generates a personalized pitch for this lead")}</p>
             </div>
 
             {/* Style selector */}
@@ -364,7 +364,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h4 className="text-sm font-bold text-[var(--color-text-primary)]">{t("ai.refineScore", "AI Score Refinement")}</h4>
-                  <p className="text-xs text-[var(--color-text-secondary)]">{t("ai.refineScoreDesc", "Claude re-evaluates lead quality")}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">{t("ai.refineScoreDesc", "Gemini re-evaluates lead quality")}</p>
                 </div>
                 <button
                   onClick={refineScore}

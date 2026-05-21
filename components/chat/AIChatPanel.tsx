@@ -108,7 +108,7 @@ export default function AIChatPanel({ context }: { context?: string }) {
           </div>
           <div>
             <h2 className="text-sm font-bold text-white">{t("ai.chat.title", "Brilliance AI Assistant")}</h2>
-            <p className="text-[10px] text-blue-200">{t("ai.chat.subtitle", "UAE Real Estate Intelligence · Powered by Claude")}</p>
+            <p className="text-[10px] text-blue-200">{t("ai.chat.subtitle", "UAE Real Estate Intelligence · Powered by Gemini")}</p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -215,7 +215,7 @@ export default function AIChatPanel({ context }: { context?: string }) {
           </button>
         </div>
         <p className="text-[10px] text-[var(--color-text-disabled)] text-center mt-2">
-          {t("ai.chat.footer", "Powered by Claude · Press Enter to send · Shift+Enter for new line")}
+          {t("ai.chat.footer", "Powered by Gemini · Press Enter to send · Shift+Enter for new line")}
         </p>
       </div>
     </div>

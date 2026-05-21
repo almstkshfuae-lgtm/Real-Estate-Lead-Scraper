@@ -14,7 +14,7 @@ export default function IntegrationsSettingsPage() {
     apifyToken: "",
     serpApiKey: "",
     apolloApiKey: "",
-    anthropicApiKey: "",
+    googleAiApiKey: "",
     bitrixDomain: "",
     bitrixToken: "",
     bitrixPushMode: "contacts",
@@ -148,15 +148,15 @@ export default function IntegrationsSettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Anthropic API Key (Claude)</label>
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Google AI API Key</label>
               <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">The Brain</span>
             </div>
             <div className="relative">
               <input
                 type="password"
-                placeholder="sk-ant-..."
-                value={integrations.anthropicApiKey}
-                onChange={(e) => handleChange('anthropicApiKey', e.target.value)}
+                placeholder="AIza... or bearer token"
+                value={integrations.googleAiApiKey}
+                onChange={(e) => handleChange('googleAiApiKey', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
               <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />

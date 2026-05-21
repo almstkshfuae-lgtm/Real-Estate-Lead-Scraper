@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { generateGeminiText } from "@/lib/ai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,17 +46,9 @@ Tone: ${style === "formal" ? "Very formal and corporate" : style === "casual" ? 
 
 Write the pitch directly without any preamble:`;
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 512,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    const pitchText = await generateGeminiText(systemPrompt, userPrompt, 512);
 
-    const pitchText =
-      message.content[0].type === "text" ? message.content[0].text : "";
-
-    return NextResponse.json({ pitch: pitchText, tokens: message.usage });
+    return NextResponse.json({ pitch: pitchText || "", tokens: null });
   } catch (error: any) {
     console.error("[AI Pitch Error]", error?.message || error);
     return NextResponse.json(

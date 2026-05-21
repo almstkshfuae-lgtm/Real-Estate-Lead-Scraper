@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { generateGeminiText } from "@/lib/ai";
 
 // Predefined news signals for UAE high-profile individuals (simulated)
 const UAE_SIGNALS_DB = [
@@ -47,14 +43,8 @@ ${lang === "ar" ? "أجب باللغة العربية للملخص، لكن ال
 
 Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<intelligence summary>", "confidenceScore": <0-100>, "newsSnippets": ["<snippet 1>", "<snippet 2>"]}`;
 
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 384,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const responseText =
-      message.content[0].type === "text" ? message.content[0].text.trim() : "{}";
+    const responseText = await generateGeminiText("", prompt, 384);
+    const trimmedResponse = responseText?.trim() || "{}";
 
     let parsed: {
       signals: string[];
@@ -64,8 +54,8 @@ Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<i
     };
 
     try {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(responseText);
+      const jsonMatch = trimmedResponse.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(trimmedResponse);
     } catch {
       return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
     }
