@@ -7,6 +7,7 @@ import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_SCRAPER_SOURCES } from './default-sources.js';
 import { verifySourceCompletePipeline } from './verification-pipeline.js';
+import { validateProxyConnection, formatProxyValidationReport } from './proxy-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,11 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3002;
 const SECRET = process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
+const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
+
+if (USE_MOCK_DATA) {
+  console.log('⚠️  Mock Data Mode ENABLED - scraper will return simulated data instead of real requests');
+}
 
 /**
  * Proxy Configuration for Oxylabs
@@ -76,6 +82,69 @@ const PROXY_CONFIG = {
 
 function getRandomDelay(minMs = 1000, maxMs = 4000) {
   return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+}
+
+/**
+ * Generate mock lead data for testing without real web requests
+ * Toggled by USE_MOCK_DATA environment variable
+ */
+function generateMockLeadData(sourceKey, sourceName) {
+  const mockLeads = [
+    {
+      name: 'Ahmed Al Mansouri',
+      email: 'ahmed.mansouri@example.ae',
+      phone: '+971501234567',
+      location: 'Dubai',
+      property_interest: 'Off-plan apartment',
+      budget_aed: '2,500,000 - 3,500,000',
+      signals: ['High Net Worth', 'Investor'],
+      source: sourceName
+    },
+    {
+      name: 'Fatima Al Khaleej',
+      email: 'fatima.khaleej@example.ae',
+      phone: '+971509876543',
+      location: 'Abu Dhabi',
+      property_interest: 'Villa',
+      budget_aed: '5,000,000 - 8,000,000',
+      signals: ['UHNW', 'Private Client'],
+      source: sourceName
+    },
+    {
+      name: 'Mohammed Al Sayegh',
+      email: 'mohammed.sayegh@example.ae',
+      phone: '+971506543210',
+      location: 'Dubai Marina',
+      property_interest: 'Penthouse',
+      budget_aed: '3,000,000 - 4,500,000',
+      signals: ['Business Owner', 'Executive'],
+      source: sourceName
+    }
+  ];
+
+  return mockLeads;
+}
+
+/**
+ * Generate mock source result for testing
+ */
+function generateMockSourceResult(source, sourceKey) {
+  const mockContent = generateMockLeadData(sourceKey, source.name)
+    .map((lead) => `Lead: ${lead.name}\nEmail: ${lead.email}\nPhone: ${lead.phone}\nBudget: ${lead.budget_aed}\nSignals: ${lead.signals.join(', ')}\n`)
+    .join('\n---\n');
+
+  return {
+    url: source.url,
+    name: source.name,
+    type: source.type,
+    signals: source.signals,
+    title: `${source.name} - Mock Data`,
+    description: `Mock lead data from ${source.name} (USE_MOCK_DATA mode)`,
+    content: mockContent,
+    mockData: true,
+    leads: generateMockLeadData(sourceKey, source.name),
+    timestamp: new Date().toISOString()
+  };
 }
 
 async function simulateHumanBrowsing(page) {
@@ -255,8 +324,15 @@ app.post('/scrape-source', async (req, res) => {
 /**
  * Scrape a single source with deep crawling, pagination, and DOM interaction
  * Supports multi-page traversal and content extraction
+ * If USE_MOCK_DATA is enabled, returns simulated lead data instead
  */
 async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = null) {
+  // Return mock data if enabled for testing
+  if (USE_MOCK_DATA) {
+    console.log(`🎭 Mock Mode: Returning simulated data for ${sourceKey || source.key}`);
+    return generateMockSourceResult(source, sourceKey || source.key);
+  }
+
   const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
   
   const contextOptions = {
@@ -501,6 +577,39 @@ app.post('/test-connection', async (req, res) => {
   } catch (error) {
     console.error('Connection test failed:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Validate proxy configuration and connectivity
+ * POST /validate-proxy
+ * Body: { secret, proxyUrl? }
+ */
+app.post('/validate-proxy', async (req, res) => {
+  const { secret, proxyUrl } = req.body;
+
+  if (secret !== SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
+    const result = await validateProxyConnection(resolvedProxyUrl, 30000);
+    
+    console.log(formatProxyValidationReport(result));
+    
+    res.json({
+      status: result.status,
+      configured: result.configured,
+      details: result,
+      report: formatProxyValidationReport(result)
+    });
+  } catch (error) {
+    console.error('Proxy validation error:', error);
+    res.status(500).json({ 
+      error: 'Proxy validation failed',
+      details: error.message 
+    });
   }
 });
 

@@ -479,7 +479,137 @@ Page is fully bilingual EN/AR with RTL layout. Includes a QR code linking to `/i
 
 ---
 
+## Deployment & Validation Scripts
+
+### Running Validation & Smoke Tests Locally
+
+The project includes two TypeScript utilities in `scratch/` for validating deployment and production readiness:
+
+#### 1. **Validate Environment Secrets** (`scratch/validate-secrets.ts`)
+
+Validates that all required production environment variables are present and correctly formatted:
+
+```bash
+# Install tsx globally (if not already installed)
+npm install -g tsx
+
+# Run validation with your environment variables loaded
+USE_MOCK_DATA=true tsx scratch/validate-secrets.ts
+```
+
+**Checks:**
+- `DATABASE_URL` — Railway MySQL connection string
+- `SCRAPER_SERVICE_URL` — Internal scraper service endpoint
+- `SCRAPER_SECRET` — 64-character hex string used for service authentication
+- `OXYLABS_PROXY_URL`, `OXYLABS_PROXY_USERNAME`, `OXYLABS_PROXY_PASSWORD` — Proxy credentials
+- At least one AI provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, etc.)
+
+**Output:**
+```
+✅ Required environment variables are present.
+✅ SCRAPER_SECRET is valid (64 chars).
+✅ At least one AI provider key is configured.
+```
+
+#### 2. **Smoke Test Production** (`scratch/smoke-test-prod.ts`)
+
+Performs end-to-end connectivity tests against production endpoints:
+
+```bash
+# Set environment variables and run smoke tests
+export SCRAPER_SERVICE_URL=https://scraper-service.railway.app
+export VERCEL_URL=https://your-vercel-project.vercel.app
+export SCRAPER_SECRET=<your-64-char-hex>
+export OXYLABS_PROXY_USERNAME=<if-configured>
+export OXYLABS_PROXY_PASSWORD=<if-configured>
+export OXYLABS_PROXY_URL=<if-configured>
+
+tsx scratch/smoke-test-prod.ts
+```
+
+**Tests:**
+1. GET `/health` — Verifies scraper service is running
+2. POST `/api/scrape` — Tests Vercel Next.js API route with auth header
+3. Proxy connectivity — If Oxylabs credentials present, validates proxy tunnel
+
+**Output:**
+```
+✅ Scraper service health passed.
+✅ Vercel scrape endpoint returned success.
+```
+
+---
+
+### Local Development with Mock Data
+
+To test the UI without triggering real web scrapes or proxy requests:
+
+```bash
+# Start scraper service in mock mode
+USE_MOCK_DATA=true node scraper-service/index.js
+
+# In a separate terminal, start the Next.js app
+npm run dev
+```
+
+When `USE_MOCK_DATA=true`:
+- Scraper endpoints return simulated lead data (no real Playwright calls)
+- No external API calls or proxy bandwidth consumed
+- Perfect for UI testing and frontend development
+- Mock data includes realistic lead profiles with signals and budgets
+
+---
+
+### Proxy Connectivity Validation (`scraper-service/proxy-validator.js`)
+
+The scraper service includes a built-in proxy validation utility used by the `/validate-proxy` endpoint:
+
+```bash
+# From the root directory, test proxy configuration
+curl -X POST http://localhost:3002/validate-proxy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "secret": "'$SCRAPER_SECRET'",
+    "proxyUrl": "'$OXYLABS_PROXY_URL'"
+  }'
+```
+
+**Response example (connected):**
+```json
+{
+  "status": "connected",
+  "configured": true,
+  "details": {
+    "responseTime": 1247,
+    "testUrl": "https://httpbin.org/ip",
+    "responsePreview": "{\"origin\": \"1.2.3.4\"}"
+  }
+}
+```
+
+**Response example (failed):**
+```json
+{
+  "status": "failed",
+  "configured": true,
+  "error": "407 Proxy Authentication Failed",
+  "suggestions": [
+    "HTTP 407 Proxy Authentication Failed — verify username/password are URL-encoded",
+    "Check OXYLABS_PROXY_USERNAME and OXYLABS_PROXY_PASSWORD values"
+  ]
+}
+```
+
+The validator:
+- Attempts real page load through configured proxy
+- Provides detailed error codes and diagnostic suggestions
+- Helps troubleshoot Oxylabs or other proxy provider issues
+- Safe to run repeatedly without side effects
+
+---
+
 ## License
+
 Private — internal tooling for real estate sales teams.
 
 ## ALL RIGHTS RESERVED FOR ALMSTKSHF FOR MEDIA MONITORING AND DEVELOPMENT 
