@@ -1,12 +1,24 @@
 import express from 'express';
 import { chromium } from 'playwright';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_SCRAPER_SOURCES } from './default-sources.js';
 import { verifySourceCompletePipeline } from './verification-pipeline.js';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const envLocalPath = path.resolve(__dirname, '../.env.local');
+const envPath = path.resolve(__dirname, '../.env');
+console.log('scraper-service loading env from:', envLocalPath, envPath);
+console.log('scraper-service existing DATABASE_URL before dotenv:', process.env.DATABASE_URL);
+
+dotenv.config({ path: envLocalPath });
+dotenv.config({ path: envPath });
+console.log('scraper-service DATABASE_URL after dotenv:', process.env.DATABASE_URL);
 
 const prisma = new PrismaClient();
 const app = express();
@@ -19,17 +31,46 @@ const SECRET = process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
  * Proxy Configuration for Oxylabs
  * Rotating residential proxies to bypass Cloudflare and anti-bot detection
  */
+const DEFAULT_OXYLABS_PROXY_HOST = process.env.OXYLABS_PROXY_HOST || 'pr.oxylabs.io';
+const DEFAULT_OXYLABS_PROXY_PORT = process.env.OXYLABS_PROXY_PORT || '10000';
+const DEFAULT_OXYLABS_PROXY_SCHEME = process.env.OXYLABS_PROXY_SCHEME || 'http';
+
+function buildOxylabsProxyUrl() {
+  if (process.env.OXYLABS_PROXY_URL) {
+    return process.env.OXYLABS_PROXY_URL;
+  }
+
+  const username = process.env.OXYLABS_PROXY_USERNAME;
+  const password = process.env.OXYLABS_PROXY_PASSWORD;
+  const host = process.env.OXYLABS_PROXY_HOST || DEFAULT_OXYLABS_PROXY_HOST;
+  const port = process.env.OXYLABS_PROXY_PORT || DEFAULT_OXYLABS_PROXY_PORT;
+  const scheme = process.env.OXYLABS_PROXY_SCHEME || DEFAULT_OXYLABS_PROXY_SCHEME;
+
+  if (!username || !password || !host || !port) {
+    console.warn('⚠️  Oxylabs proxy credentials or endpoint are not fully configured. Provide OXYLABS_PROXY_URL or OXYLABS_PROXY_USERNAME/OXYLABS_PROXY_PASSWORD and OXYLABS_PROXY_HOST/OXYLABS_PROXY_PORT.');
+    return null;
+  }
+
+  const encodedUser = encodeURIComponent(username);
+  const encodedPass = encodeURIComponent(password);
+  return `${scheme}://${encodedUser}:${encodedPass}@${host}:${port}`;
+}
+
 const PROXY_CONFIG = {
-  enabled: process.env.USE_PROXY === 'true' || true,
+  enabled: process.env.USE_PROXY ? process.env.USE_PROXY === 'true' : Boolean(process.env.OXYLABS_PROXY_URL || process.env.OXYLABS_PROXY_USERNAME),
   provider: 'oxylabs',
   // Format: socks5://username:password@proxy:port
   // Or: http://username:password@proxy:port
   getProxyUrl: () => {
-    if (!process.env.OXYLABS_PROXY_URL) {
-      console.warn('⚠️  OXYLABS_PROXY_URL not set - proceeding without proxy');
+    const proxyUrl = buildOxylabsProxyUrl();
+    if (!proxyUrl) {
+      console.warn('⚠️  Oxylabs proxy URL not resolved - proceeding without proxy');
       return null;
     }
-    return process.env.OXYLABS_PROXY_URL;
+
+    const safeProxyUrl = proxyUrl.replace(/(https?:\/\/)([^:@\s]+):(.*)@/, '$1$2:*****@');
+    console.log(`🔒 Oxylabs proxy resolved: ${safeProxyUrl}`);
+    return proxyUrl;
   }
 };
 
@@ -104,6 +145,9 @@ async function getSourceConfigMap() {
       return acc;
     }, {});
   } catch (err) {
+    console.error('Prisma error in getSourceConfigMap:', err instanceof Error ? err.message : err);
+    console.error('Prisma stack:', err instanceof Error ? err.stack : undefined);
+    console.error('scraper-service DATABASE_URL at error time:', process.env.DATABASE_URL);
     // If Prisma / DATABASE_URL is not configured (local dev), fall back to default in-memory sources
     console.warn('Prisma not available or DATABASE_URL not set - falling back to DEFAULT_SCRAPER_SOURCES');
     const map = {};

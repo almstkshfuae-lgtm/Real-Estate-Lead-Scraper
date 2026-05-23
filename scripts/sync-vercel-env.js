@@ -43,7 +43,24 @@ if (fs.existsSync(localPath)) {
 
 // Keys we DO NOT copy from Vercel into local to avoid accidental production DB creds
 const denyPatterns = [/^DATABASE_URL$/i, /^MYSQL_/, /^MYSQLDATABASE$/i, /^MYSQL_PUBLIC_URL$/i, /^MYSQL_URL$/i, /^MYSQLROOT/gi, /^MYSQL_ROOT_/i, /^MUX_TOKEN_SECRET$/i, /^MUX_TOKEN_ID$/i];
-const allowExplicit = new Set(['SCRAPER_SERVICE_URL','SCRAPER_SECRET','PROXY_SERVICE_URL','PROXY_API_KEY','BLOB_READ_WRITE_TOKEN','GOOGLE_AI_API_KEY','BITRIX24_TOKEN','BITRIX24_DOMAIN','WHATSAPP_TOKEN','JWT_SECRET']);
+const allowExplicit = new Set([
+  'SCRAPER_SERVICE_URL',
+  'SCRAPER_SECRET',
+  'PROXY_SERVICE_URL',
+  'PROXY_API_KEY',
+  'OXYLABS_PROXY_URL',
+  'OXYLABS_PROXY_USERNAME',
+  'OXYLABS_PROXY_PASSWORD',
+  'OXYLABS_PROXY_HOST',
+  'OXYLABS_PROXY_PORT',
+  'OXYLABS_PROXY_SCHEME',
+  'BLOB_READ_WRITE_TOKEN',
+  'GOOGLE_AI_API_KEY',
+  'BITRIX24_TOKEN',
+  'BITRIX24_DOMAIN',
+  'WHATSAPP_TOKEN',
+  'JWT_SECRET'
+]);
 
 for (const [k, v] of Object.entries(vercel)) {
   const deny = denyPatterns.some(rx => rx.test(k));
