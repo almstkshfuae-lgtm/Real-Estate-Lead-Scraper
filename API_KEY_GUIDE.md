@@ -12,24 +12,19 @@ This document clarifies the purpose, usage, and optimization of each API key use
     - **Agent Chatbot**: Powering the persistent AI assistant.
 - **Optimization**: We use `gemini-1.0` for the best balance of speed and intelligence.
 
-## 2. Real Estate Scraper: Apify
-- **Key**: `APIFY_API_TOKEN`
-- **Actor**: `tamer_almstkshf/Real-Estate-Lead-Scraper`
-- **Purpose**: Specialized property portal scraping.
-- **Usage**: Directly targets PropertyFinder, Bayut, and Dubizzle to find active property inquiries and market trends.
-- **Optimization**: Only triggered via Vercel Cron or manual "Run Scraper" action to minimize credit usage.
+## 2. Internal Abu Dhabi Scraper Service
+- **URLs**: `SCRAPER_SERVICE_URL`
+- **Secret**: `SCRAPER_SECRET`
+- **Purpose**: Central engine for scraping premium Abu Dhabi HNWI sources using a custom Playwright microservice.
+- **Usage**: Targets local elite ecosystem sites, the ADGM/DIFC public registers, private club directories, and boutique investor portals.
+- **Optimization**: Designed for deep crawl, pagination handling, and DOM cleaning without third-party subscription costs.
 
-## 3. Global Prospecting: Apollo.io
-- **Key**: `APOLLO_API_KEY` (Requires Master Key)
-- **Purpose**: B2B executive and investor discovery.
-- **Usage**: Finds "Net New" high-net-worth individuals in the UAE (CEOs, Founders, Partners) based on job title and location.
-- **Optimization**: Complementary to property scraping. Used for finding corporate investors and office space leads.
-
-## 4. News Intelligence: SerpAPI (Google News)
-- **Key**: `SERPAPI_API_KEY`
-- **Purpose**: Signal extraction from current events.
-- **Usage**: Scans Google News for keywords like "UAE relocation", "Dubai luxury investment", and "New company launch".
-- **Optimization**: Feeds results into Gemini for entity extraction, turning news mentions into actionable leads.
+## 3. Residential Proxy Service
+- **URL**: `PROXY_SERVICE_URL`
+- **Key**: `PROXY_API_KEY`
+- **Purpose**: Rotate residential proxies to bypass bot protection and Cloudflare-style defenses.
+- **Usage**: Optional but recommended for high-reliability scraping of Abu Dhabi business sites and restricted index pages.
+- **Optimization**: Use only when necessary to reduce request costs and preserve scraper stability.
 
 ## 5. CRM Integration: Bitrix24
 - **Key**: `BITRIX24_TOKEN` (Inbound Webhook)

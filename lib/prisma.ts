@@ -15,7 +15,8 @@ const prismaClientSingleton = () => {
     errorFormat: 'minimal',
   })
 
-  // Eagerly connect with retry logic
+  // Lazily connect on first query rather than during module import.
+  // This avoids build-time connection noise when local env configuration is not yet set.
   const connectWithRetry = async (maxRetries = 5, delay = 3000) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -31,8 +32,6 @@ const prismaClientSingleton = () => {
       }
     }
   }
-
-  connectWithRetry()
 
   return client
 }

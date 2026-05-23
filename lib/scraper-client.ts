@@ -4,9 +4,13 @@
  * Handles communication with the internal scraping engine
  */
 
+import { getSecret } from "./secrets";
+
 interface ScraperConfig {
   baseUrl: string;
   secret: string;
+  proxyUrl?: string;
+  proxyApiKey?: string;
   timeout?: number;
 }
 
@@ -31,11 +35,15 @@ interface ScraperResponse {
 class ScraperClient {
   private baseUrl: string;
   private secret: string;
+  private proxyUrl?: string;
+  private proxyApiKey?: string;
   private timeout: number;
 
   constructor(config: ScraperConfig) {
     this.baseUrl = config.baseUrl || 'http://localhost:3002';
     this.secret = config.secret || 'scraper_secret_alpha_bravo';
+    this.proxyUrl = config.proxyUrl;
+    this.proxyApiKey = config.proxyApiKey;
     this.timeout = config.timeout || 30000;
   }
 
@@ -57,6 +65,31 @@ class ScraperClient {
       return response.ok;
     } catch (error) {
       console.error('Scraper health check failed:', error);
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Check scraper service connection and optional proxy access
+   */
+  async testConnection(): Promise<boolean> {
+    const { controller, timeoutId } = this.createAbortController();
+    try {
+      const response = await fetch(`${this.baseUrl}/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          secret: this.secret,
+          proxyUrl: this.proxyUrl,
+          proxyApiKey: this.proxyApiKey
+        }),
+        signal: controller.signal
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Scraper connection test failed:', error);
       return false;
     } finally {
       clearTimeout(timeoutId);
@@ -94,7 +127,9 @@ class ScraperClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sources: sourceKeys,
-          secret: this.secret
+          secret: this.secret,
+          proxyUrl: this.proxyUrl,
+          proxyApiKey: this.proxyApiKey
         }),
         signal: controller.signal
       });
@@ -124,7 +159,9 @@ class ScraperClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceKey,
-          secret: this.secret
+          secret: this.secret,
+          proxyUrl: this.proxyUrl,
+          proxyApiKey: this.proxyApiKey
         }),
         signal: controller.signal
       });
@@ -144,16 +181,24 @@ class ScraperClient {
   }
 }
 
-// Singleton instance
-let scraperClient: ScraperClient | null = null;
+// Singleton instance promise
+let scraperClientPromise: Promise<ScraperClient> | null = null;
 
-export function getScraperClient(): ScraperClient {
-  if (!scraperClient) {
-    const baseUrl = process.env.SCRAPER_SERVICE_URL || 'http://localhost:3002';
-    const secret = process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
-    scraperClient = new ScraperClient({ baseUrl, secret });
-  }
-  return scraperClient;
+async function createScraperClient(): Promise<ScraperClient> {
+  const baseUrl = (await getSecret('scraperServiceUrl')) || process.env.SCRAPER_SERVICE_URL || 'http://localhost:3002';
+  const secret = (await getSecret('scraperSecret')) || process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
+  const proxyUrl = (await getSecret('proxyServiceUrl')) || process.env.PROXY_SERVICE_URL || undefined;
+  const proxyApiKey = (await getSecret('proxyApiKey')) || process.env.PROXY_API_KEY || undefined;
+
+  return new ScraperClient({ baseUrl, secret, proxyUrl, proxyApiKey });
 }
 
-export { ScraperClient, ScraperResponse, ScrapedContent, ScraperConfig };
+export function getScraperClient(): Promise<ScraperClient> {
+  if (!scraperClientPromise) {
+    scraperClientPromise = createScraperClient();
+  }
+  return scraperClientPromise;
+}
+
+export { ScraperClient };
+export type { ScraperResponse, ScrapedContent, ScraperConfig };

@@ -22,10 +22,11 @@ export async function GET(request: Request) {
       smtpHost: "",
       smtpUser: "",
       smtpPass: "",
-      apifyToken: "",
-      serpApiKey: "",
-      apolloApiKey: "",
-      googleAiApiKey: ""
+      googleAiApiKey: "",
+      scraperServiceUrl: "",
+      scraperSecret: "",
+      proxyServiceUrl: "",
+      proxyApiKey: ""
     };
 
     let prefs: any = {};

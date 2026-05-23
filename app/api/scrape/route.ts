@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { extractHNWILeads, extractLeadsFromText, enrichLeadWithAI, generatePersonaAnalysis } from "@/lib/ai";
 import { SearchCriteria } from "@/lib/types";
 import { getScraperClient } from "@/lib/scraper-client";
+import { getEnvVar } from "@/lib/env";
 import { put } from "@vercel/blob";
 
 export async function POST(request: NextRequest) {
@@ -64,8 +65,8 @@ async function runHNWIScrapePipeline(
 ) {
   let totalLeadsFound = 0;
   const logs: any[] = [];
-  const scraperServiceUrl = process.env.SCRAPER_SERVICE_URL || 'http://localhost:3002';
-  const scraperSecret = process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
+  const scraperServiceUrl = getEnvVar('SCRAPER_SERVICE_URL') || 'http://localhost:3002';
+  const scraperSecret = getEnvVar('SCRAPER_SECRET') || 'scraper_secret_alpha_bravo';
 
   try {
     logs.push({ 
@@ -83,7 +84,7 @@ async function runHNWIScrapePipeline(
       targetSources: sourcesToScrape
     });
 
-    const scraperClient = getScraperClient();
+    const scraperClient = await getScraperClient();
     const scraperResults: any[] = [];
 
     for (const sourceKey of sourcesToScrape) {

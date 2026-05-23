@@ -1,4 +1,5 @@
 import prisma from "./prisma";
+import { getEnvVar } from "./env";
 
 export async function getSecret(keyName: string): Promise<string> {
   try {
@@ -24,13 +25,13 @@ export async function getSecret(keyName: string): Promise<string> {
   // 2. Fallback to Environment Variables
   const envMap: Record<string, string | undefined> = {
     googleAiApiKey:
-      process.env.GOOGLE_AI_API_KEY ||
-      process.env.GOOGLE_API_KEY,
-    apifyToken: process.env.APIFY_API_TOKEN,
-    serpApiKey: process.env.SERPAPI_API_KEY,
-    apolloApiKey: process.env.APOLLO_API_KEY,
-    bitrixToken: process.env.BITRIX24_TOKEN,
-    whatsappToken: process.env.WHATSAPP_TOKEN,
+      getEnvVar('GOOGLE_AI_API_KEY') || getEnvVar('GOOGLE_API_KEY'),
+    scraperServiceUrl: getEnvVar('SCRAPER_SERVICE_URL'),
+    scraperSecret: getEnvVar('SCRAPER_SECRET'),
+    proxyServiceUrl: getEnvVar('PROXY_SERVICE_URL'),
+    proxyApiKey: getEnvVar('PROXY_API_KEY'),
+    bitrixToken: getEnvVar('BITRIX24_TOKEN'),
+    whatsappToken: getEnvVar('WHATSAPP_TOKEN'),
   };
 
   return envMap[keyName] || "";

@@ -11,10 +11,11 @@ export default function IntegrationsSettingsPage() {
   const { t } = useTranslation('common');
   
   const [integrations, setIntegrations] = useState({
-    apifyToken: "",
-    serpApiKey: "",
-    apolloApiKey: "",
     googleAiApiKey: "",
+    scraperServiceUrl: "",
+    scraperSecret: "",
+    proxyServiceUrl: "",
+    proxyApiKey: "",
     bitrixDomain: "",
     bitrixToken: "",
     bitrixPushMode: "contacts",
@@ -28,6 +29,7 @@ export default function IntegrationsSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [testStatus, setTestStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({
+    scraper: 'idle',
     bitrix: 'idle',
     whatsapp: 'idle',
     smtp: 'idle'
@@ -77,7 +79,7 @@ export default function IntegrationsSettingsPage() {
     );
   }
 
-  const handleTest = async (system: 'bitrix' | 'whatsapp' | 'smtp') => {
+  const handleTest = async (system: 'scraper' | 'bitrix' | 'whatsapp' | 'smtp') => {
     setTestStatus(prev => ({ ...prev, [system]: 'testing' }));
     
     try {
@@ -148,8 +150,8 @@ export default function IntegrationsSettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Google AI API Key</label>
-              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">The Brain</span>
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Gemini API Key</label>
+              <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">AI Engine</span>
             </div>
             <div className="relative">
               <input
@@ -161,60 +163,98 @@ export default function IntegrationsSettingsPage() {
               />
               <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
-            <p className="text-[11px] text-[var(--color-text-secondary)]">Powers lead analysis, pitch generation, and the AI chatbot.</p>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Powers Gemini-driven scoring, signal extraction, pitches, and chatbot responses.</p>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Apify API Token</label>
-              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Property Scraper</span>
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Internal Scraper URL</label>
+              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Playwright Service</span>
             </div>
-            <div className="relative">
-              <input
-                type="password"
-                placeholder="apify_api_..."
-                value={integrations.apifyToken}
-                onChange={(e) => handleChange('apifyToken', e.target.value)}
-                className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
-              />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
-            </div>
-            <p className="text-[11px] text-[var(--color-text-secondary)]">Enables automated scraping of property portals like PropertyFinder.</p>
+            <input
+              type="text"
+              placeholder="http://localhost:3002"
+              value={integrations.scraperServiceUrl}
+              onChange={(e) => handleChange('scraperServiceUrl', e.target.value)}
+              className="w-full h-10 px-3 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+            />
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Service endpoint for the internal Abu Dhabi-focused Playwright scraper.</p>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-[var(--color-text-secondary)]">SerpAPI Key</label>
-              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">News Signals</span>
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Scraper Secret</label>
+              <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Auth</span>
             </div>
             <div className="relative">
               <input
                 type="password"
-                value={integrations.serpApiKey}
-                onChange={(e) => handleChange('serpApiKey', e.target.value)}
+                placeholder="scraper_secret_alpha_bravo"
+                value={integrations.scraperSecret}
+                onChange={(e) => handleChange('scraperSecret', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
               <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
-            <p className="text-[11px] text-[var(--color-text-secondary)]">Used to find market-moving news and UAE investment signals.</p>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Used to authenticate requests between the app and the scraper microservice.</p>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Apollo API Key</label>
-              <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Prospecting</span>
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Proxy Service URL</label>
+              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Bot Bypass</span>
+            </div>
+            <input
+              type="text"
+              placeholder="https://proxy.example.com"
+              value={integrations.proxyServiceUrl}
+              onChange={(e) => handleChange('proxyServiceUrl', e.target.value)}
+              className="w-full h-10 px-3 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+            />
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Optional residential proxy endpoint for bypassing anti-bot protections.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-[var(--color-text-secondary)]">Proxy API Key</label>
+              <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Residential Proxy</span>
             </div>
             <div className="relative">
               <input
                 type="password"
-                value={integrations.apolloApiKey}
-                onChange={(e) => handleChange('apolloApiKey', e.target.value)}
+                value={integrations.proxyApiKey}
+                onChange={(e) => handleChange('proxyApiKey', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
               <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
-            <p className="text-[11px] text-[var(--color-text-secondary)]">Connects to Apollo B2B database for executive investor discovery.</p>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Authentication for a managed proxy pool or rotating residential proxy service.</p>
           </div>
+        </div>
+
+        <div className="pt-4 border-t border-[var(--color-border)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            {testStatus.scraper === 'success' && (
+              <div className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-sm font-medium text-green-800">
+                <CheckCircle2 className="w-4 h-4" />
+                Scraper service ready
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => handleTest('scraper')}
+            disabled={testStatus.scraper === 'testing'}
+            className="flex items-center gap-2 px-4 py-2 border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-lg font-medium hover:bg-[var(--color-bg-surface)] transition-all disabled:opacity-50"
+          >
+            {testStatus.scraper === 'testing' ? (
+              <span className="w-4 h-4 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin"></span>
+            ) : testStatus.scraper === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
+            ) : (
+              <Link2 className="w-4 h-4 text-[var(--color-text-secondary)]" />
+            )}
+            Test Scraper Service
+          </button>
         </div>
       </div>
 

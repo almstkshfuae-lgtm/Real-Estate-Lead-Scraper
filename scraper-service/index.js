@@ -1,7 +1,7 @@
 import express from 'express';
 import { chromium } from 'playwright';
 import dotenv from 'dotenv';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_SCRAPER_SOURCES } from './default-sources.js';
 import { verifySourceCompletePipeline } from './verification-pipeline.js';
@@ -92,16 +92,26 @@ async function detectAndClickLoadMore(page, source) {
 }
 
 async function getSourceConfigMap() {
-  const configs = await prisma.sourceConfig.findMany({ where: { active: true } });
-  if (!configs || configs.length === 0) {
-    await seedDefaultSources();
-    return getSourceConfigMap();
-  }
+  try {
+    const configs = await prisma.sourceConfig.findMany({ where: { active: true } });
+    if (!configs || configs.length === 0) {
+      await seedDefaultSources();
+      return getSourceConfigMap();
+    }
 
-  return configs.reduce((acc, config) => {
-    acc[config.key] = config;
-    return acc;
-  }, {});
+    return configs.reduce((acc, config) => {
+      acc[config.key] = config;
+      return acc;
+    }, {});
+  } catch (err) {
+    // If Prisma / DATABASE_URL is not configured (local dev), fall back to default in-memory sources
+    console.warn('Prisma not available or DATABASE_URL not set - falling back to DEFAULT_SCRAPER_SOURCES');
+    const map = {};
+    for (const s of DEFAULT_SCRAPER_SOURCES) {
+      map[s.key] = s;
+    }
+    return map;
+  }
 }
 
 async function seedDefaultSources() {
@@ -141,7 +151,7 @@ async function seedDefaultSources() {
 const HNWI_SOURCES = {};
 
 app.post('/scrape', async (req, res) => {
-  const { sources, secret } = req.body;
+  const { sources, secret, proxyUrl, proxyApiKey } = req.body;
 
   if (secret !== SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -151,12 +161,12 @@ app.post('/scrape', async (req, res) => {
     return res.status(400).json({ error: 'sources array required' });
   }
 
-  console.log('Received scrape request for sources:', sources);
+  console.log('Received scrape request for sources:', sources, 'proxyUrl:', proxyUrl ? 'provided' : 'default');
 
   // Background processing - return immediately
   (async () => {
     try {
-      await scrapeMultipleSources(sources);
+      await scrapeMultipleSources(sources, proxyUrl);
     } catch (error) {
       console.error('Scrape pipeline error:', error);
     }
@@ -170,7 +180,7 @@ app.post('/scrape', async (req, res) => {
 });
 
 app.post('/scrape-source', async (req, res) => {
-  const { sourceKey, secret } = req.body;
+  const { sourceKey, secret, proxyUrl, proxyApiKey } = req.body;
 
   if (secret !== SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -186,7 +196,7 @@ app.post('/scrape-source', async (req, res) => {
       return res.status(400).json({ error: 'Invalid source key' });
     }
 
-    const content = await scrapeSource(sourceKey);
+    const content = await scrapeSource(sourceKey, proxyUrl);
     res.json({ 
       source: sourceKey,
       content: content,
@@ -202,18 +212,17 @@ app.post('/scrape-source', async (req, res) => {
  * Scrape a single source with deep crawling, pagination, and DOM interaction
  * Supports multi-page traversal and content extraction
  */
-async function scrapeSourceWithBrowser(browser, source) {
-  const proxyUrl = PROXY_CONFIG.getProxyUrl();
+async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = null) {
+  const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
   
   const contextOptions = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 }
   };
 
-  // Add proxy if configured
-  if (proxyUrl) {
-    contextOptions.proxy = { server: proxyUrl };
-    console.log(`🔒 Using Oxylabs proxy for ${sourceKey}`);
+  if (resolvedProxyUrl) {
+    contextOptions.proxy = { server: resolvedProxyUrl };
+    console.log(`🔒 Using proxy for ${sourceKey || source.key}`);
   }
 
   const context = await browser.newContext(contextOptions);
@@ -353,7 +362,7 @@ async function scrapePageRecursively(
 /**
  * Scrape multiple HNWI sources in parallel with proxy rotation
  */
-async function scrapeMultipleSources(sourceKeys) {
+async function scrapeMultipleSources(sourceKeys, proxyUrl = null) {
   const browser = await chromium.launch({ 
     headless: true,
     args: [
@@ -381,7 +390,7 @@ async function scrapeMultipleSources(sourceKeys) {
 
       try {
         console.log(`\n🎯 Scraping ${sourceKey}...`);
-        const content = await scrapeSourceWithBrowser(browser, sourceMap[sourceKey]);
+        const content = await scrapeSourceWithBrowser(browser, sourceMap[sourceKey], sourceKey, proxyUrl);
         results.push({
           source: sourceKey,
           content: content,
@@ -414,7 +423,7 @@ async function scrapeMultipleSources(sourceKeys) {
 /**
  * Fallback single-source scraper (for on-demand requests)
  */
-async function scrapeSource(sourceKey) {
+async function scrapeSource(sourceKey, proxyUrl = null) {
   const browser = await chromium.launch({ 
     headless: true,
     args: ['--disable-blink-features=AutomationControlled']
@@ -425,7 +434,7 @@ async function scrapeSource(sourceKey) {
     if (!sourceMap[sourceKey]) {
       throw new Error(`Unknown source key: ${sourceKey}`);
     }
-    return await scrapeSourceWithBrowser(browser, sourceMap[sourceKey]);
+    return await scrapeSourceWithBrowser(browser, sourceMap[sourceKey], sourceKey, proxyUrl);
   } finally {
     await browser.close();
   }
@@ -434,6 +443,50 @@ async function scrapeSource(sourceKey) {
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'playwright-scraper' });
 });
+
+app.post('/test-connection', async (req, res) => {
+  const { secret, proxyUrl } = req.body;
+
+  if (secret !== SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    await testScraperConnection(proxyUrl);
+    res.json({ status: 'ok', message: 'Connection successful' });
+  } catch (error) {
+    console.error('Connection test failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function testScraperConnection(proxyUrl = null) {
+  const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--disable-blink-features=AutomationControlled']
+  });
+
+  try {
+    const contextOptions = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1920, height: 1080 }
+    };
+
+    if (resolvedProxyUrl) {
+      contextOptions.proxy = { server: resolvedProxyUrl };
+      console.log(`🔒 Testing scraper service through proxy: ${resolvedProxyUrl}`);
+    }
+
+    const context = await browser.newContext(contextOptions);
+    const page = await context.newPage();
+    await page.goto('https://example.com', { timeout: 20000, waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+    await context.close();
+  } finally {
+    await browser.close();
+  }
+}
 
 app.get('/sources', async (req, res) => {
   try {
