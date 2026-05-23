@@ -1,0 +1,7 @@
+{
+  "build": "npm install",
+  "start": "npm start",
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
