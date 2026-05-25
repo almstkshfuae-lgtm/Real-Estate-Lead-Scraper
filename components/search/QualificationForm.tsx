@@ -18,6 +18,16 @@ import { toast } from "sonner";
 
 import { useRouter } from "next/navigation";
 
+const DEFAULT_SCRAPE_SOURCES = [
+  'alforsan',
+  'adec',
+  'rotary',
+  'whatson',
+  'artsclub',
+  'dhabianequi',
+  'alhabtoor',
+];
+
 export default function QualificationForm({ initialData }: { initialData?: any }) {
   const router = useRouter();
   const { t } = useTranslation('common');
@@ -87,7 +97,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
         const scrapeRes = await fetch("/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ criteria }),
+          body: JSON.stringify({ sources: DEFAULT_SCRAPE_SOURCES, criteria }),
         });
         const scrapeData = await scrapeRes.json();
 

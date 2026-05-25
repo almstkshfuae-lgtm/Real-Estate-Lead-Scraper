@@ -1,37 +1,40 @@
 import { getSecret } from "./secrets";
 
-interface GeminiConfig {
+interface AIConfig {
+  provider: 'openai' | 'google';
   apiKey: string;
-  projectId: string;
-  location: string;
+  projectId?: string;
+  location?: string;
   model: string;
 }
 
-async function getGeminiConfig(): Promise<GeminiConfig | null> {
-  const apiKey = (await getSecret("googleAiApiKey")) || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
-  const projectId = process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID;
-  const location = process.env.GOOGLE_AI_LOCATION || "us-central1";
-  const model = process.env.GOOGLE_AI_MODEL || "gemini-1.0";
+async function getAIConfig(): Promise<AIConfig | null> {
+  const openAiKey = process.env.OPENAI_API_KEY;
+  const googleApiKey = (await getSecret("googleAiApiKey")) || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
+  const googleProjectId = process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+  const googleLocation = process.env.GOOGLE_AI_LOCATION || "us-central1";
+  const googleModel = process.env.GOOGLE_AI_MODEL || "gemini-1.0";
+  const openAiModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
-  if (!apiKey || !projectId) {
-    return null;
+  if (openAiKey) {
+    return {
+      provider: 'openai',
+      apiKey: openAiKey,
+      model: openAiModel
+    };
   }
 
-  return { apiKey, projectId, location, model };
-}
-
-function extractTextFromGeminiResponse(response: any): string {
-  const candidate = response?.predictions?.[0] || response?.candidates?.[0] || response;
-  const contents = candidate?.content || candidate?.output || [];
-
-  if (!Array.isArray(contents)) {
-    return typeof contents === "string" ? contents : "";
+  if (googleApiKey && googleProjectId) {
+    return {
+      provider: 'google',
+      apiKey: googleApiKey,
+      projectId: googleProjectId,
+      location: googleLocation,
+      model: googleModel
+    };
   }
 
-  return contents
-    .map((item: any) => (item?.text ? item.text : ""))
-    .filter(Boolean)
-    .join("\n");
+  return null;
 }
 
 function formatCriteriaPrompt(criteria?: any) {
@@ -129,10 +132,193 @@ function filterLeadByCriteria(lead: any, criteria?: any) {
   return true;
 }
 
+async function generateOpenAIText(systemPrompt: string, userPrompt: string, maxTokens = 1024, apiKey: string, model: string) {
+  const endpoint = "https://api.openai.com/v1/responses";
+  const body = {
+    model,
+    input: `${systemPrompt}\n\n${userPrompt}`,
+    max_output_tokens: maxTokens,
+    temperature: 0.0,
+    top_p: 0.95
+  };
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  return extractTextFromAIResponse(data) || "";
+}
+
+function extractTextFromAIResponse(response: any): string {
+  if (!response) {
+    return "";
+  }
+
+  const candidate = response?.predictions?.[0] || response?.candidates?.[0] || response?.output?.[0] || response?.output || response;
+  let contents = candidate?.content || candidate?.output || candidate?.text || candidate;
+
+  if (!contents) {
+    return "";
+  }
+
+  if (Array.isArray(contents)) {
+    return contents
+      .map((item: any) => (typeof item === "string" ? item : item?.text || ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (typeof contents === "string") {
+    return contents;
+  }
+
+  if (typeof contents === "object") {
+    return Object.values(contents)
+      .map((value: any) => (typeof value === "string" ? value : ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return "";
+}
+
+function pickFirstMatch(matches: string[] | null) {
+  return matches && matches.length > 0 ? matches[0].trim() : null;
+}
+
+function normalizePhone(phone: string) {
+  return phone.replace(/[\s\-().]/g, "").replace(/^00/, "+");
+}
+
+function extractLikelyNames(content: string) {
+  const matches = new Set<string>();
+  const namePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g;
+  const rolePattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s*,?\s*(?:CEO|Founder|Co-Founder|Chairman|President|Director|Managing Director|General Manager|Manager|Head)\b/gi;
+  const reverseRolePattern = /\b(?:CEO|Founder|Co-Founder|Chairman|President|Director|Managing Director|General Manager|Manager|Head)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/gi;
+
+  let match: RegExpExecArray | null;
+  while ((match = namePattern.exec(content))) {
+    const candidate = match[1].trim();
+    if (candidate.split(' ').length <= 4 && candidate.length > 6) {
+      matches.add(candidate);
+    }
+  }
+
+  while ((match = rolePattern.exec(content))) {
+    matches.add(match[1].trim());
+  }
+
+  while ((match = reverseRolePattern.exec(content))) {
+    matches.add(match[1].trim());
+  }
+
+  return Array.from(matches).slice(0, 5);
+}
+
+function extractLikelyRole(content: string) {
+  const patterns = [
+    /\b(CEO|Chief Executive Officer|Founder|Co-Founder|Chairman|President|Director|Managing Director|General Manager|Manager|Head of [A-Za-z ]+)\b/gi,
+    /\b(Investor|Member|Partner|Executive|Owner)\b/gi
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(content);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return "Member";
+}
+
+function heuristicExtractLeads(scrapedData: any, criteria?: any) {
+  const content = String(scrapedData.content || "");
+  const emails = Array.from(new Set((content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [])));
+  const phones = Array.from(new Set((content.match(/\+?[0-9][0-9()\-\.\s]{7,}[0-9]/g) || [])
+    .map((value) => normalizePhone(value))));
+  const company = scrapedData.name || scrapedData.title || "HNWI Source";
+  const location = scrapedData.type?.includes("Dubai") ? "Dubai" : scrapedData.type?.includes("Abu Dhabi") ? "Abu Dhabi" : "Abu Dhabi";
+  const role = extractLikelyRole(content);
+  const tier = /\b(CEO|Chief Executive Officer|Founder|Co-Founder|Chairman|President|Director|Managing Director|General Manager)\b/i.test(content) ? 1 : 2;
+  const score = tier === 1 ? 80 : 60;
+
+  const names = extractLikelyNames(content);
+  const leads = [] as any[];
+
+  const candidates = names.length > 0 ? names : [company];
+
+  for (let i = 0; i < candidates.length; i += 1) {
+    const name = candidates[i];
+    const email = emails[i] || emails[0] || null;
+    const phone = phones[i] || phones[0] || null;
+
+    const lead = {
+      name: name || `Contact from ${company}`,
+      nameAr: name || `جهة اتصال من ${company}`,
+      company,
+      companyAr: company,
+      role,
+      roleAr: role === "Member" ? "عضو" : role,
+      email,
+      phone,
+      location,
+      budgetMin: null,
+      budgetMax: null,
+      relocated: null,
+      source: scrapedData.name || company,
+      sourceType: scrapedData.type || "Unknown",
+      tier,
+      score,
+      signals: Array.isArray(scrapedData.signals) ? scrapedData.signals : ["HNWI Candidate"]
+    };
+
+    if (lead.name && lead.company && lead.role) {
+      leads.push(lead);
+    }
+  }
+
+  if (leads.length === 0) {
+    return [{
+      name: `Lead from ${company}`,
+      nameAr: `جهة اتصال من ${company}`,
+      company,
+      companyAr: company,
+      role,
+      roleAr: role === "Member" ? "عضو" : role,
+      email: emails[0] || null,
+      phone: phones[0] || null,
+      location,
+      budgetMin: null,
+      budgetMax: null,
+      relocated: null,
+      source: scrapedData.name || company,
+      sourceType: scrapedData.type || "Unknown",
+      tier,
+      score,
+      signals: Array.isArray(scrapedData.signals) ? scrapedData.signals : ["HNWI Candidate"]
+    }].filter((lead) => filterLeadByCriteria(lead, criteria));
+  }
+
+  return leads.filter((lead) => filterLeadByCriteria(lead, criteria));
+}
+
 async function generateGeminiText(systemPrompt: string, userPrompt: string, maxTokens = 1024) {
-  const config = await getGeminiConfig();
+  const config = await getAIConfig();
   if (!config) {
     return null;
+  }
+
+  if (config.provider === 'openai') {
+    return await generateOpenAIText(systemPrompt, userPrompt, maxTokens, config.apiKey, config.model);
   }
 
   const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`;
@@ -165,7 +351,7 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
   }
 
   const data = await response.json();
-  return extractTextFromGeminiResponse(data) || "";
+  return extractTextFromAIResponse(data) || "";
 }
 
 /**
@@ -267,12 +453,17 @@ Output ONLY the JSON array. No other text.`,
   );
 
   if (!content) {
-    console.warn("Google Gemini API unavailable, skipping HNWI extraction");
-    return [];
+    console.warn("AI extraction unavailable, falling back to local heuristic extraction");
+    return heuristicExtractLeads(scrapedData, criteria);
   }
 
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   const leads = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+
+  if (!Array.isArray(leads) || leads.length === 0) {
+    console.warn("AI extraction returned no structured leads, falling back to local heuristic extraction");
+    return heuristicExtractLeads(scrapedData, criteria);
+  }
 
   return Array.isArray(leads)
     ? leads.filter((lead: any) =>
@@ -318,12 +509,31 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
   );
 
   if (!content) {
-    console.warn("Google Gemini AI extraction unavailable, skipping text extraction");
-    return [];
+    console.warn("AI extraction unavailable, falling back to local heuristic text extraction");
+    const heuristicLead = heuristicExtractLeads({
+      name: "Text source",
+      title: "Text source",
+      type: "Text",
+      signals: [],
+      content: text
+    }, criteria);
+    return heuristicLead;
   }
 
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   const leads = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+
+  if (!Array.isArray(leads) || leads.length === 0) {
+    console.warn("AI text extraction returned no structured leads, falling back to local heuristic text extraction");
+    return heuristicExtractLeads({
+      name: "Text source",
+      title: "Text source",
+      type: "Text",
+      signals: [],
+      content: text
+    }, criteria);
+  }
+
   return Array.isArray(leads)
     ? leads.filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location && filterLeadByCriteria(lead, criteria))
     : [];

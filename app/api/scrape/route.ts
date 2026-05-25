@@ -22,7 +22,19 @@ export async function POST(request: NextRequest) {
 
     const { sources, criteria } = await request.json();
 
-    if (!sources || !Array.isArray(sources) || sources.length === 0) {
+    const DEFAULT_SCRAPE_SOURCES = [
+      'alforsan',
+      'adec',
+      'rotary',
+      'whatson',
+      'artsclub',
+      'dhabianequi',
+      'alhabtoor',
+    ];
+
+    const requestedSources = Array.isArray(sources) && sources.length > 0 ? sources : DEFAULT_SCRAPE_SOURCES;
+
+    if (!requestedSources || requestedSources.length === 0) {
       return NextResponse.json({ error: 'sources array required' }, { status: 400 });
     }
 
@@ -30,19 +42,19 @@ export async function POST(request: NextRequest) {
     const scrapeRun = await prisma.scrapeRun.create({
       data: {
         triggeredBy: session.id,
-        sources: sources,
+        sources: requestedSources,
         criteria: criteria || {},
         status: "PROCESSING",
       }
     });
 
     // Fire and forget pipeline
-    runHNWIScrapePipeline(session.id, scrapeRun.id, sources, criteria).catch(console.error);
+    runHNWIScrapePipeline(session.id, scrapeRun.id, requestedSources, criteria).catch(console.error);
 
     return NextResponse.json({ 
       message: 'HNWI lead scraping started', 
       runId: scrapeRun.id,
-      sources: sources
+      sources: requestedSources
     });
   } catch (error: any) {
     console.error("Scrape initiation error:", error);
