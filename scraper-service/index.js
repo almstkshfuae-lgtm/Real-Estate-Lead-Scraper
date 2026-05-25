@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_SCRAPER_SOURCES } from './default-sources.js';
 import { verifySourceCompletePipeline } from './verification-pipeline.js';
-import { validateProxyConnection, formatProxyValidationReport } from './proxy-validator.js';
+import { validateProxyConnection, formatProxyValidationReport, verifyProxyEgress } from './proxy-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,57 +31,90 @@ const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
 
 if (USE_MOCK_DATA) {
   console.log('⚠️  Mock Data Mode ENABLED - scraper will return simulated data instead of real requests');
+} else {
+  console.log('✅ Real Data Mode ENABLED - scraper will fetch actual data from sources');
 }
 
 /**
- * Proxy Configuration for Oxylabs
+ * Proxy Configuration - Supports Oxylabs and DataImpulse
  * Rotating residential proxies to bypass Cloudflare and anti-bot detection
  */
-const DEFAULT_OXYLABS_PROXY_HOST = process.env.OXYLABS_PROXY_HOST || 'pr.oxylabs.io';
-const DEFAULT_OXYLABS_PROXY_PORT = process.env.OXYLABS_PROXY_PORT || '10000';
-const DEFAULT_OXYLABS_PROXY_SCHEME = process.env.OXYLABS_PROXY_SCHEME || 'http';
+const ACTIVE_PROXY_PROVIDER = process.env.ACTIVE_PROXY_PROVIDER || 'oxylabs';
 
-function buildOxylabsProxyUrl() {
-  if (process.env.OXYLABS_PROXY_URL) {
-    return process.env.OXYLABS_PROXY_URL;
-  }
+function buildProxyUrl(provider) {
+  if (provider === 'dataimpulse') {
+    if (process.env.DATAIMPULSE_PROXY_URL) {
+      return process.env.DATAIMPULSE_PROXY_URL;
+    }
 
-  const username = process.env.OXYLABS_PROXY_USERNAME;
-  const password = process.env.OXYLABS_PROXY_PASSWORD;
-  const host = process.env.OXYLABS_PROXY_HOST || DEFAULT_OXYLABS_PROXY_HOST;
-  const port = process.env.OXYLABS_PROXY_PORT || DEFAULT_OXYLABS_PROXY_PORT;
-  const scheme = process.env.OXYLABS_PROXY_SCHEME || DEFAULT_OXYLABS_PROXY_SCHEME;
+    const username = process.env.DATAIMPULSE_PROXY_USERNAME;
+    const password = process.env.DATAIMPULSE_PROXY_PASSWORD;
+    const host = process.env.DATAIMPULSE_PROXY_HOST;
+    const port = process.env.DATAIMPULSE_PROXY_PORT || '823';
+    const scheme = process.env.DATAIMPULSE_PROXY_SCHEME || 'http';
 
-  if (!username || !password || !host || !port) {
-    console.warn('⚠️  Oxylabs proxy credentials or endpoint are not fully configured. Provide OXYLABS_PROXY_URL or OXYLABS_PROXY_USERNAME/OXYLABS_PROXY_PASSWORD and OXYLABS_PROXY_HOST/OXYLABS_PROXY_PORT.');
-    return null;
-  }
-
-  const encodedUser = encodeURIComponent(username);
-  const encodedPass = encodeURIComponent(password);
-  return `${scheme}://${encodedUser}:${encodedPass}@${host}:${port}`;
-}
-
-const PROXY_CONFIG = {
-  enabled: process.env.USE_PROXY ? process.env.USE_PROXY === 'true' : Boolean(process.env.OXYLABS_PROXY_URL || process.env.OXYLABS_PROXY_USERNAME),
-  provider: 'oxylabs',
-  // Format: socks5://username:password@proxy:port
-  // Or: http://username:password@proxy:port
-  getProxyUrl: () => {
-    const proxyUrl = buildOxylabsProxyUrl();
-    if (!proxyUrl) {
-      console.warn('⚠️  Oxylabs proxy URL not resolved - proceeding without proxy');
+    if (!username || !password || !host || !port) {
+      console.warn('⚠️  DataImpulse proxy credentials are not fully configured. Provide DATAIMPULSE_PROXY_URL or DATAIMPULSE_PROXY_USERNAME/DATAIMPULSE_PROXY_PASSWORD and DATAIMPULSE_PROXY_HOST/DATAIMPULSE_PROXY_PORT.');
       return null;
     }
 
-    const safeProxyUrl = proxyUrl.replace(/(https?:\/\/)([^:@\s]+):(.*)@/, '$1$2:*****@');
-    console.log(`🔒 Oxylabs proxy resolved: ${safeProxyUrl}`);
+    const encodedUser = encodeURIComponent(username);
+    const encodedPass = encodeURIComponent(password);
+    return `${scheme}://${encodedUser}:${encodedPass}@${host}:${port}`;
+  } else if (provider === 'oxylabs') {
+    if (process.env.OXYLABS_PROXY_URL) {
+      return process.env.OXYLABS_PROXY_URL;
+    }
+
+    const username = process.env.OXYLABS_PROXY_USERNAME;
+    const password = process.env.OXYLABS_PROXY_PASSWORD;
+    const host = process.env.OXYLABS_PROXY_HOST || 'pr.oxylabs.io';
+    const port = process.env.OXYLABS_PROXY_PORT || '10000';
+    const scheme = process.env.OXYLABS_PROXY_SCHEME || 'http';
+
+    if (!username || !password || !host || !port) {
+      console.warn('⚠️  Oxylabs proxy credentials or endpoint are not fully configured.');
+      return null;
+    }
+
+    const encodedUser = encodeURIComponent(username);
+    const encodedPass = encodeURIComponent(password);
+    return `${scheme}://${encodedUser}:${encodedPass}@${host}:${port}`;
+  }
+
+  return null;
+}
+
+const PROXY_CONFIG = {
+  enabled: process.env.USE_PROXY ? process.env.USE_PROXY === 'true' : Boolean(process.env.DATAIMPULSE_PROXY_URL || process.env.DATAIMPULSE_PROXY_USERNAME || process.env.OXYLABS_PROXY_URL || process.env.OXYLABS_PROXY_USERNAME),
+  provider: ACTIVE_PROXY_PROVIDER,
+  getProxyUrl: () => {
+    const proxyUrl = buildProxyUrl(ACTIVE_PROXY_PROVIDER);
+    if (!proxyUrl) {
+      console.warn(`⚠️  ${ACTIVE_PROXY_PROVIDER} proxy URL not resolved - proceeding without proxy`);
+      return null;
+    }
+    const safeProxyUrl = proxyUrl.replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
+    console.log(`🔒 ${ACTIVE_PROXY_PROVIDER.toUpperCase()} proxy resolved: ${safeProxyUrl}`);
     return proxyUrl;
   }
 };
 
+console.log(`🌐 Proxy Provider: ${ACTIVE_PROXY_PROVIDER}`);
+
 function getRandomDelay(minMs = 1000, maxMs = 4000) {
   return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+}
+
+/**
+ * Returns a randomized desktop user-agent string to better mimic rotating residential clients.
+ */
+function getRandomDesktopUserAgent() {
+  const chromeMajor = 100 + Math.floor(Math.random() * 30); // 100-129
+  const chromeMinor = 0;
+  const chromeBuild = Math.floor(1000 + Math.random() * 9000);
+  const ua = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.${chromeBuild}.0 Safari/537.36`;
+  return ua;
 }
 
 /**
@@ -296,6 +329,7 @@ app.post('/scrape-source', async (req, res) => {
   const { sourceKey, secret, proxyUrl, proxyApiKey } = req.body;
 
   if (secret !== SECRET) {
+    console.warn(`Secret mismatch: received "${secret}" (${secret?.length} chars), expected "${SECRET}" (${SECRET?.length} chars)`);
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -334,13 +368,52 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
   }
 
   const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
-  
+
   const contextOptions = {
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    userAgent: getRandomDesktopUserAgent(),
     viewport: { width: 1920, height: 1080 }
   };
 
-  if (resolvedProxyUrl) {
+  // Prefer explicit DataImpulse env vars when provider is dataimpulse
+  if (ACTIVE_PROXY_PROVIDER === 'dataimpulse') {
+    // DataImpulse requires separate username/password (not embedded in URL)
+    const username = process.env.DATAIMPULSE_PROXY_USERNAME;
+    const password = process.env.DATAIMPULSE_PROXY_PASSWORD;
+    const host = process.env.DATAIMPULSE_PROXY_HOST || 'gw.dataimpulse.com';
+    const port = process.env.DATAIMPULSE_PROXY_PORT || '823';
+
+    if (username && password && host && port) {
+      contextOptions.proxy = {
+        server: `http://${host}:${port}`,
+        username: username,
+        password: password
+      };
+      console.log(`🔒 Using DataImpulse proxy for ${sourceKey || source.key}: http://${host}:${port} (auth: ${username.substring(0, 10)}...)`);
+    } else {
+      console.warn(`⚠️  DataImpulse proxy credentials incomplete. Proceeding without proxy.`);
+    }
+  }
+  // Fallback to Oxylabs if provider is oxylabs
+  else if (ACTIVE_PROXY_PROVIDER === 'oxylabs') {
+    if (process.env.OXYLABS_PROXY_URL) {
+      contextOptions.proxy = {
+        server: process.env.OXYLABS_PROXY_URL,
+        ...(process.env.OXYLABS_PROXY_USERNAME ? { username: process.env.OXYLABS_PROXY_USERNAME } : {}),
+        ...(process.env.OXYLABS_PROXY_PASSWORD ? { password: process.env.OXYLABS_PROXY_PASSWORD } : {})
+      };
+      const masked = (process.env.OXYLABS_PROXY_URL || '').replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
+      console.log(`🔒 Using Oxylabs proxy for ${sourceKey || source.key}: ${masked}`);
+    } else {
+      const proxyUrl = buildProxyUrl('oxylabs');
+      if (proxyUrl) {
+        contextOptions.proxy = { server: proxyUrl };
+        const masked = proxyUrl.replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
+        console.log(`🔒 Using Oxylabs proxy for ${sourceKey || source.key}: ${masked}`);
+      }
+    }
+  }
+  // Generic fallback to resolved proxy URL
+  else if (resolvedProxyUrl) {
     contextOptions.proxy = { server: resolvedProxyUrl };
     console.log(`🔒 Using proxy for ${sourceKey || source.key}`);
   }
@@ -595,13 +668,30 @@ app.post('/validate-proxy', async (req, res) => {
   try {
     const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
     const result = await validateProxyConnection(resolvedProxyUrl, 30000);
-    
     console.log(formatProxyValidationReport(result));
-    
+
+    // If connection appears to work, attempt an egress verification comparing direct vs proxied public IP
+    let egress = null;
+    try {
+      egress = await verifyProxyEgress(resolvedProxyUrl, 30000);
+    } catch (e) {
+      egress = { error: e.message || String(e) };
+    }
+
+    // Mask any raw proxy URL before returning
+    const maskedResolved = resolvedProxyUrl ? resolvedProxyUrl.replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@') : null;
+    if (egress && typeof egress === 'object') {
+      // prefer masked field from egress if present
+      egress.maskedProxyUrl = egress.maskedProxyUrl || maskedResolved;
+      if ('proxyUrl' in egress) delete egress.proxyUrl;
+    }
+
     res.json({
       status: result.status,
       configured: result.configured,
       details: result,
+      egressVerification: egress,
+      maskedProxy: maskedResolved,
       report: formatProxyValidationReport(result)
     });
   } catch (error) {
@@ -622,13 +712,21 @@ async function testScraperConnection(proxyUrl = null) {
 
   try {
     const contextOptions = {
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      userAgent: getRandomDesktopUserAgent(),
       viewport: { width: 1920, height: 1080 }
     };
 
-    if (resolvedProxyUrl) {
+    if (process.env.OXYLABS_PROXY_URL) {
+      contextOptions.proxy = {
+        server: process.env.OXYLABS_PROXY_URL,
+        ...(process.env.OXYLABS_PROXY_USERNAME ? { username: process.env.OXYLABS_PROXY_USERNAME } : {}),
+        ...(process.env.OXYLABS_PROXY_PASSWORD ? { password: process.env.OXYLABS_PROXY_PASSWORD } : {})
+      };
+      const masked = (process.env.OXYLABS_PROXY_URL || '').replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
+      console.log(`🔒 Testing scraper service through Oxylabs proxy: ${masked}`);
+    } else if (resolvedProxyUrl) {
       contextOptions.proxy = { server: resolvedProxyUrl };
-      console.log(`🔒 Testing scraper service through proxy: ${resolvedProxyUrl}`);
+      console.log(`🔒 Testing scraper service through proxy: ${resolvedProxyUrl.replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@')}`);
     }
 
     const context = await browser.newContext(contextOptions);

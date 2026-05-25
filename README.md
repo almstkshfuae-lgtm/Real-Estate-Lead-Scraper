@@ -267,6 +267,54 @@ SCRAPER_SECRET=
 
 ---
 
+## Developer scripts & local testing
+
+- **Validate required secrets**: quick check to ensure required environment variables are present. Run with `tsx` (no build step). Examples:
+
+  - PowerShell (Windows):
+
+    ```powershell
+    $env:SCRAPER_SERVICE_URL='https://example.com'; $env:SCRAPER_SECRET='your_secret'; npx tsx scratch/validate-secrets.ts
+    ```
+
+  - macOS / Linux:
+
+    ```bash
+    SCRAPER_SERVICE_URL=https://example.com SCRAPER_SECRET=your_secret npx tsx scratch/validate-secrets.ts
+    ```
+
+- **Smoke test (production endpoints)**: runs basic health and API checks against configured `SCRAPER_SERVICE_URL` and `VERCEL_URL`.
+
+  - PowerShell:
+
+    ```powershell
+    $env:SCRAPER_SERVICE_URL='https://scraper.example.com'; $env:VERCEL_URL='https://your-app.vercel.app'; $env:SCRAPER_SECRET='your_secret'; npx tsx scratch/smoke-test-prod.ts
+    ```
+
+  - macOS / Linux:
+
+    ```bash
+    SCRAPER_SERVICE_URL=https://scraper.example.com VERCEL_URL=https://your-app.vercel.app SCRAPER_SECRET=your_secret npx tsx scratch/smoke-test-prod.ts
+    ```
+
+- **Run scraper service in mock mode (no external web requests)**: useful for developing the Next.js frontend and pipelines without consuming proxy bandwidth or triggering real scrapes.
+
+  - PowerShell (Windows):
+
+    ```powershell
+    $env:USE_MOCK_DATA='true'; node scraper-service/index.js
+    ```
+
+  - macOS / Linux:
+
+    ```bash
+    USE_MOCK_DATA=true node scraper-service/index.js
+    ```
+
+  When `USE_MOCK_DATA=true`, the scraper will return simulated lead data for all sources and skip launching Playwright browsers.
+
+---
+
 ## Project Structure
 
 ```

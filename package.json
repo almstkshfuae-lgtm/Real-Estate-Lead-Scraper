@@ -10,6 +10,7 @@
     "test:e2e": "npx playwright test",
     "playwright:install": "npx playwright install",
     "postinstall": "prisma generate"
+    ,"check:scratch": "tsc -p tsconfig.scratch.json"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

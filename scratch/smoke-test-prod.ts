@@ -49,7 +49,7 @@ async function run() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-scraper-secret': scraperSecret || ''
+      'x-scraper-secret': (scraperSecret ?? '')
     },
     body: JSON.stringify(payload)
   });
