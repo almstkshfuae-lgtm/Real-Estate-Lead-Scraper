@@ -17,8 +17,8 @@ export async function GET(request: Request) {
     const scrapeRun = await prisma.scrapeRun.create({
       data: {
         triggeredBy: "cron",
-        sources: ["InternalScraper", "Registry"],
-        criteria: { type: "daily_sync" },
+        sources: JSON.stringify(["InternalScraper", "Registry"]),
+        criteria: JSON.stringify({ type: "daily_sync" }),
         status: "PROCESSING",
       }
     });

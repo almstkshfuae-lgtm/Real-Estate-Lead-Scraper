@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -75,8 +75,7 @@ model SourceConfig {
   delayBetweenPages     Int?
   active                Boolean  @default(true)
   
-  // Verification Pipeline Fields
-  verificationStatus    String   @default("pending") // pending, verified, rejected, manual_review
+  verificationStatus    String   @default("pending")
   verificationReport    String?
   verifiedAt            DateTime?
   technicalAccessPassed Boolean?

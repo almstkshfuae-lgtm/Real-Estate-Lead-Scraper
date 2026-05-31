@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
-import { createToken, setSession } from '@/lib/auth';
+import { createToken } from '@/lib/auth';
+import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,18 +32,32 @@ export async function POST(request: NextRequest) {
       role: user.role,
     });
 
-    await setSession(token);
-
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        language: user.language,
-        theme: user.theme,
+    const response = NextResponse.json(
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          language: user.language,
+          theme: user.theme,
+        },
+        token: token,
       },
+      { status: 200 }
+    );
+
+    // Set auth token cookie on the response
+    const cookieStore = await cookies();
+    cookieStore.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
     });
+
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(

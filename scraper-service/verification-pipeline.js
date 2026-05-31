@@ -1,6 +1,5 @@
 import { chromium } from 'playwright';
 import * as cheerio from 'cheerio';
-import fetch from 'node-fetch';
 
 /**
  * Data Extraction Source Verification Pipeline

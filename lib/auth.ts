@@ -21,6 +21,23 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
   }
 }
 
+export function parsePreferences(preferences: any) {
+  if (!preferences) return {};
+  if (typeof preferences === 'string') {
+    try {
+      return JSON.parse(preferences);
+    } catch {
+      return {};
+    }
+  }
+  return preferences;
+}
+
+export function normalizePreferences(preferences: any) {
+  if (typeof preferences === 'string') return preferences;
+  return JSON.stringify(preferences || {});
+}
+
 export async function getSession(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get('auth_token')?.value;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, parsePreferences } from "@/lib/auth";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 
 export async function POST(
@@ -34,7 +34,7 @@ export async function POST(
       where: { id: session.id },
     });
 
-    const prefs = ((user as any)?.preferences)?.integrations || {};
+    const prefs = parsePreferences((user as any)?.preferences).integrations || {};
     const { whatsappPhoneId, whatsappToken } = prefs;
 
     if (!whatsappPhoneId || !whatsappToken) {

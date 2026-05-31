@@ -42,8 +42,8 @@ export async function POST(request: NextRequest) {
     const scrapeRun = await prisma.scrapeRun.create({
       data: {
         triggeredBy: session.id,
-        sources: requestedSources,
-        criteria: criteria || {},
+        sources: JSON.stringify(requestedSources),
+        criteria: JSON.stringify(criteria || {}),
         status: "PROCESSING",
       }
     });
@@ -186,11 +186,11 @@ async function runHNWIScrapePipeline(
             email: enrichedLead.email || null,
             location: enrichedLead.location || "Abu Dhabi",
             score: enrichedLead.score || 50,
-            signals: enrichedLead.signals || [],
+            signals: JSON.stringify(enrichedLead.signals || []),
             budgetMin: enrichedLead.budgetMin ?? null,
             budgetMax: enrichedLead.budgetMax ?? null,
             relocated: enrichedLead.relocated ?? false,
-            propertyPref: enrichedLead.propertyPref || null,
+            propertyPref: JSON.stringify(enrichedLead.propertyPref || {}),
             persona,
             agentId: agentId,
             scrapeRunId: runId
@@ -209,11 +209,11 @@ async function runHNWIScrapePipeline(
             email: enrichedLead.email || null,
             location: enrichedLead.location || "Abu Dhabi",
             score: enrichedLead.score || 50,
-            signals: enrichedLead.signals || [],
+            signals: JSON.stringify(enrichedLead.signals || []),
             budgetMin: enrichedLead.budgetMin ?? null,
             budgetMax: enrichedLead.budgetMax ?? null,
             relocated: enrichedLead.relocated ?? false,
-            propertyPref: enrichedLead.propertyPref || null,
+            propertyPref: JSON.stringify(enrichedLead.propertyPref || {}),
             agentId: agentId,
             scrapeRunId: runId,
             persona

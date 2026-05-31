@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, normalizePreferences } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
@@ -49,10 +49,11 @@ export async function POST(request: Request) {
     }
 
     const { preferences } = await request.json();
+    const preferencesPayload = normalizePreferences(preferences);
 
     await prisma.user.update({
       where: { id: session.id },
-      data: { preferences } as any
+      data: { preferences: preferencesPayload }
     });
 
     return NextResponse.json({ success: true }, { status: 200 });

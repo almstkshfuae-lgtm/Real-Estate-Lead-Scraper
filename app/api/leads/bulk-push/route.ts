@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, parsePreferences } from "@/lib/auth";
 import { pushContact } from "@/lib/bitrix24";
 
 export async function POST(request: Request) {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       where: { id: session.id },
     });
 
-    const prefs = ((user as any)?.preferences)?.integrations || {};
+    const prefs = parsePreferences((user as any)?.preferences).integrations || {};
     const { bitrixDomain, bitrixToken } = prefs;
 
     if (!bitrixDomain || !bitrixToken) {

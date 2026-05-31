@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const search = await prisma.search.create({
       data: {
         agentId: session.id,
-        criteria: criteria,
+        criteria: JSON.stringify(criteria || {}),
       },
     });
 
@@ -46,7 +46,14 @@ export async function GET() {
       take: 5,
     });
 
-    return NextResponse.json(searches);
+    const parsedSearches = searches.map((search) => ({
+      ...search,
+      criteria: typeof search.criteria === 'string'
+        ? JSON.parse(search.criteria)
+        : search.criteria,
+    }));
+
+    return NextResponse.json(parsedSearches);
   } catch (error) {
     console.error("Search fetch error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

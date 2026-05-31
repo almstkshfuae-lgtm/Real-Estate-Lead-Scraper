@@ -27,8 +27,8 @@ async function main() {
   const scrapeRun = await prisma.scrapeRun.create({
     data: {
       triggeredBy: admin.id,
-      sources: ["Manual Seed"],
-      criteria: {},
+      sources: JSON.stringify(["Manual Seed"]),
+      criteria: JSON.stringify({}),
       status: "COMPLETED",
       leadsFound: 35,
     }
@@ -207,8 +207,8 @@ async function main() {
         ...lead,
         agentId: admin.id,
         scrapeRunId: scrapeRun.id,
-        signals: lead.signals as any,
-        propertyPref: lead.propertyPref as any,
+        signals: JSON.stringify(lead.signals),
+        propertyPref: JSON.stringify(lead.propertyPref),
       }
     });
   }

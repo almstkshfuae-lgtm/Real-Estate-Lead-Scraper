@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, parsePreferences } from "@/lib/auth";
 import { sendEmail } from "@/lib/mail";
 
 export async function POST(
@@ -38,8 +38,8 @@ export async function POST(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const preferences = (user as any).preferences;
-    const prefs = preferences?.integrations || {};
+    const preferences = parsePreferences((user as any).preferences);
+    const prefs = preferences.integrations || {};
     const { smtpHost, smtpUser, smtpPass } = prefs;
 
     if (!smtpHost || !smtpUser || !smtpPass) {

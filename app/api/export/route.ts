@@ -98,7 +98,7 @@ export async function GET(request: Request) {
       data: {
         agentId: session.id,
         format: format.toUpperCase(),
-        filters: { search, status, tier },
+        filters: JSON.stringify({ search, status, tier }),
         recordCount: leads.length,
         fileUrl: blob.url,
       }

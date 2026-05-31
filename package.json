@@ -5,12 +5,13 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "node ./scripts/prisma-generate.js && next build",
+    "build:prod": "node ./scripts/prisma-generate.js && next build",
     "start": "next start",
     "test:e2e": "npx playwright test",
     "playwright:install": "npx playwright install",
-    "postinstall": "prisma generate"
-    ,"check:scratch": "tsc -p tsconfig.scratch.json"
+    "postinstall": "node ./scripts/prisma-generate.js",
+    "check:scratch": "tsc -p tsconfig.scratch.json"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
