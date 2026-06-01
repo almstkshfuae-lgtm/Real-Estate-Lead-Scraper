@@ -32,6 +32,28 @@ export default function AIChatPanel({ context }: { context?: string }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const res = await fetch("/api/ai/chat");
+        if (res.ok) {
+          const history = await res.json();
+          if (Array.isArray(history)) {
+            setMessages(history.map((message) => ({
+              role: message.role,
+              content: message.content,
+              id: `${message.role}-${Date.now()}-${Math.random()}`,
+            })));
+          }
+        }
+      } catch {
+        // silently ignore history load failures; chat still works.
+      }
+    };
+
+    loadHistory();
+  }, []);
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const sendMessage = async (text?: string) => {
@@ -58,7 +80,19 @@ export default function AIChatPanel({ context }: { context?: string }) {
         }),
       });
 
-      if (!res.ok || !res.body) throw new Error("Stream error");
+      if (!res.ok) {
+        const errorText = await res.text();
+        let errorMessage = "Chat failed, please try again.";
+        try {
+          const json = JSON.parse(errorText);
+          errorMessage = json.error || json.detail || errorText || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (!res.body) throw new Error("Chat failed: missing response body.");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -84,8 +118,8 @@ export default function AIChatPanel({ context }: { context?: string }) {
           } catch { /* skip malformed */ }
         }
       }
-    } catch (err) {
-      toast.error(t("ai.chatError", "Chat failed, please try again"));
+    } catch (err: any) {
+      toast.error(err?.message || t("ai.chatError", "Chat failed, please try again"));
       setMessages((prev) => prev.filter((m) => m.id !== assistantId));
     } finally {
       setLoading(false);
@@ -113,7 +147,16 @@ export default function AIChatPanel({ context }: { context?: string }) {
         </div>
         {messages.length > 0 && (
           <button
-            onClick={() => setMessages([])}
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/ai/chat", { method: "DELETE" });
+                if (res.ok) {
+                  setMessages([]);
+                }
+              } catch {
+                toast.error(t("ai.chatError", "Chat failed, please try again"));
+              }
+            }}
             className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all"
             title={t("ai.chat.clear", "Clear chat")}
           >

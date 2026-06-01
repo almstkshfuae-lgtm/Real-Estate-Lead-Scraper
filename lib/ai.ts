@@ -13,24 +13,24 @@ async function getAIConfig(): Promise<AIConfig | null> {
   const googleApiKey = (await getSecret("googleAiApiKey")) || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
   const googleProjectId = process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
   const googleLocation = process.env.GOOGLE_AI_LOCATION || "us-central1";
-  const googleModel = process.env.GOOGLE_AI_MODEL || "gemini-1.0";
+  const googleModel = process.env.GOOGLE_AI_MODEL || process.env.GOOGLE_MODEL || "gemini-1.0";
   const openAiModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
-  if (openAiKey) {
-    return {
-      provider: 'openai',
-      apiKey: openAiKey,
-      model: openAiModel
-    };
-  }
-
-  if (googleApiKey && googleProjectId) {
+  if (googleApiKey) {
     return {
       provider: 'google',
       apiKey: googleApiKey,
       projectId: googleProjectId,
       location: googleLocation,
       model: googleModel
+    };
+  }
+
+  if (openAiKey) {
+    return {
+      provider: 'openai',
+      apiKey: openAiKey,
+      model: openAiModel
     };
   }
 
@@ -314,28 +314,41 @@ function heuristicExtractLeads(scrapedData: any, criteria?: any) {
 async function generateGeminiText(systemPrompt: string, userPrompt: string, maxTokens = 1024) {
   const config = await getAIConfig();
   if (!config) {
-    return null;
+    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY or OPENAI_API_KEY.");
   }
 
   if (config.provider === 'openai') {
     return await generateOpenAIText(systemPrompt, userPrompt, maxTokens, config.apiKey, config.model);
   }
 
-  const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`;
-
-  const body = {
-    instances: [
-      {
-        content: `${systemPrompt}\n\n${userPrompt}`
+  const isProjectBased = Boolean(config.projectId);
+  const body = isProjectBased
+    ? {
+        instances: [
+          {
+            content: `${systemPrompt}\n\n${userPrompt}`
+          }
+        ],
+        parameters: {
+          temperature: 0.0,
+          maxOutputTokens: maxTokens,
+          topP: 0.95,
+          topK: 40
+        }
       }
-    ],
-    parameters: {
-      temperature: 0.0,
-      maxOutputTokens: maxTokens,
-      topP: 0.95,
-      topK: 40
-    }
-  };
+    : {
+        prompt: {
+          text: `${systemPrompt}\n\n${userPrompt}`
+        },
+        temperature: 0.0,
+        maxOutputTokens: maxTokens,
+        topP: 0.95,
+        topK: 40
+      };
+
+  const endpoint = isProjectBased
+    ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`
+    : `https://generativelanguage.googleapis.com/v1beta2/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`;
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -347,6 +360,12 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
 
   if (!response.ok) {
     const errorText = await response.text();
+    if (response.status === 400 && errorText.includes("API key not valid")) {
+      throw new Error("Gemini API key invalid or unauthorized. Verify GOOGLE_AI_API_KEY and project settings.");
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`Gemini authentication error ${response.status}: ${errorText}`);
+    }
     throw new Error(`Gemini API error ${response.status}: ${errorText}`);
   }
 

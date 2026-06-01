@@ -34,9 +34,18 @@ export default function LeadsPage() {
 
   useEffect(() => {
     fetch("/api/auth/me")
-      .then(res => res.json())
-      .then(data => setUser(data.user))
-      .catch(err => console.error(err));
+      .then(async (res) => {
+        if (!res.ok) return null;
+        try {
+          return await res.json();
+        } catch {
+          return null;
+        }
+      })
+      .then((data) => {
+        if (data && data.user) setUser(data.user);
+      })
+      .catch((err) => console.error(err));
   }, []);
 
   const handleRefresh = () => setRefreshKey(prev => prev + 1);
