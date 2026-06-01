@@ -66,7 +66,7 @@ export default function NotificationListener() {
             description: notification.body,
             action: {
               label: "View",
-              onClick: () => window.location.href = "/settings/notifications",
+              onClick: () => window.location.href = "/notifications",
             },
           });
 

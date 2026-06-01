@@ -75,7 +75,7 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 
         <button
           type="button"
-          onClick={() => router.push('/settings/notifications')}
+          onClick={() => router.push('/notifications')}
           className="p-2 rounded-full hover:bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] relative transition-colors"
           title={t('nav.notifications')}
           aria-label={t('nav.notifications')}

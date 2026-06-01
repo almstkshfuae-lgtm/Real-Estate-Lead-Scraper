@@ -202,14 +202,24 @@ async function main() {
   }
 
   for (const lead of leadsData) {
-    await prisma.lead.create({
-      data: {
-        ...lead,
-        agentId: admin.id,
-        scrapeRunId: scrapeRun.id,
-        signals: JSON.stringify(lead.signals),
-        propertyPref: JSON.stringify(lead.propertyPref),
-      }
+    const leadPayload = {
+      ...lead,
+      agentId: admin.id,
+      scrapeRunId: scrapeRun.id,
+      signals: JSON.stringify(lead.signals),
+      propertyPref: JSON.stringify(lead.propertyPref),
+    };
+
+    await prisma.lead.upsert({
+      where: {
+        name_company_source: {
+          name: lead.name,
+          company: lead.company,
+          source: lead.source,
+        },
+      },
+      update: leadPayload,
+      create: leadPayload,
     });
   }
 
