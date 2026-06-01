@@ -15,7 +15,6 @@
     "prisma:migrate:prod": "npx prisma migrate deploy --schema prisma/schema.mysql.prisma",
     "prisma:db:pull": "npx prisma db pull --schema prisma/schema.mysql.prisma",
     "prisma:studio": "npx prisma studio --schema prisma/schema.mysql.prisma",
-    "postinstall": "node ./scripts/prisma-generate.js",
     "prisma:seed": "npx prisma db seed --schema prisma/schema.prisma",
     "seed:dev": "npm run prisma:seed",
     "prisma:deploy": "npx prisma migrate deploy --schema prisma/schema.mysql.prisma",
