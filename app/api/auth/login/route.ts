@@ -47,9 +47,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    // Set auth token cookie on the response
-    const cookieStore = await cookies();
-    cookieStore.set('auth_token', token, {
+    response.cookies.set('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
