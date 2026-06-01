@@ -17,6 +17,10 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
     return jwt.verify(token, JWT_SECRET) as AuthUser;
   } catch (error) {
+    // Log the verification error for debugging (do not log the token)
+    try {
+      console.warn('[verifyToken] token verification failed:', (error as Error).message);
+    } catch {}
     return null;
   }
 }

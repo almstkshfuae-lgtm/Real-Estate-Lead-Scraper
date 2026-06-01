@@ -8,7 +8,7 @@ interface AIConfig {
   model: string;
 }
 
-async function getAIConfig(): Promise<AIConfig | null> {
+export async function getAIConfig(): Promise<AIConfig | null> {
   const openAiKey = process.env.OPENAI_API_KEY;
   const googleApiKey = (await getSecret("googleAiApiKey")) || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
   const googleProjectId = process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
@@ -17,6 +17,7 @@ async function getAIConfig(): Promise<AIConfig | null> {
   const openAiModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
   if (googleApiKey) {
+    console.info('[AI] using Google provider (apiKey present)');
     return {
       provider: 'google',
       apiKey: googleApiKey,
@@ -27,6 +28,7 @@ async function getAIConfig(): Promise<AIConfig | null> {
   }
 
   if (openAiKey) {
+    console.info('[AI] using OpenAI provider (apiKey present)');
     return {
       provider: 'openai',
       apiKey: openAiKey,
@@ -314,6 +316,7 @@ function heuristicExtractLeads(scrapedData: any, criteria?: any) {
 async function generateGeminiText(systemPrompt: string, userPrompt: string, maxTokens = 1024) {
   const config = await getAIConfig();
   if (!config) {
+    console.error('[AI] no provider configured');
     throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY or OPENAI_API_KEY.");
   }
 
@@ -360,6 +363,10 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
 
   if (!response.ok) {
     const errorText = await response.text();
+    // Log the error details for debugging (masking any potential sensitive snippets)
+    try {
+      console.error('[AI] Gemini API error', { status: response.status, body: errorText.substring(0, 1000) });
+    } catch {}
     if (response.status === 400 && errorText.includes("API key not valid")) {
       throw new Error("Gemini API key invalid or unauthorized. Verify GOOGLE_AI_API_KEY and project settings.");
     }

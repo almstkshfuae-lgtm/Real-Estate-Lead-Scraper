@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { generateGeminiText } from "@/lib/ai";
+import { generateGeminiText, getAIConfig } from "@/lib/ai";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -95,9 +95,20 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       });
     }
-
     const body = await req.json();
     const { messages, lang = "en", context } = body;
+
+    // Fast-fail when no AI provider is configured to avoid wasted work
+    const aiConfig = await getAIConfig();
+    if (!aiConfig) {
+      console.warn('[AI Chat] request rejected: no AI provider configured');
+      return new Response(JSON.stringify({ error: 'AI provider not configured. Set GOOGLE_AI_API_KEY or OPENAI_API_KEY.' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.info('[AI Chat] POST request', { agentId: session.id, messagesCount: Array.isArray(messages) ? messages.length : 0, lang });
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: "Messages array is required" }), {
@@ -121,22 +132,30 @@ export async function POST(req: NextRequest) {
 
     const lastUserMessage = [...messages].reverse().find((message: any) => message.role === "user");
     if (lastUserMessage?.content) {
+      try {
+        await prisma.chatMessage.create({
+          data: {
+            agentId: session.id,
+            role: "user",
+            content: lastUserMessage.content,
+          },
+        });
+      } catch (dbErr) {
+        console.error('[AI Chat] failed to save user message', (dbErr as Error).message);
+      }
+    }
+
+    try {
       await prisma.chatMessage.create({
         data: {
           agentId: session.id,
-          role: "user",
-          content: lastUserMessage.content,
+          role: "assistant",
+          content: assistantText,
         },
       });
+    } catch (dbErr) {
+      console.error('[AI Chat] failed to save assistant message', (dbErr as Error).message);
     }
-
-    await prisma.chatMessage.create({
-      data: {
-        agentId: session.id,
-        role: "assistant",
-        content: assistantText,
-      },
-    });
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

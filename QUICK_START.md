@@ -231,3 +231,30 @@ Each lead stores:
 
 **Status**: ✅ Re-engineering Complete & Ready for Testing
 
+
+## AI Provider setup
+
+- Add an AI provider key to your local environment. The chat API requires one of the following environment variables to be set in `.env.local` (do NOT commit secrets):
+
+  - `GOOGLE_AI_API_KEY` (Gemini / Google Generative Language)
+  - `OPENAI_API_KEY` (OpenAI)
+
+- Quick steps:
+
+  1. Copy the example file and edit values:
+
+     ```bash
+     cp .env.local.example .env.local
+     ```
+
+  2. Edit `.env.local` and set `GOOGLE_AI_API_KEY` or `OPENAI_API_KEY`.
+
+  3. Restart the dev server:
+
+     ```bash
+     npm run dev
+     ```
+
+- If you use a secrets manager or database-stored secrets, configure `lib/secrets.ts` accordingly.
+
+
