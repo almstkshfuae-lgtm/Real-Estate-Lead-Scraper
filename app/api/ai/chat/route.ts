@@ -3,7 +3,7 @@ import { generateGeminiText } from "@/lib/ai";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const buildSystemPrompt = (lang: string, context: string | undefined, user: { email: string; role: string; language?: string; name?: string; nameAr?: string } | null) => {
+const buildSystemPrompt = (lang: string, context: string | undefined, user: { email: string; role: string; language?: string; name?: string; nameAr?: string | null } | null) => {
   const profileHints = [] as string[];
   if (user) {
     profileHints.push(`Agent email: ${user.email}`);
