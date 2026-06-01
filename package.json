@@ -11,13 +11,13 @@
     "test:e2e": "npx playwright test",
     "playwright:install": "npx playwright install",
     "prisma:generate": "node ./scripts/prisma-generate.js",
-    "prisma:migrate:dev": "npx prisma migrate dev --schema prisma/schema.mysql.prisma",
-    "prisma:migrate:prod": "npx prisma migrate deploy --schema prisma/schema.mysql.prisma",
-    "prisma:db:pull": "npx prisma db pull --schema prisma/schema.mysql.prisma",
-    "prisma:studio": "npx prisma studio --schema prisma/schema.mysql.prisma",
+    "prisma:migrate:dev": "npx prisma migrate dev --schema prisma/schema.prisma",
+    "prisma:migrate:prod": "npx prisma migrate deploy --schema prisma/schema.prisma",
+    "prisma:db:pull": "npx prisma db pull --schema prisma/schema.prisma",
+    "prisma:studio": "npx prisma studio --schema prisma/schema.prisma",
     "prisma:seed": "npx prisma db seed --schema prisma/schema.prisma",
     "seed:dev": "npm run prisma:seed",
-    "prisma:deploy": "npx prisma migrate deploy --schema prisma/schema.mysql.prisma",
+    "prisma:deploy": "npx prisma migrate deploy --schema prisma/schema.prisma",
     "check:scratch": "tsc -p tsconfig.scratch.json"
   },
   "prisma": {
@@ -61,7 +61,6 @@
     "nodemailer": "^8.0.7",
     "papaparse": "^5.5.3",
     "postcss": "^8.5.14",
-    "prisma": "^5.22.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
@@ -80,6 +79,7 @@
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "prisma": "^5.22.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }

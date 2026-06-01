@@ -1,7 +1,11 @@
+import dotenv from 'dotenv';
 import { execSync } from 'child_process';
 
-const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
-const schema = isProduction ? 'prisma/schema.mysql.prisma' : 'prisma/schema.prisma';
+// Load fallback env first, then override with .env.local
+dotenv.config({ path: '.env' });
+dotenv.config({ path: '.env.local', override: true });
+
+const schema = 'prisma/schema.prisma';
 
 console.log(`📦 Generating Prisma Client using schema: ${schema}`);
 execSync(`npx prisma generate --schema ${schema}`, { stdio: 'inherit' });

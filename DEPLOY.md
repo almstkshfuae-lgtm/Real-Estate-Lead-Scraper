@@ -1,69 +1,61 @@
 # Deployment and Database Migration Guide
 
-This document explains how to keep local development on SQLite and deploy to production using Railway MySQL (via Vercel). It includes exact environment variables, recommended commands, and safe migration steps.
+This repository now uses Railway MySQL only. The Prisma schema is `prisma/schema.prisma` and it must be driven by `DATABASE_URL` in both development and production.
 
 ## Philosophy
-- Local development: use SQLite (`DATABASE_URL="file:./prisma/local-dev.db"`).
-- Production: use MySQL (Railway). Keep DBs separate — do NOT point production to a local file.
+- Development and production must use MySQL via Railway.
+- Do not use SQLite anywhere in this repo or deployment flow.
+- Keep `DATABASE_URL` set to a valid MySQL connection string for all Prisma operations.
 
 ## Vercel environment variables (Project → Settings → Environment Variables)
 - `DATABASE_PROVIDER` = `mysql`
-- `DATABASE_URL` = your Railway MySQL connection string (example):
+- `DATABASE_URL` = your Railway MySQL connection string, for example:
   - `mysql://username:password@host:3306/database_name`
 - `NODE_ENV` = `production`
 
-Note: Do NOT set `DATABASE_URL` in Vercel to a `file:` path.
+Note: Do not set `DATABASE_URL` to a `file:` path.
 
-## Which Prisma schema to use
-- For local dev keep `prisma/schema.prisma` (SQLite datasource) as is.
-- For MySQL use `prisma/schema.mysql.prisma` for migration commands and `prisma migrate deploy` in CI/production.
+## Prisma schema
+- Use `prisma/schema.prisma` for all Prisma commands.
+- There is no SQLite schema in active use.
 
-## Recommended deployment workflow (safe)
+## Recommended deployment workflow
 
-1. Create MySQL migrations locally (recommended using a local/test MySQL instance or a temporary Railway branch):
+1. Create and commit migrations using MySQL.
 
 ```bash
-# Example: start a local MySQL docker container (optional)
-docker run --name prisma-mysql -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=realestate -p 3306:3306 -d mysql:8 --default-authentication-plugin=mysql_native_password
-
-# Point Prisma at that MySQL while creating migrations
 export DATABASE_URL="mysql://root:root@127.0.0.1:3306/realestate"
-
-# Use the MySQL schema file to create migrations
-npx prisma migrate dev --schema=prisma/schema.mysql.prisma --name init
-
-# Commit the generated migrations (they will be in prisma/migrations)
-git add prisma/migrations && git commit -m "Add MySQL migrations"
+npx prisma migrate dev --schema=prisma/schema.prisma --name init
 ```
 
-2. Push code & migrations to GitHub.
+2. Push code and migrations.
 
-3. On production (Railway / Vercel) apply migrations (recommended via CI or one-off remote command):
+3. Apply migrations in production:
 
 ```bash
-# Run from CI or your machine with DATABASE_URL set to Railway connection
-npx prisma migrate deploy --schema=prisma/schema.mysql.prisma --url="$DATABASE_URL"
+npx prisma migrate deploy --schema=prisma/schema.prisma --url="$DATABASE_URL"
 ```
 
-Alternative: include a deployed migration step in your Vercel build command (less ideal because builds should be idempotent):
+Optional Vercel build command:
 
-```
-# Vercel Build Command (example)
-npm run build && npx prisma migrate deploy --schema=prisma/schema.mysql.prisma
+```bash
+npm run build && npx prisma migrate deploy --schema=prisma/schema.prisma
 ```
 
 ## If you cannot run MySQL locally
-- You can run migrations directly against Railway (CI or locally) by setting `DATABASE_URL` to the Railway connection string and running `npx prisma migrate dev --schema=prisma/schema.mysql.prisma --name init`.
-- If you prefer, provide the Railway MySQL connection string and I can generate the MySQL migrations for you and add them to the repo.
+- Use Railway with `DATABASE_URL` set to your Railway MySQL string.
+- Run migrations directly against Railway using the same `prisma/schema.prisma` schema.
 
 ## Quick checks to avoid problems
-- Verify `prisma/schema.prisma` and `prisma/schema.mysql.prisma` both reference `env("DATABASE_URL")`.
-- Ensure you do not accidentally commit a `DATABASE_URL` secret.
-- Confirm the migrations directory contains MySQL-compatible SQL before running `migrate deploy` on production.
+- Confirm `prisma/schema.prisma` uses `provider = "mysql"`.
+- Confirm `DATABASE_URL` is a MySQL URL in both local and production environments.
+- Do not leave any `file:` database URLs in env files or deployment settings.
 
 ## Troubleshooting
-- If Prisma complains about missing tables after deploy, run `npx prisma migrate status --schema=prisma/schema.mysql.prisma --url="$DATABASE_URL"` to see which migrations were applied.
-- If you need me to produce migrations, share a Railway connection string (or temporary credentials) OR follow the Docker-based local flow above and commit the generated migrations. I will then review and finish the deployment steps.
+- If Prisma complains about missing tables, run:
 
----
-If you want me to generate and commit MySQL migrations now, provide a Railway MySQL connection string or allow me to use a temporary MySQL instance you control. Otherwise, run the Docker steps above locally and push the generated migrations.
+```bash
+npx prisma migrate status --schema=prisma/schema.prisma --url="$DATABASE_URL"
+```
+
+- If you need migration help, provide a Railway MySQL connection string or run a local MySQL instance and commit the generated migrations.
