@@ -14,7 +14,8 @@ export default function NotificationsSettingsPage() {
     newLeadAlerts: true,
     scrapeCompletion: true,
     weeklyDigest: false,
-    whatsappAlerts: false
+    whatsappAlerts: false,
+    whatsappPhoneNumber: "",
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -35,7 +36,27 @@ export default function NotificationsSettingsPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const togglePreference = (key: keyof typeof preferences) => {
+  const requestBrowserPermission = async () => {
+    if (typeof Notification === "undefined") {
+      toast.error(t('settings.notifications.pushUnsupported', 'Browser notifications are not supported in this environment.'));
+      return false;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      toast.error(t('settings.notifications.pushDenied', 'Please allow browser notifications to enable this feature.'));
+      return false;
+    }
+
+    return true;
+  };
+
+  const togglePreference = async (key: keyof typeof preferences) => {
+    if (key === 'pushNotifications' && !preferences.pushNotifications) {
+      const granted = await requestBrowserPermission();
+      if (!granted) return;
+    }
+
     setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -148,6 +169,23 @@ export default function NotificationsSettingsPage() {
             onChange={() => togglePreference('whatsappAlerts')}
             icon={MessageSquare}
           />
+          {preferences.whatsappAlerts && (
+            <div className="space-y-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4">
+              <label className="block text-sm font-medium text-[var(--color-text-primary)]">
+                {t('settings.notifications.whatsappPhone', 'WhatsApp notification number')}
+              </label>
+              <input
+                type="tel"
+                value={preferences.whatsappPhoneNumber ?? ""}
+                onChange={(e) => setPreferences(prev => ({ ...prev, whatsappPhoneNumber: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                placeholder={t('settings.notifications.whatsappPhonePlaceholder', '+971501234567')}
+              />
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                {t('settings.notifications.whatsappPhoneDesc', 'Use international format without spaces so we can deliver WhatsApp alerts to your number.')}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">

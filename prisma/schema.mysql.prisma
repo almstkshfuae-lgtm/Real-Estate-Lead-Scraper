@@ -22,6 +22,7 @@ model User {
   exports      ExportHistory[]
   leads        Lead[]
   searches     Search[]
+  notifications Notification[]
 }
 
 model Lead {
@@ -131,6 +132,20 @@ model ExportHistory {
   fileUrl     String
   createdAt   DateTime @default(now())
   agent       User     @relation(fields: [agentId], references: [id])
+
+  @@index([agentId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  agentId   String
+  title     String
+  body      String
+  type      String
+  data      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  agent     User     @relation(fields: [agentId], references: [id])
 
   @@index([agentId])
 }

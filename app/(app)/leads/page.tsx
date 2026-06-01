@@ -93,7 +93,7 @@ export default function LeadsPage() {
             <RotateCcw className="w-4 h-4 text-[var(--color-text-secondary)]" />
           </button>
 
-          {user?.role === 'ADMIN' && (
+          {user && (
             <div className="flex gap-2">
               <button 
                 onClick={() => exportLeads('csv')}

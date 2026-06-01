@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 
 export async function POST(request: Request) {
   try {
@@ -119,6 +120,12 @@ export async function POST(request: Request) {
           skippedCount++;
         }
       }
+
+      if (savedCount > 0) {
+        await notifyNewEliteLeads(session.id, savedCount, importRun.id);
+      }
+
+      await notifyScrapeCompletion(session.id, savedCount, importRun.id);
 
       return NextResponse.json({ 
         success: true, 

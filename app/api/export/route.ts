@@ -8,7 +8,7 @@ import { put } from "@vercel/blob";
 export async function GET(request: Request) {
   try {
     const session = await getSession();
-    if (!session || session.role !== 'ADMIN') {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -20,6 +20,9 @@ export async function GET(request: Request) {
     const format = (searchParams.get("format") || "xlsx").toLowerCase();
 
     const where: any = {};
+    if (session.role?.toUpperCase() !== 'ADMIN') {
+      where.agentId = session.id;
+    }
     if (search) {
       where.OR = [
         { name: { contains: search } },
@@ -29,7 +32,12 @@ export async function GET(request: Request) {
       ];
     }
     if (status) where.status = status;
-    if (tier) where.tier = parseInt(tier);
+    if (tier) {
+      const parsedTier = parseInt(tier);
+      if (!isNaN(parsedTier)) {
+        where.tier = parsedTier;
+      }
+    }
     if (scrapeRunId) where.scrapeRunId = scrapeRunId;
 
     const leads = await prisma.lead.findMany({
@@ -98,7 +106,7 @@ export async function GET(request: Request) {
       data: {
         agentId: session.id,
         format: format.toUpperCase(),
-        filters: JSON.stringify({ search, status, tier }),
+        filters: JSON.stringify({ search, status, tier, scrapeRunId }),
         recordCount: leads.length,
         fileUrl: blob.url,
       }

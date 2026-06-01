@@ -401,6 +401,31 @@ export default function MapPage() {
             )}
             {layers.find((l) => l.id === activeLayer)?.label}
           </div>
+
+          {activeLayer === "heatmap" && (
+            <div className="absolute bottom-4 inset-inline-start-4 z-[900] w-72 rounded-2xl border border-white/40 bg-white/95 p-3 shadow-2xl shadow-slate-900/10 backdrop-blur">
+              <div className="text-[var(--color-text-primary)] text-xs font-bold uppercase tracking-widest mb-2">
+                {t("map.heatmapLegend.title", "Demand Heatmap")}
+              </div>
+              <div className="space-y-2 text-[var(--color-text-secondary)] text-xs mb-3">
+                <div>{t("map.heatmapLegend.description", "Map demand intensity across the UAE using lead score and priority source tier.")}</div>
+              </div>
+              <div className="space-y-2 text-[var(--color-text-secondary)] text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-[#A32D2D] flex-shrink-0" />
+                  {t("map.heatmapLegend.high", "High demand")}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-[#BA7517] flex-shrink-0" />
+                  {t("map.heatmapLegend.medium", "Medium demand")}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-[#185FA5] flex-shrink-0" />
+                  {t("map.heatmapLegend.low", "Low demand")}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Stats Sidebar */}

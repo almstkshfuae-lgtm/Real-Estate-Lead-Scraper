@@ -179,12 +179,21 @@
     "geofenceHint": "Click and drag on the map to draw a geo-fence zone. Release to see leads within the zone.",
     "geofenceResult": "{{count}} leads found in your geo-fence zone.",
     "clearZone": "Clear Zone",
+    "targetScrape": "Targeted Scrape for this Zone",
+    "heatmapLegend": {
+      "title": "Demand Heatmap",
+      "description": "Map demand intensity across the UAE using lead score and priority source tier.",
+      "high": "High demand",
+      "medium": "Medium demand",
+      "low": "Low demand"
+    },
     "zone": {
       "leads": "Zone Leads"
     },
     "panel": {
       "viewProfile": "View Full Profile"
-    }
+    },
+    "viewDetails": "View Full Profile"
   },
   "campaigns": {
     "title": "Campaign Manager",
@@ -212,7 +221,29 @@
       "comingSoon": "Profile and account management will be active in the next update.",
       "security": "Security & Auth",
       "notifications": "Notifications",
-      "preferences": "Preferences"
+      "preferences": "Preferences",
+      "accountInfo": "Account Information",
+      "accountInfoDescription": "Your identity and login preferences.",
+      "loadError": "Failed to load profile data.",
+      "missingFields": "Name and email are required.",
+      "saveError": "Failed to save profile.",
+      "saveSuccess": "Profile updated successfully.",
+      "fullName": "Full Name",
+      "email": "Email Address",
+      "language": "Language",
+      "theme": "Theme",
+      "currentPassword": "Current Password",
+      "newPassword": "New Password",
+      "quickActions": "Quick Actions",
+      "quickActionsDescription": "Keep your profile up to date for a smoother experience.",
+      "quickActionName": "Update your full name",
+      "quickActionEmail": "Confirm your email address",
+      "quickActionPassword": "Change password when needed",
+      "languageAndTheme": "Language & Theme",
+      "languageDescription": "Pick your display language and app theme.",
+      "languageNote": "Arabic content will display right-to-left when selected.",
+      "themeNote": "Theme changes apply to the application interface.",
+      "securityDescription": "Change your password and keep your account secure."
     },
     "scraper": {
       "title": "Scraper Settings",

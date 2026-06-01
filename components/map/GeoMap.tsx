@@ -33,14 +33,29 @@ const UAE_AREAS: Record<string, { lat: number; lng: number; emirate: string }> =
   "Fujairah": { lat: 25.1288, lng: 56.3265, emirate: "Fujairah" },
 };
 
+function stableHash(input: string) {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
 function getCoords(location: string): { lat: number; lng: number } | null {
+  const normalized = location?.trim() || "";
   for (const [key, val] of Object.entries(UAE_AREAS)) {
-    if (location?.toLowerCase().includes(key.toLowerCase())) {
-      return { lat: val.lat + (Math.random() - 0.5) * 0.02, lng: val.lng + (Math.random() - 0.5) * 0.02 };
+    if (normalized.toLowerCase().includes(key.toLowerCase())) {
+      const hash = stableHash(normalized);
+      const offsetLat = ((hash % 1000) / 1000 - 0.5) * 0.02;
+      const offsetLng = (((hash >> 10) % 1000) / 1000 - 0.5) * 0.02;
+      return { lat: val.lat + offsetLat, lng: val.lng + offsetLng };
     }
   }
-  // fallback: random point in UAE
-  return { lat: 24.4 + Math.random() * 1.5, lng: 54.0 + Math.random() * 2.5 };
+  const hash = stableHash(normalized || "uae-fallback");
+  return {
+    lat: 24.4 + ((hash % 1000) / 1000) * 1.5,
+    lng: 54.0 + (((hash >> 10) % 1000) / 1000) * 2.5,
+  };
 }
 
 function getTierColor(tier: number): string {
@@ -173,11 +188,9 @@ function GeoMap({
 
       const L = (await import("leaflet")).default;
 
-      // Clear existing markers
+      // Clear existing markers and heatmap overlays
       markersRef.current.forEach((m) => map.removeLayer(m));
       markersRef.current = [];
-
-      // Clear heatmap
       if (heatLayerRef.current) {
         map.removeLayer(heatLayerRef.current);
         heatLayerRef.current = null;
@@ -354,32 +367,30 @@ function GeoMap({
         });
 
       } else if (activeLayer === "heatmap") {
-        // Build heatmap data from lead locations + score intensity
-        const heatData: [number, number, number][] = [];
+        const heatGroup = L.layerGroup();
 
         leads.forEach((lead) => {
           const coords = getCoords(lead.location);
           if (!coords) return;
-          // intensity: normalize score to 0.1–1.0, weighted by tier (T1=3x, T2=2x, T3=1x)
           const tierWeight = lead.tier === 1 ? 3 : lead.tier === 2 ? 2 : 1;
-          const intensity = ((lead.score / 100) * tierWeight) / 3;
-          heatData.push([coords.lat, coords.lng, intensity]);
-        });
-
-        // We'll simulate a heatmap using colored circles since leaflet.heat needs extra plugin
-        heatData.forEach(([lat, lng, intensity]) => {
-          const radius = 25000 * intensity;
-          const alpha = 0.12 + intensity * 0.25;
+          const intensity = Math.max(0.12, Math.min(1, ((lead.score / 100) * tierWeight) / 3));
+          const radius = 16000 + 22000 * intensity;
+          const alpha = 0.16 + intensity * 0.24;
           const color = intensity > 0.7 ? "#A32D2D" : intensity > 0.4 ? "#BA7517" : "#185FA5";
-          
-          const circle = L.circle([lat, lng], {
+
+          const circle = L.circle([coords.lat, coords.lng], {
             radius,
             color: "transparent",
             fillColor: color,
             fillOpacity: alpha,
-          }).addTo(map);
-          markersRef.current.push(circle);
+            interactive: false,
+          });
+
+          heatGroup.addLayer(circle);
         });
+
+        heatGroup.addTo(map);
+        heatLayerRef.current = heatGroup;
       }
     };
 

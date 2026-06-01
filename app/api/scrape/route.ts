@@ -6,6 +6,7 @@ import { SearchCriteria } from "@/lib/types";
 import { getScraperClient } from "@/lib/scraper-client";
 import { getEnvVar } from "@/lib/env";
 import { put } from "@vercel/blob";
+import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 
 export async function POST(request: NextRequest) {
   try {
@@ -272,6 +273,17 @@ async function runHNWIScrapePipeline(
       completedAt: new Date(),
     } as any
   });
+
+  const tierOneCount = await prisma.lead.count({
+    where: {
+      scrapeRunId: runId,
+      agentId,
+      tier: 1,
+    }
+  });
+
+  await notifyNewEliteLeads(agentId, tierOneCount, runId);
+  await notifyScrapeCompletion(agentId, totalLeadsFound, runId);
 
   console.log(`✅ HNWI Pipeline completed: ${totalLeadsFound} leads found and processed`);
 }

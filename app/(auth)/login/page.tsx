@@ -26,7 +26,18 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        console.error('Login response was not valid JSON:', text);
+        data = {
+          error: 'Unexpected server response',
+          details: text,
+        };
+      }
 
       if (res.ok) {
         router.push("/leads");

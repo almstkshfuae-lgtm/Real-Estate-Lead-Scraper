@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Moon, Sun, Globe, Bell, User, Menu } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
+  const router = useRouter();
   const { t, i18n } = useTranslation('common');
   const [theme, setTheme] = useState("light");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -72,8 +74,11 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
         </button>
 
         <button
+          type="button"
+          onClick={() => router.push('/settings/notifications')}
           className="p-2 rounded-full hover:bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] relative transition-colors"
           title={t('nav.notifications')}
+          aria-label={t('nav.notifications')}
         >
           <Bell className="w-5 h-5" />
           <span className="absolute top-2 inset-inline-end-2 w-2 h-2 bg-[var(--color-danger)] rounded-full border-2 border-[var(--color-bg-card)]"></span>
