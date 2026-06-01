@@ -15,24 +15,6 @@ const prismaClientSingleton = () => {
     errorFormat: 'minimal',
   })
 
-  // Lazily connect on first query rather than during module import.
-  // This avoids build-time connection noise when local env configuration is not yet set.
-  const connectWithRetry = async (maxRetries = 5, delay = 3000) => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await client.$connect()
-        console.log('[Prisma] Connected successfully')
-        return
-      } catch (err) {
-        console.error(`[Prisma] Connection attempt ${attempt}/${maxRetries} failed:`, (err as Error).message)
-        if (attempt < maxRetries) {
-          console.log(`[Prisma] Retrying in ${delay}ms...`)
-          await new Promise(resolve => setTimeout(resolve, delay))
-        }
-      }
-    }
-  }
-
   return client
 }
 
