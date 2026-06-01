@@ -5,11 +5,16 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "node ./scripts/prisma-generate.js && next build",
-    "build:prod": "node ./scripts/prisma-generate.js && next build",
+    "build": "npm run prisma:generate && next build",
+    "build:prod": "npm run prisma:generate && next build",
     "start": "next start",
     "test:e2e": "npx playwright test",
     "playwright:install": "npx playwright install",
+    "prisma:generate": "node ./scripts/prisma-generate.js",
+    "prisma:migrate:dev": "npx prisma migrate dev --schema prisma/schema.mysql.prisma",
+    "prisma:migrate:prod": "npx prisma migrate deploy --schema prisma/schema.mysql.prisma",
+    "prisma:db:pull": "npx prisma db pull --schema prisma/schema.mysql.prisma",
+    "prisma:studio": "npx prisma studio --schema prisma/schema.mysql.prisma",
     "postinstall": "node ./scripts/prisma-generate.js",
     "prisma:deploy": "npx prisma migrate deploy --schema prisma/schema.mysql.prisma",
     "check:scratch": "tsc -p tsconfig.scratch.json"
