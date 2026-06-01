@@ -8,21 +8,21 @@ datasource db {
 }
 
 model User {
-  id           String          @id @default(cuid())
-  email        String          @unique
-  passwordHash String
-  name         String
-  nameAr       String?
-  role         String          @default("agent")
-  theme        String          @default("system")
-  language     String          @default("en")
-  createdAt    DateTime        @default(now())
-  preferences  String?
-  chatHistory  ChatMessage[]
-  exports      ExportHistory[]
-  leads        Lead[]
-  searches     Search[]
+  id            String          @id @default(cuid())
+  email         String          @unique
+  passwordHash  String
+  name          String
+  nameAr        String?
+  role          String          @default("agent")
+  theme         String          @default("system")
+  language      String          @default("en")
+  createdAt     DateTime        @default(now())
+  preferences   String?
+  chatHistory   ChatMessage[]
+  exports       ExportHistory[]
+  leads         Lead[]
   notifications Notification[]
+  searches      Search[]
 }
 
 model Lead {
@@ -40,20 +40,20 @@ model Lead {
   email        String?
   location     String
   score        Int
-  signals      String
+  signals      String    @db.Text
   propertyPref String
   budgetMin    Float?
   budgetMax    Float?
   relocated    Boolean   @default(false)
   rentalFlag   Boolean   @default(false)
   status       String    @default("new")
-  notes        String?
-  persona      String?
+  notes        String?   @db.Text
+  persona      String?   @db.Text
   bitrix24Id   String?
   agentId      String
   scrapeRunId  String
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    DateTime  @updatedAt
   agent        User      @relation(fields: [agentId], references: [id])
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
 
@@ -63,28 +63,28 @@ model Lead {
 }
 
 model SourceConfig {
-  id                    String   @id @default(cuid())
-  key                   String   @unique
+  id                    String    @id @default(cuid())
+  key                   String    @unique
   url                   String
   name                  String
   type                  String
-  signals               String
-  navigationSelectors   String
-  contentSelectors      String
+  signals               String    @db.Text
+  navigationSelectors   String    @db.Text
+  contentSelectors      String    @db.Text
   crawlDepth            Int?
   maxPages              Int?
   delayBetweenPages     Int?
-  active                Boolean  @default(true)
-  verificationStatus    String   @default("pending")
-  verificationReport    String?
+  active                Boolean   @default(true)
+  verificationStatus    String    @default("pending")
+  verificationReport    String?   @db.Text
   verifiedAt            DateTime?
   technicalAccessPassed Boolean?
   domDataPassed         Boolean?
   interactionsPassed    Boolean?
   aiExtractionPassed    Boolean?
-  verificationNotes     String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  verificationNotes     String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
 
 model ScrapeRun {
@@ -114,7 +114,7 @@ model ChatMessage {
   id        String   @id @default(cuid())
   agentId   String
   role      String
-  content   String
+  content   String   @db.Text
   createdAt DateTime @default(now())
   agent     User     @relation(fields: [agentId], references: [id])
 

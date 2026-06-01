@@ -1,15 +1,19 @@
-#!/usr/bin/env tsx
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const requiredKeys = [
   'DATABASE_URL',
   'SCRAPER_SERVICE_URL',
-  'SCRAPER_SECRET',
-  'OXYLABS_PROXY_URL',
-  'OXYLABS_PROXY_USERNAME',
-  'OXYLABS_PROXY_PASSWORD'
+  'SCRAPER_SECRET'
 ];
 
 const optionalKeys = [
+  'DATAIMPULSE_PROXY_URL',
+  'DATAIMPULSE_PROXY_USERNAME',
+  'DATAIMPULSE_PROXY_PASSWORD',
   'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
   'GOOGLE_API_KEY',

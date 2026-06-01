@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession, parsePreferences } from "@/lib/auth";
-import { pushContact } from "@/lib/bitrix24";
+import { pushContact, testConnection } from "@/lib/bitrix24";
 
 export async function POST(request: Request) {
   try {
@@ -30,6 +30,14 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // Pre-flight session validation: Check connection before processing the bulk batch
+    const isConnectionValid = await testConnection(bitrixDomain, bitrixToken);
+    if (!isConnectionValid) {
+      return NextResponse.json({ 
+        error: "Bitrix24 session is invalid or expired. Please check your credentials in Settings > Integrations." 
+      }, { status: 401 });
+    }
+
     // 2. Get the leads
     const leads = await prisma.lead.findMany({
       where: {
@@ -44,7 +52,7 @@ export async function POST(request: Request) {
       errors: [] as string[]
     };
 
-    // 3. Push to Bitrix24 sequentially (or in small batches)
+    // 3. Push to Bitrix24 sequentially (or in small batches) with transactional breaks
     for (const lead of leads) {
       try {
         const bitrixId = await pushContact(bitrixDomain, bitrixToken, lead);
@@ -59,6 +67,18 @@ export async function POST(request: Request) {
       } catch (error: any) {
         results.failed++;
         results.errors.push(`Lead ${lead.name}: ${error.message}`);
+
+        // If it's a token authorization/expired error, abort subsequent loop items to prevent partial pipeline sync issues
+        const isAuthError = 
+          error.message?.toLowerCase().includes("unauthorized") || 
+          error.message?.toLowerCase().includes("401") || 
+          error.message?.toLowerCase().includes("expired") ||
+          error.message?.toLowerCase().includes("invalid_token");
+          
+        if (isAuthError) {
+          results.errors.push("Bulk push loop aborted mid-way due to active Bitrix24 token expiration.");
+          break; // Break loop immediately
+        }
       }
     }
 

@@ -3,6 +3,7 @@ import { Inter, Cairo } from "next/font/google";
 import "./globals.css";
 import I18nProvider from "@/components/I18nProvider";
 import NotificationListener from "@/components/notifications/NotificationListener";
+import SWRegister from "@/components/SWRegister";
 import { Toaster } from "sonner";
 
 const inter = Inter({
@@ -51,6 +52,7 @@ export default function RootLayout({
         <I18nProvider>
           {children}
           <NotificationListener />
+          <SWRegister />
           <Toaster position="top-right" richColors />
         </I18nProvider>
       </body>

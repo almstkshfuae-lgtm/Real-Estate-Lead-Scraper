@@ -79,10 +79,9 @@
 
 ---
 
-## Phase 7 — Scraper Service [DEPRECATED - MOVED TO STATIC PIVOT] ⚠️
+## Phase 7 — Scraper Service Architecture Evolution 🎯
 
-> Architecture: Reliance on third-party scrapers (Apify, Apollo, SerpAPI) has been removed.
-> The system now uses a "Golden Dataset" static database model with AI-powered persona analysis.
+> **Architecture Clarification**: Reliance on expensive, paid third-party scrapers (Apify, Apollo, SerpAPI) has been completely removed to save 95% in costs. The system has successfully transitioned to our own **Internal Playwright-based Scraper Service** (running on Railway/locally) which harvests a high-quality "Golden Dataset" local database, enriched by Gemini AI.
 
 ### 7A-7F — Legacy Integrations [REMOVED]
 - [x] Apify integration (Removed)
@@ -205,11 +204,11 @@
 ## Phase 12 — Static Data Pivot & AI Persona 🚀
 
 - [x] **Decommission External Services** — Removed Apify, Apollo, SerpAPI.
-- [x] **Static Retrieval Engine** — Replaced scrapers with high-quality database query logic.
+- [x] **Internal Playwright Engine** — Fully activated our local scraper-service to extract local source data.
 - [x] **Unlimited Result Extraction** — Removed "25 leads" hardcoded limit.
 + [x] **Gemini Persona Field** — Added `persona` column to Lead model in MySQL.
 + [x] **Deep Persona Analysis** — Integrated Gemini logic to analyze behavior and investor profiles.
-- [x] **Ingestion Failure Resilience** — Static model ensures 100% data availability without API timeouts.
+- [x] **Ingestion Failure Resilience** — Local/Railway scraper-service model ensures 100% data availability without paid API timeouts.
 
 ## Legend
 

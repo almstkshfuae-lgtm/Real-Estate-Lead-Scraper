@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only';
 
@@ -44,7 +44,16 @@ export function normalizePreferences(preferences: any) {
 
 export async function getSession(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
-  const token = cookieStore.get('auth_token')?.value;
+  let token = cookieStore.get('auth_token')?.value;
+  
+  if (!token) {
+    const headersList = await headers();
+    const authHeader = headersList.get('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
+  
   if (!token) return null;
   return verifyToken(token);
 }

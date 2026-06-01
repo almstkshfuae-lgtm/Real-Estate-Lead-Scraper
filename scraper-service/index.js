@@ -1,4 +1,5 @@
 import express from 'express';
+import axios from 'axios';
 import { chromium } from 'playwright';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -6,7 +7,7 @@ import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_SCRAPER_SOURCES } from './default-sources.js';
-import { verifySourceCompletePipeline } from './verification-pipeline.js';
+import { verifySourceCompletePipeline, technicalAccessTest } from './verification-pipeline.js';
 import { validateProxyConnection, formatProxyValidationReport, verifyProxyEgress } from './proxy-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,10 +37,10 @@ if (USE_MOCK_DATA) {
 }
 
 /**
- * Proxy Configuration - Supports Oxylabs and DataImpulse
+ * Proxy Configuration - Supports DataImpulse
  * Rotating residential proxies to bypass Cloudflare and anti-bot detection
  */
-const ACTIVE_PROXY_PROVIDER = process.env.ACTIVE_PROXY_PROVIDER || 'oxylabs';
+const ACTIVE_PROXY_PROVIDER = process.env.ACTIVE_PROXY_PROVIDER || 'dataimpulse';
 
 function buildProxyUrl(provider) {
   if (provider === 'dataimpulse') {
@@ -61,32 +62,13 @@ function buildProxyUrl(provider) {
     const encodedUser = encodeURIComponent(username);
     const encodedPass = encodeURIComponent(password);
     return `${scheme}://${encodedUser}:${encodedPass}@${host}:${port}`;
-  } else if (provider === 'oxylabs') {
-    if (process.env.OXYLABS_PROXY_URL) {
-      return process.env.OXYLABS_PROXY_URL;
-    }
-
-    const username = process.env.OXYLABS_PROXY_USERNAME;
-    const password = process.env.OXYLABS_PROXY_PASSWORD;
-    const host = process.env.OXYLABS_PROXY_HOST || 'pr.oxylabs.io';
-    const port = process.env.OXYLABS_PROXY_PORT || '10000';
-    const scheme = process.env.OXYLABS_PROXY_SCHEME || 'http';
-
-    if (!username || !password || !host || !port) {
-      console.warn('⚠️  Oxylabs proxy credentials or endpoint are not fully configured.');
-      return null;
-    }
-
-    const encodedUser = encodeURIComponent(username);
-    const encodedPass = encodeURIComponent(password);
-    return `${scheme}://${encodedUser}:${encodedPass}@${host}:${port}`;
   }
 
   return null;
 }
 
 const PROXY_CONFIG = {
-  enabled: process.env.USE_PROXY ? process.env.USE_PROXY === 'true' : Boolean(process.env.DATAIMPULSE_PROXY_URL || process.env.DATAIMPULSE_PROXY_USERNAME || process.env.OXYLABS_PROXY_URL || process.env.OXYLABS_PROXY_USERNAME),
+  enabled: process.env.USE_PROXY ? process.env.USE_PROXY === 'true' : Boolean(process.env.DATAIMPULSE_PROXY_URL || process.env.DATAIMPULSE_PROXY_USERNAME),
   provider: ACTIVE_PROXY_PROVIDER,
   getProxyUrl: () => {
     const proxyUrl = buildProxyUrl(ACTIVE_PROXY_PROVIDER);
@@ -297,7 +279,7 @@ async function seedDefaultSources() {
 const HNWI_SOURCES = {};
 
 app.post('/scrape', async (req, res) => {
-  const { sources, secret, proxyUrl, proxyApiKey } = req.body;
+  const { sources, secret, proxyUrl, proxyApiKey, webhookUrl, runId } = req.body;
 
   if (secret !== SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -307,12 +289,12 @@ app.post('/scrape', async (req, res) => {
     return res.status(400).json({ error: 'sources array required' });
   }
 
-  console.log('Received scrape request for sources:', sources, 'proxyUrl:', proxyUrl ? 'provided' : 'default');
+  console.log('Received scrape request for sources:', sources, 'proxyUrl:', proxyUrl ? 'provided' : 'default', 'webhookUrl:', webhookUrl || 'none');
 
   // Background processing - return immediately
   (async () => {
     try {
-      await scrapeMultipleSources(sources, proxyUrl);
+      await scrapeMultipleSources(sources, proxyUrl, webhookUrl, runId);
     } catch (error) {
       console.error('Scrape pipeline error:', error);
     }
@@ -321,7 +303,8 @@ app.post('/scrape', async (req, res) => {
   res.json({ 
     message: 'Scrape job started', 
     status: 'processing',
-    sources: sources
+    sources: sources,
+    runId: runId
   });
 });
 
@@ -393,25 +376,6 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
       console.warn(`⚠️  DataImpulse proxy credentials incomplete. Proceeding without proxy.`);
     }
   }
-  // Fallback to Oxylabs if provider is oxylabs
-  else if (ACTIVE_PROXY_PROVIDER === 'oxylabs') {
-    if (process.env.OXYLABS_PROXY_URL) {
-      contextOptions.proxy = {
-        server: process.env.OXYLABS_PROXY_URL,
-        ...(process.env.OXYLABS_PROXY_USERNAME ? { username: process.env.OXYLABS_PROXY_USERNAME } : {}),
-        ...(process.env.OXYLABS_PROXY_PASSWORD ? { password: process.env.OXYLABS_PROXY_PASSWORD } : {})
-      };
-      const masked = (process.env.OXYLABS_PROXY_URL || '').replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
-      console.log(`🔒 Using Oxylabs proxy for ${sourceKey || source.key}: ${masked}`);
-    } else {
-      const proxyUrl = buildProxyUrl('oxylabs');
-      if (proxyUrl) {
-        contextOptions.proxy = { server: proxyUrl };
-        const masked = proxyUrl.replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
-        console.log(`🔒 Using Oxylabs proxy for ${sourceKey || source.key}: ${masked}`);
-      }
-    }
-  }
   // Generic fallback to resolved proxy URL
   else if (resolvedProxyUrl) {
     contextOptions.proxy = { server: resolvedProxyUrl };
@@ -425,7 +389,26 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
   const visitedUrls = new Set();
 
   try {
-    await page.goto(source.url, { timeout: 30000, waitUntil: 'domcontentloaded' });
+    await page.goto(source.url, { timeout: 45000, waitUntil: 'networkidle' });
+
+    // Force lazy-loaded content: scroll to bottom then back to top
+    await page.evaluate(async () => {
+      await new Promise(resolve => {
+        let totalHeight = 0;
+        const step = 400;
+        const timer = setInterval(() => {
+          window.scrollBy(0, step);
+          totalHeight += step;
+          if (totalHeight >= document.body.scrollHeight) {
+            clearInterval(timer);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setTimeout(resolve, 500);
+          }
+        }, 150);
+      });
+    });
+    await page.waitForTimeout(1000);
+
     await simulateHumanBrowsing(page);
     await scrapePageRecursively(page, source, sourceKey, allContent, visitedUrls, source.maxPages || 5);
 
@@ -482,7 +465,7 @@ async function scrapePageRecursively(
 
   try {
     // Wait for page load
-    await page.waitForLoadState('domcontentloaded', { timeout: 15000 });
+    await page.waitForLoadState('networkidle', { timeout: 20000 });
     await page.waitForTimeout(getRandomDelay(1000, 2500));
     await simulateHumanBrowsing(page);
 
@@ -555,7 +538,7 @@ async function scrapePageRecursively(
 /**
  * Scrape multiple HNWI sources in parallel with proxy rotation
  */
-async function scrapeMultipleSources(sourceKeys, proxyUrl = null) {
+async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = null, runId = null) {
   const browser = await chromium.launch({ 
     headless: true,
     args: [
@@ -581,6 +564,24 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null) {
         continue;
       }
 
+      // Pre-scrape verification: Stage 1 Technical Access Test
+      try {
+        const accessResult = await technicalAccessTest(sourceMap[sourceKey].url, proxyUrl || PROXY_CONFIG.getProxyUrl());
+        if (!accessResult.passed) {
+          console.warn(`🚫 Source ${sourceKey} failed Technical Access Test: ${accessResult.issues.join(', ')}`);
+          results.push({
+            source: sourceKey,
+            status: 'blocked',
+            error: `Technical access blocked: ${accessResult.issues.join('; ')}`,
+            timestamp: new Date().toISOString()
+          });
+          continue;
+        }
+        console.log(`✅ Source ${sourceKey} passed Technical Access Test (${accessResult.loadTime}ms, ${accessResult.htmlSize} bytes)`);
+      } catch (verifyError) {
+        console.warn(`⚠️  Stage 1 verification error for ${sourceKey}, proceeding with scrape: ${verifyError.message}`);
+      }
+
       try {
         console.log(`\n🎯 Scraping ${sourceKey}...`);
         const content = await scrapeSourceWithBrowser(browser, sourceMap[sourceKey], sourceKey, proxyUrl);
@@ -592,6 +593,21 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null) {
         });
         
         console.log(`✅ ${sourceKey}: ${content.pagesScraped} pages, ${content.contentLength} bytes`);
+
+        // Secure Webhook Integration (POST raw scraped data back to Next.js)
+        if (webhookUrl && runId) {
+          console.log(`[Webhook] Posting scraped results for ${sourceKey} to: ${webhookUrl}`);
+          try {
+            await axios.post(webhookUrl, {
+              secret: SECRET,
+              runId: runId,
+              sourceKey: sourceKey,
+              scrapedData: content
+            });
+          } catch (webhookErr) {
+            console.error(`[Webhook] Failed to send results for ${sourceKey}:`, webhookErr.message);
+          }
+        }
       } catch (error) {
         console.error(`❌ Failed to scrape ${sourceKey}:`, error.message);
         results.push({
@@ -607,6 +623,21 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null) {
     }
 
     console.log(`\n✅ Completed scraping ${results.length} sources`);
+
+    // Post finalized completion signal to webhook
+    if (webhookUrl && runId) {
+      console.log(`[Webhook] Finalizing ScrapeRun: ${runId} via completed signal`);
+      try {
+        await axios.post(webhookUrl, {
+          secret: SECRET,
+          runId: runId,
+          isCompletedSignal: true
+        });
+      } catch (webhookErr) {
+        console.error(`[Webhook] Final finalization webhook post failed:`, webhookErr.message);
+      }
+    }
+
     return results;
   } finally {
     await browser.close();
@@ -716,14 +747,20 @@ async function testScraperConnection(proxyUrl = null) {
       viewport: { width: 1920, height: 1080 }
     };
 
-    if (process.env.OXYLABS_PROXY_URL) {
-      contextOptions.proxy = {
-        server: process.env.OXYLABS_PROXY_URL,
-        ...(process.env.OXYLABS_PROXY_USERNAME ? { username: process.env.OXYLABS_PROXY_USERNAME } : {}),
-        ...(process.env.OXYLABS_PROXY_PASSWORD ? { password: process.env.OXYLABS_PROXY_PASSWORD } : {})
-      };
-      const masked = (process.env.OXYLABS_PROXY_URL || '').replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
-      console.log(`🔒 Testing scraper service through Oxylabs proxy: ${masked}`);
+    if (ACTIVE_PROXY_PROVIDER === 'dataimpulse') {
+      const username = process.env.DATAIMPULSE_PROXY_USERNAME;
+      const password = process.env.DATAIMPULSE_PROXY_PASSWORD;
+      const host = process.env.DATAIMPULSE_PROXY_HOST || 'gw.dataimpulse.com';
+      const port = process.env.DATAIMPULSE_PROXY_PORT || '823';
+
+      if (username && password && host && port) {
+        contextOptions.proxy = {
+          server: `http://${host}:${port}`,
+          username: username,
+          password: password
+        };
+        console.log(`🔒 Testing scraper service through DataImpulse proxy: http://${host}:${port}`);
+      }
     } else if (resolvedProxyUrl) {
       contextOptions.proxy = { server: resolvedProxyUrl };
       console.log(`🔒 Testing scraper service through proxy: ${resolvedProxyUrl.replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@')}`);

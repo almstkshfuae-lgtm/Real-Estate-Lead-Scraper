@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { generateGeminiText, getAIConfig } from "@/lib/ai";
+import { generateGeminiText, getAIConfig, generateGeminiStream } from "@/lib/ai";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.info('[AI Chat] POST request', { agentId: session.id, messagesCount: Array.isArray(messages) ? messages.length : 0, lang });
+    console.info('[AI Chat] POST request starting stream', { agentId: session.id, messagesCount: Array.isArray(messages) ? messages.length : 0, lang });
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: "Messages array is required" }), {
@@ -127,9 +127,13 @@ export async function POST(req: NextRequest) {
       .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
       .join("\n")}`;
 
-    const text = await generateGeminiText(systemPrompt, conversationText, 1024);
-    const assistantText = text || "";
+    // Get the live stream from Gemini, passing the incoming request signal!
+    // This propagates browser cancellations all the way to Google's servers.
+    const rawStream = await generateGeminiStream(systemPrompt, conversationText, 2048, req.signal);
+    const reader = rawStream.getReader();
+    const encoder = new TextEncoder();
 
+    // Save the user message to chat history immediately
     const lastUserMessage = [...messages].reverse().find((message: any) => message.role === "user");
     if (lastUserMessage?.content) {
       try {
@@ -145,26 +149,66 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    try {
-      await prisma.chatMessage.create({
-        data: {
-          agentId: session.id,
-          role: "assistant",
-          content: assistantText,
-        },
-      });
-    } catch (dbErr) {
-      console.error('[AI Chat] failed to save assistant message', (dbErr as Error).message);
-    }
+    let accumulatedText = "";
 
-    const encoder = new TextEncoder();
     const stream = new ReadableStream({
-      start(controller) {
-        const data = JSON.stringify({ delta: assistantText });
-        controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-        controller.close();
+      async start(controller) {
+        // Handle abort event explicitly to close reader cleanly
+        req.signal.addEventListener('abort', () => {
+          console.info('[AI Chat] connection aborted by client, terminating stream reader.');
+          reader.cancel("Aborted").catch(() => {});
+          try {
+            controller.close();
+          } catch {}
+        });
       },
+      async pull(controller) {
+        try {
+          if (req.signal.aborted) {
+            controller.close();
+            return;
+          }
+
+          const { done, value } = await reader.read();
+          if (done) {
+            // Save the assistant's full reply to the database history once fully generated
+            if (accumulatedText.trim()) {
+              try {
+                await prisma.chatMessage.create({
+                  data: {
+                    agentId: session.id,
+                    role: "assistant",
+                    content: accumulatedText,
+                  },
+                });
+              } catch (dbErr) {
+                console.error('[AI Chat] failed to save assistant message to DB', (dbErr as Error).message);
+              }
+            }
+
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+            return;
+          }
+
+          accumulatedText += value;
+          const data = JSON.stringify({ delta: value });
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+        } catch (err: any) {
+          if (req.signal.aborted || err.name === 'AbortError') {
+            console.info('[AI Chat] streaming fetch request aborted during read loop.');
+          } else {
+            console.error('[AI Chat] error during stream reading:', err);
+            controller.error(err);
+          }
+          try {
+            controller.close();
+          } catch {}
+        }
+      },
+      cancel() {
+        reader.cancel().catch(() => {});
+      }
     });
 
     return new Response(stream, {
@@ -175,6 +219,10 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.info('[AI Chat] POST request aborted during pre-stream setup.');
+      return new Response(JSON.stringify({ error: "Request aborted" }), { status: 499 });
+    }
     console.error("[AI Chat Error]", error?.message || error);
     return new Response(
       JSON.stringify({ error: "Failed to process chat", detail: error?.message }),

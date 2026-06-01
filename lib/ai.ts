@@ -9,12 +9,28 @@ interface AIConfig {
 }
 
 export async function getAIConfig(): Promise<AIConfig | null> {
-  const openAiKey = process.env.OPENAI_API_KEY;
-  const googleApiKey = (await getSecret("googleAiApiKey")) || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
-  const googleProjectId = process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
-  const googleLocation = process.env.GOOGLE_AI_LOCATION || "us-central1";
-  const googleModel = process.env.GOOGLE_AI_MODEL || process.env.GOOGLE_MODEL || "gemini-1.0";
-  const openAiModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const rawOpenAiKey = process.env.OPENAI_API_KEY?.trim();
+  const openAiKey = rawOpenAiKey && !rawOpenAiKey.startsWith('YOUR_') ? rawOpenAiKey : null;
+
+  const rawGoogleKey = (await getSecret("googleAiApiKey"))?.trim();
+  const googleApiKey = rawGoogleKey && !rawGoogleKey.startsWith('YOUR_') ? rawGoogleKey : null;
+  
+  const googleProjectId = (process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT)?.trim();
+  const googleLocation = (process.env.GOOGLE_AI_LOCATION || "us-central1")?.trim();
+  
+  let googleModel = (process.env.GOOGLE_AI_MODEL || process.env.GOOGLE_MODEL || "gemini-2.5-flash")?.trim();
+  // Auto-upgrade legacy or invalid models to stable and fast gemini-2.5-flash
+  if (
+    !googleModel || 
+    googleModel === "gemini-1.0" || 
+    googleModel === "gemini-1.0-pro" || 
+    googleModel === "gemini-1.5-flash" ||
+    googleModel === "gemini-pro" ||
+    googleModel === "gemini-flash-latest"
+  ) {
+    googleModel = "gemini-2.5-flash";
+  }
+  const openAiModel = (process.env.OPENAI_MODEL || "gpt-4.1-mini")?.trim();
 
   if (googleApiKey) {
     console.info('[AI] using Google provider (apiKey present)');
@@ -134,7 +150,7 @@ function filterLeadByCriteria(lead: any, criteria?: any) {
   return true;
 }
 
-async function generateOpenAIText(systemPrompt: string, userPrompt: string, maxTokens = 1024, apiKey: string, model: string) {
+async function generateOpenAIText(systemPrompt: string, userPrompt: string, maxTokens = 1024, apiKey: string, model: string, signal?: AbortSignal) {
   const endpoint = "https://api.openai.com/v1/responses";
   const body = {
     model,
@@ -150,7 +166,8 @@ async function generateOpenAIText(systemPrompt: string, userPrompt: string, maxT
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
 
   if (!response.ok) {
@@ -174,6 +191,20 @@ function extractTextFromAIResponse(response: any): string {
     return "";
   }
 
+  if (typeof contents === "object" && Array.isArray(contents.parts)) {
+    return contents.parts
+      .map((part: any) => part.text || "")
+      .filter(Boolean)
+      .join("");
+  }
+
+  if (typeof candidate === "object" && Array.isArray(candidate.parts)) {
+    return candidate.parts
+      .map((part: any) => part.text || "")
+      .filter(Boolean)
+      .join("");
+  }
+
   if (Array.isArray(contents)) {
     return contents
       .map((item: any) => (typeof item === "string" ? item : item?.text || ""))
@@ -195,12 +226,102 @@ function extractTextFromAIResponse(response: any): string {
   return "";
 }
 
+function safeParseJson(text: string, fallback: any = []): any {
+  if (!text) return fallback;
+
+  let cleanText = text.trim();
+  
+  // 1. Remove markdown code blocks if present anywhere in the text
+  if (cleanText.includes("```")) {
+    const matches = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (matches && matches[1]) {
+      cleanText = matches[1].trim();
+    }
+  }
+
+  // 2. Try to locate the JSON array or object boundaries explicitly
+  const firstBracket = cleanText.indexOf('[');
+  const lastBracket = cleanText.lastIndexOf(']');
+  const firstBrace = cleanText.indexOf('{');
+  const lastBrace = cleanText.lastIndexOf('}');
+
+  let jsonStr = cleanText;
+
+  if (firstBracket !== -1 && lastBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+    jsonStr = cleanText.substring(firstBracket, lastBracket + 1);
+  } else if (firstBrace !== -1 && lastBrace !== -1) {
+    jsonStr = cleanText.substring(firstBrace, lastBrace + 1);
+  }
+
+  // 3. Robust sanitization of control characters and backslashes
+  // Remove all invalid ASCII control characters (0x00 to 0x1F) except newline (\n), carriage return (\r), and tab (\t)
+  jsonStr = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error('[AI] JSON Parse failed for raw text:', text.substring(0, 500));
+    console.error('[AI] Cleaned text attempt:', jsonStr.substring(0, 500));
+    
+    // 4. Try automatic recovery for common defects (trailing commas, unescaped quotes)
+    try {
+      const fixedJsonStr = jsonStr
+        .replace(/,\s*\]/g, ']') // remove trailing comma in arrays
+        .replace(/,\s*\}/g, '}') // remove trailing comma in objects
+        .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"'); // normalize smart/curly quotes
+      return JSON.parse(fixedJsonStr);
+    } catch (innerError) {
+      console.error('[AI] Secondary JSON parsing recovery failed:', innerError);
+      return fallback;
+    }
+  }
+}
+
 function pickFirstMatch(matches: string[] | null) {
   return matches && matches.length > 0 ? matches[0].trim() : null;
 }
 
 function normalizePhone(phone: string) {
   return phone.replace(/[\s\-().]/g, "").replace(/^00/, "+");
+}
+
+export function cleanScrapedText(text: string): string {
+  if (!text) return "";
+
+  let cleaned = text;
+
+  // 1. Strip script and style blocks entirely
+  cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+  cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "");
+  
+  // 2. Strip standard HTML tags
+  cleaned = cleaned.replace(/<[^>]+>/g, " ");
+
+  // 3. Strip common footer/header boilerplate and noise words to focus AI attention
+  const noisePatterns = [
+    /terms of (?:service|use)|privacy policy|cookie policy|all rights reserved/gi,
+    /share on (?:facebook|twitter|linkedin|whatsapp)/gi,
+    /subscribe to newsletter|sign up for free/gi,
+    /loading\.\.\.|please wait|click here to/gi,
+    /follow us on|social media/gi,
+  ];
+
+  for (const pattern of noisePatterns) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+
+  // 4. Normalize tab, carriage return, and space sequences
+  cleaned = cleaned.replace(/[\t\r]/g, " ");
+  cleaned = cleaned.replace(/\n\s*\n+/g, "\n"); // Collapse multiple blank lines
+  cleaned = cleaned.replace(/ {2,}/g, " ");     // Collapse multiple double spaces
+
+  // 5. Truncate content length to 15,000 characters (~3,500 words) to avoid context saturation
+  const maxChars = 15000;
+  if (cleaned.length > maxChars) {
+    cleaned = cleaned.substring(0, maxChars) + "... [Truncated due to context window limits]";
+  }
+
+  return cleaned.trim();
 }
 
 function extractLikelyNames(content: string) {
@@ -313,7 +434,7 @@ function heuristicExtractLeads(scrapedData: any, criteria?: any) {
   return leads.filter((lead) => filterLeadByCriteria(lead, criteria));
 }
 
-async function generateGeminiText(systemPrompt: string, userPrompt: string, maxTokens = 1024) {
+async function generateGeminiText(systemPrompt: string, userPrompt: string, maxTokens = 1024, signal?: AbortSignal) {
   const config = await getAIConfig();
   if (!config) {
     console.error('[AI] no provider configured');
@@ -321,7 +442,7 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
   }
 
   if (config.provider === 'openai') {
-    return await generateOpenAIText(systemPrompt, userPrompt, maxTokens, config.apiKey, config.model);
+    return await generateOpenAIText(systemPrompt, userPrompt, maxTokens, config.apiKey, config.model, signal);
   }
 
   const isProjectBased = Boolean(config.projectId);
@@ -340,25 +461,34 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
         }
       }
     : {
-        prompt: {
-          text: `${systemPrompt}\n\n${userPrompt}`
-        },
-        temperature: 0.0,
-        maxOutputTokens: maxTokens,
-        topP: 0.95,
-        topK: 40
+        contents: [
+          {
+            parts: [
+              {
+                text: `${systemPrompt}\n\n${userPrompt}`
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.0,
+          maxOutputTokens: maxTokens,
+          topP: 0.95,
+          topK: 40
+        }
       };
 
   const endpoint = isProjectBased
     ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`
-    : `https://generativelanguage.googleapis.com/v1beta2/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`;
+    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
 
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
 
   if (!response.ok) {
@@ -394,17 +524,21 @@ export async function extractHNWILeads(scrapedData: {
   content: string;
 }, criteria?: any) {
   const criteriaPrompt = formatCriteriaPrompt(criteria);
+  const cleanedContent = cleanScrapedText(scrapedData.content);
 
   const content = await generateGeminiText(
     `You are an expert at extracting high-net-worth individual (HNWI) leads from UAE business websites, club directories, news articles, and event listings.
 
 CRITICAL INSTRUCTIONS:
-1. Extract ONLY real people with verified context from the page
-2. For each person, provide BOTH English AND Arabic names/companies/roles
-3. Include ALL required fields for the database schema
-4. Assign tier based on position: Tier 1 = Leadership/Ownership, Tier 2 = Management, Tier 3 = Standard
-5. Calculate investment score (0-100) based on context
-6. Apply the search criteria as strict filters and discard irrelevant or out-of-scope profiles before returning results
+0. ABSOLUTE RULE: You MUST extract ONLY real data explicitly present in the provided text. If you cannot find an explicit name of a real estate client, investor, or HNWI with financial solvency indicators, return an EMPTY ARRAY [] immediately. It is STRICTLY FORBIDDEN to invent names, guess companies, or generate random data based on general context. Absence of real data = return []. No exceptions.
+1. Extract ONLY real people with verified business context from the page.
+2. If the page text is purely generic marketing copy, facility catalogs, sports package descriptions, pricing tables, or promotional articles with NO list of specific members, committee lists, board members, corporate leaders, or elite horse owners, DO NOT extract anything. You MUST return an empty array [] immediately.
+3. NEVER extract general staff, copywriters, or random nouns. Only extract HNWIs (owners, directors, members).
+4. For each person, provide BOTH English AND Arabic names/companies/roles.
+5. Include ALL required fields for the database schema.
+6. Assign tier based on position: Tier 1 = Leadership/Ownership, Tier 2 = Management, Tier 3 = Standard.
+7. Calculate investment score (0-100) based on context, ensuring high variation (no flat 50 or 75 clustering).
+8. Apply the search criteria as strict filters and discard irrelevant or out-of-scope profiles before returning results.
 
 REQUIRED FIELDS FOR EACH LEAD:
 - name (English) - Person's full name
@@ -424,17 +558,16 @@ REQUIRED FIELDS FOR EACH LEAD:
 - source (String) - "${scrapedData.name}"
 - sourceType (String) - "${scrapedData.type}"
 - signals (Array) - Business context clues
+- persona (String) - REQUIRED: Full behavioral and investor profile analysis paragraph in the active language (English or Arabic). Limit to 2-3 sentences describing motivation, risk profile, and lifestyle/property alignment.
 
-SCORING GUIDELINES (0-100):
-- Leadership position (CEO, Chairman, Founder): +30 points
-- Equestrian/Polo club member: +25 points
-- Club board/committee member: +20 points
-- Business owner/Director: +25 points
-- News mention/Public figure: +15 points
-- Professional/Manager: +10 points
-- Multi-property interests: +10 points
-- International business: +15 points
-- Add contextual factors based on source
+SCORING GUIDELINES (0-100) - EVALUATE TO ENSURE DIVERSE, CONTINUOUS SCORES:
+Assign a specific, highly varied investment score based on this precise scale:
+- 90-100: Elite UHNWI (Royal family, multi-billionaires, top-tier family offices, large conglomerate owners).
+- 80-89: Elite HNWIs (CEOs of multinational firms, major real estate developers, active top equestrian/polo owners).
+- 70-79: HNWIs (Founders, high-profile entrepreneurs, managing directors of established firms, venture capitalists).
+- 60-69: Premium Clients (Directors, general managers, partners, luxury property seekers, multi-property investors).
+- 50-59: Standard Business Profiles (Managers, professionals, consultants, high-earning corporate employees).
+- Below 50: Standard employees or low-likelihood seekers (never default to flat 50 or 75, provide specific values like 53, 67, 72, 84, 91 based on exact context).
 
 TIER ASSIGNMENT:
 - Tier 1: Founders, CEOs, Chairmen, Polo/Equestrian club leadership, UHNWI
@@ -469,33 +602,59 @@ Example format:
     "sourceType": "${scrapedData.type}",
     "tier": 1,
     "score": 95,
-    "signals": ["Business Owner", "Equestrian Investor", "Leadership"]
+    "signals": ["Business Owner", "Equestrian Investor", "Leadership"],
+    "persona": "A high-profile real estate investor seeking luxury waterfront villas. Displays a growth-oriented, aggressive risk profile with focus on immediate off-plan capital appreciation."
   }
 ]
 
 Output ONLY the JSON array. No other text.`,
-    `Extract leads from this content:\n\nPage Title: ${scrapedData.title}\nSource: ${scrapedData.name}\nType: ${scrapedData.type}\n\nContent:\n${scrapedData.content}`,
+    `Extract leads from this content:\n\nPage Title: ${scrapedData.title}\nSource: ${scrapedData.name}\nType: ${scrapedData.type}\n\nContent:\n${cleanedContent}`,
     4096
   );
 
   if (!content) {
-    console.warn("AI extraction unavailable, falling back to local heuristic extraction");
-    return heuristicExtractLeads(scrapedData, criteria);
+    console.warn("[AI] AI extraction unavailable — returning empty (no heuristic fallback)");
+    return [];
   }
 
-  const jsonMatch = content.match(/\[[\s\S]*\]/);
-  const leads = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+  const leads = safeParseJson(content, []);
 
   if (!Array.isArray(leads) || leads.length === 0) {
-    console.warn("AI extraction returned no structured leads, falling back to local heuristic extraction");
-    return heuristicExtractLeads(scrapedData, criteria);
+    console.warn("[AI] AI extraction returned no structured leads — returning empty (no heuristic fallback)");
+    return [];
   }
 
   return Array.isArray(leads)
     ? leads.filter((lead: any) =>
-        lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location && filterLeadByCriteria(lead, criteria)
+        lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
+        && filterLeadByCriteria(lead, criteria)
+        && verifyLeadInSource(lead.name, cleanedContent)
       )
     : [];
+}
+
+/**
+ * Verify that the lead's name actually appears in the original source text.
+ * Prevents AI hallucinations from entering the database.
+ */
+function verifyLeadInSource(name: string, sourceText: string): boolean {
+  if (!name || !sourceText) return false;
+  const normalizedName = name.toLowerCase().trim();
+  const normalizedSource = sourceText.toLowerCase();
+  // Check if at least the first word + last word of the name appear in the source
+  const nameParts = normalizedName.split(/\s+/);
+  if (nameParts.length >= 2) {
+    const found = normalizedSource.includes(nameParts[0]) && normalizedSource.includes(nameParts[nameParts.length - 1]);
+    if (!found) {
+      console.warn(`[AI] Hallucination detected: name "${name}" not found in source text — discarding lead`);
+    }
+    return found;
+  }
+  const found = normalizedSource.includes(normalizedName);
+  if (!found) {
+    console.warn(`[AI] Hallucination detected: name "${name}" not found in source text — discarding lead`);
+  }
+  return found;
 }
 
 /**
@@ -503,9 +662,11 @@ Output ONLY the JSON array. No other text.`,
  */
 export async function extractLeadsFromText(text: string, criteria?: any) {
   const criteriaPrompt = formatCriteriaPrompt(criteria);
+  const cleanedText = cleanScrapedText(text);
 
   const content = await generateGeminiText(
     `You are an expert at extracting high-quality business leads from UAE news articles, event write-ups, and profile snippets.
+    ABSOLUTE RULE: You MUST extract ONLY real data explicitly present in the provided text. If you cannot find an explicit name of a real estate client, investor, or HNWI with financial solvency indicators, return an EMPTY ARRAY [] immediately. It is STRICTLY FORBIDDEN to invent names, guess companies, or generate random data based on general context. Absence of real data = return []. No exceptions.
     Extract the Person's Name, Company, Role, location, investment tier, score, and bilingual Arabic translations.
 
     REQUIRED FIELDS:
@@ -524,44 +685,44 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
     - budgetMin (Number or null)
     - budgetMax (Number or null)
     - relocated (Boolean or null)
+    - persona (String) - REQUIRED: Full behavioral and investor profile analysis paragraph in the active language (English or Arabic). Limit to 2-3 sentences describing motivation, risk profile, and lifestyle/property alignment.
 
+    SCORING GUIDELINES (0-100) - EVALUATE TO ENSURE DIVERSE, CONTINUOUS SCORES:
+    Assign a specific, highly varied investment score based on this precise scale:
+    - 90-100: Elite UHNWI (Royal family, multi-billionaires, top-tier family offices, large conglomerate owners).
+    - 80-89: Elite HNWIs (CEOs of multinational firms, major real estate developers, active top equestrian/polo owners).
+    - 70-79: HNWIs (Founders, high-profile entrepreneurs, managing directors of established firms, venture capitalists).
+    - 60-69: Premium Clients (Directors, general managers, partners, luxury property seekers, multi-property investors).
+    - 50-59: Standard Business Profiles (Managers, professionals, consultants, high-earning corporate employees).
+    - Below 50: Standard employees or low-likelihood seekers (never default to flat 50 or 75, provide specific values like 53, 67, 72, 84, 91 based on exact context).
+
+    CRITICAL: If the input text is just generic marketing descriptions, brochures, facilities listings, or sport rules rather than actual lists/mentions of members, executives, or leaders, DO NOT extract anything. Return an empty array [] immediately. Do NOT extract staff names or copywriters.
     Only return valid leads with a real person, company, and role. Default missing location to "Abu Dhabi".
     Apply the search criteria as strict filters and discard irrelevant profiles.
     Output ONLY a JSON array.
 
     ${criteriaPrompt}`,
-    `Extract leads from this text: ${text}`,
+    `Extract leads from this text: ${cleanedText}`,
     1024
   );
 
   if (!content) {
-    console.warn("AI extraction unavailable, falling back to local heuristic text extraction");
-    const heuristicLead = heuristicExtractLeads({
-      name: "Text source",
-      title: "Text source",
-      type: "Text",
-      signals: [],
-      content: text
-    }, criteria);
-    return heuristicLead;
+    console.warn("[AI] AI text extraction unavailable — returning empty (no heuristic fallback)");
+    return [];
   }
 
-  const jsonMatch = content.match(/\[[\s\S]*\]/);
-  const leads = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+  const leads = safeParseJson(content, []);
 
   if (!Array.isArray(leads) || leads.length === 0) {
-    console.warn("AI text extraction returned no structured leads, falling back to local heuristic text extraction");
-    return heuristicExtractLeads({
-      name: "Text source",
-      title: "Text source",
-      type: "Text",
-      signals: [],
-      content: text
-    }, criteria);
+    console.warn("[AI] AI text extraction returned no structured leads — returning empty (no heuristic fallback)");
+    return [];
   }
 
   return Array.isArray(leads)
-    ? leads.filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location && filterLeadByCriteria(lead, criteria))
+    ? leads.filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
+        && filterLeadByCriteria(lead, criteria)
+        && verifyLeadInSource(lead.name, cleanedText)
+      )
     : [];
 }
 
@@ -629,8 +790,7 @@ Return ONLY this JSON object with keys tier and score. No explanatory text.`,
     return enrichedLead;
   }
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/);
-  const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+  const result = safeParseJson(content, null);
   if (result && result.tier && typeof result.score === "number") {
     return Object.assign({}, enrichedLead, {
       tier: Math.max(1, Math.min(3, result.tier)),
@@ -645,6 +805,10 @@ Return ONLY this JSON object with keys tier and score. No explanatory text.`,
  * Generate buyer persona analysis for detailed lead understanding
  */
 export async function generatePersonaAnalysis(lead: any) {
+  if (lead.persona) {
+    return lead.persona;
+  }
+
   const content = await generateGeminiText(
     `You are a professional behavioral psychologist and UAE real estate investment analyst.
 Analyze the following lead data and create a buyer persona.
@@ -673,6 +837,133 @@ Do not use placeholders. Use the data provided.`,
  */
 export async function enrichLeadsInBatch(leads: any[]) {
   return Promise.all(leads.map(lead => enrichLeadWithAI(lead)));
+}
+
+export async function generateGeminiStream(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens = 1024,
+  signal?: AbortSignal
+): Promise<ReadableStream<string>> {
+  const config = await getAIConfig();
+  if (!config) {
+    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY or OPENAI_API_KEY.");
+  }
+
+  if (config.provider === 'openai') {
+    const text = await generateOpenAIText(systemPrompt, userPrompt, maxTokens, config.apiKey, config.model, signal);
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(text);
+        controller.close();
+      }
+    });
+  }
+
+  const isProjectBased = Boolean(config.projectId);
+  const body = isProjectBased
+    ? {
+        instances: [{ content: `${systemPrompt}\n\n${userPrompt}` }],
+        parameters: { temperature: 0.0, maxOutputTokens: maxTokens, topP: 0.95, topK: 40 }
+      }
+    : {
+        contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+        generationConfig: { temperature: 0.0, maxOutputTokens: maxTokens, topP: 0.95, topK: 40 }
+      };
+
+  const endpoint = isProjectBased
+    ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini streaming API error ${response.status}: ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async pull(controller) {
+      if (!reader) {
+        controller.close();
+        return;
+      }
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+
+        const chunkText = decoder.decode(value, { stream: true });
+        
+        let text = "";
+        let cleanChunk = chunkText.trim();
+        let shouldClose = false;
+
+        if (cleanChunk.endsWith(']')) {
+          shouldClose = true;
+          cleanChunk = cleanChunk.substring(0, cleanChunk.length - 1).trim();
+          if (cleanChunk.endsWith(',')) {
+            cleanChunk = cleanChunk.substring(0, cleanChunk.length - 1).trim();
+          }
+        }
+
+        if (cleanChunk.startsWith(',')) cleanChunk = cleanChunk.substring(1).trim();
+        if (cleanChunk.startsWith('[')) cleanChunk = cleanChunk.substring(1).trim();
+
+        if (cleanChunk) {
+          try {
+            const obj = JSON.parse(cleanChunk);
+            const candidate = obj?.predictions?.[0] || obj?.candidates?.[0];
+            const contents = candidate?.content || candidate;
+            const parts = contents?.parts || contents;
+            if (Array.isArray(parts)) {
+              text = parts.map((p: any) => p.text || "").join("");
+            } else if (typeof parts === "string") {
+              text = parts;
+            } else if (parts?.text) {
+              text = parts.text;
+            }
+          } catch (e) {
+            const textRegex = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+            let match;
+            const matches = [];
+            while ((match = textRegex.exec(chunkText)) !== null) {
+              try {
+                matches.push(JSON.parse(`"${match[1]}"`));
+              } catch {
+                matches.push(match[1]);
+              }
+            }
+            text = matches.join("");
+          }
+        }
+
+        if (text) {
+          controller.enqueue(text);
+        }
+        if (shouldClose) {
+          controller.close();
+        }
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel(reason) {
+      if (reader) {
+        reader.cancel(reason).catch(() => {});
+      }
+    }
+  });
 }
 
 export { generateGeminiText };

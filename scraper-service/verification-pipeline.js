@@ -67,7 +67,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.createBrowserContext({
+    const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     });
     const page = await context.newPage();
@@ -179,7 +179,7 @@ async function domDataVerification(url, proxyUrl = null) {
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.createBrowserContext();
+    const context = await browser.newContext();
     const page = await context.newPage();
 
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
@@ -342,7 +342,7 @@ async function interactionMapping(url, proxyUrl = null) {
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.createBrowserContext();
+    const context = await browser.newContext();
     const page = await context.newPage();
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -501,7 +501,7 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.createBrowserContext();
+    const context = await browser.newContext();
     const page = await context.newPage();
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });

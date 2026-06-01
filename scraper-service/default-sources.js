@@ -159,5 +159,143 @@ export const DEFAULT_SCRAPER_SOURCES = [
     },
     maxPages: 8,
     delayBetweenPages: 2000
+  },
+  {
+    key: 'adgm',
+    url: 'https://www.adgm.com',
+    name: 'ADGM Registered Entities',
+    type: 'Company Registry',
+    signals: ['Family Office', 'Fund Manager', 'Wealth Management', 'UHNW'],
+    crawlDepth: 3,
+    navigationSelectors: {
+      memberDirectory: ['a[href*="public-registers"]', 'a[href*="companies"]', 'a[href*="directory"]'],
+      pagination: ['.pagination a', 'a[rel="next"]', 'button[aria-label*="next"]'],
+      expandButtons: ['button[aria-expanded]', '.expand-btn'],
+      memberLinks: ['a[href*="company"]', 'a[href*="entity"]', '.company-link']
+    },
+    contentSelectors: {
+      namePatterns: ['data-name', '.company-name', 'h1', 'h2', 'h3'],
+      companyPatterns: ['.entity-type', '.registration-number'],
+      rolePatterns: ['.director-name', '.officer-name', '.role'],
+      phonePatterns: ['href*="tel:"', '.phone'],
+      emailPatterns: ['href*="mailto:"', '.email']
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'difc',
+    url: 'https://www.difc.ae',
+    name: 'DIFC Public Register',
+    type: 'Company Registry',
+    signals: ['Investment Firm', 'Private Equity', 'CEO', 'HNWI'],
+    crawlDepth: 3,
+    navigationSelectors: {
+      memberDirectory: ['a[href*="public-register"]', 'a[href*="directory"]'],
+      pagination: ['.pagination a', 'a[rel="next"]'],
+      expandButtons: ['button[aria-expanded]'],
+      memberLinks: ['a[href*="view-entity"]', 'a[href*="company"]', '.entity-link']
+    },
+    contentSelectors: {
+      namePatterns: ['.entity-name', 'h1', 'h2'],
+      companyPatterns: ['.industry', '.status'],
+      rolePatterns: ['.director', '.principal'],
+      phonePatterns: ['href*="tel:"'],
+      emailPatterns: ['href*="mailto:"']
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'gazette',
+    url: 'https://www.ecouncil.ae',
+    name: 'Abu Dhabi Official Gazette',
+    type: 'Government Gazette',
+    signals: ['Decree Recipient', 'Strategic Investor', 'UHNW'],
+    crawlDepth: 3,
+    navigationSelectors: {
+      memberDirectory: ['a[href*="gazette"]', 'a[href*="decree"]', 'a[href*="official"]'],
+      pagination: ['.pagination a', 'a[rel="next"]'],
+      expandButtons: [],
+      memberLinks: ['a[href*="gazette"]', 'a[href*="decree"]', '.gazette-link']
+    },
+    contentSelectors: {
+      namePatterns: ['.decree-title', 'h1', 'h2', 'h3'],
+      companyPatterns: ['.entity-mention', '.corporate-body'],
+      rolePatterns: ['.signatory', '.minister'],
+      phonePatterns: [],
+      emailPatterns: []
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'arabianbusiness',
+    url: 'https://www.arabianbusiness.com',
+    name: 'Arabian Business Leaders',
+    type: 'Business News',
+    signals: ['Rich List', 'Executive Move', 'Wealthy Investor'],
+    crawlDepth: 2,
+    navigationSelectors: {
+      articleList: ['article', '[class*="article"]', '[class*="post"]'],
+      pagination: ['.pagination a', 'a[rel="next"]'],
+      expandButtons: [],
+      memberLinks: ['a[href*="leader"]', 'a[href*="article"]', '.article-link']
+    },
+    contentSelectors: {
+      namePatterns: ['.author-name', 'h1', 'h2', '.leader-name'],
+      companyPatterns: ['.company-name', '.organization'],
+      rolePatterns: ['.leader-title', '.job-title'],
+      phonePatterns: [],
+      emailPatterns: []
+    },
+    maxPages: 15,
+    delayBetweenPages: 1000
+  },
+  {
+    key: 'propertymonitor',
+    url: 'https://www.propertymonitor.ae',
+    name: 'Property Monitor Reports',
+    type: 'Property Intelligence',
+    signals: ['Strategic Buyer', 'Institutional Investor', 'HNWI'],
+    crawlDepth: 2,
+    navigationSelectors: {
+      memberDirectory: ['a[href*="report"]', 'a[href*="insight"]', 'a[href*="news"]'],
+      pagination: ['.pagination a', 'a[rel="next"]'],
+      expandButtons: [],
+      memberLinks: ['a[href*="report"]', 'a[href*="insight"]', '.report-link']
+    },
+    contentSelectors: {
+      namePatterns: ['.report-title', 'h1', 'h2'],
+      companyPatterns: ['.client-name', '.firm'],
+      rolePatterns: ['.analyst', '.buyer-type'],
+      phonePatterns: [],
+      emailPatterns: []
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'abudhabichamber',
+    url: 'https://www.abudhabichamber.ae',
+    name: 'Abu Dhabi Chamber Directory',
+    type: 'Business Directory',
+    signals: ['Business Licensee', 'Executive Director', 'Commercial Buyer'],
+    crawlDepth: 3,
+    navigationSelectors: {
+      memberDirectory: ['a[href*="directory"]', 'a[href*="members"]', 'a[href*="search"]'],
+      pagination: ['.pagination a', 'a[rel="next"]', 'button[aria-label*="next"]'],
+      expandButtons: ['button[aria-expanded]', '.expand'],
+      memberLinks: ['a[href*="member"]', 'a[href*="company"]', '.directory-link']
+    },
+    contentSelectors: {
+      namePatterns: ['.company-name', '.owner-name', 'h1', 'h2', 'h3'],
+      companyPatterns: ['.license-type', '.category'],
+      rolePatterns: ['.manager', '.director', '.position'],
+      phonePatterns: ['href*="tel:"', '.phone'],
+      emailPatterns: ['href*="mailto:"', '.email']
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
   }
 ];

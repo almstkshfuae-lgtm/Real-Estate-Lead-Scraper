@@ -26,6 +26,12 @@ const DEFAULT_SCRAPE_SOURCES = [
   'artsclub',
   'dhabianequi',
   'alhabtoor',
+  'adgm',
+  'difc',
+  'gazette',
+  'arabianbusiness',
+  'propertymonitor',
+  'abudhabichamber',
 ];
 
 export default function QualificationForm({ initialData }: { initialData?: any }) {

@@ -48,9 +48,26 @@ export async function enrichCompanyData(companies: any[], source: string, agentI
       scrapeRunId,
     };
 
-    // 7C.5: Store enriched company leads in MySQL
-    await prisma.lead.create({
-      data: enrichedLead
+    // 7C.5: Store enriched company leads in MySQL using upsert to avoid unique constraint crashes
+    await prisma.lead.upsert({
+      where: {
+        name_company_source: {
+          name: enrichedLead.name,
+          company: enrichedLead.company,
+          source: enrichedLead.source
+        }
+      },
+      update: {
+        role: enrichedLead.role,
+        tier: enrichedLead.tier,
+        location: enrichedLead.location,
+        score: enrichedLead.score,
+        signals: enrichedLead.signals,
+        propertyPref: enrichedLead.propertyPref,
+        agentId: enrichedLead.agentId,
+        scrapeRunId: enrichedLead.scrapeRunId
+      },
+      create: enrichedLead
     });
     savedCount++;
   }

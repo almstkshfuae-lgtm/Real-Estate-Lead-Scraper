@@ -215,11 +215,23 @@ export async function getAuthUrl() {
 export async function exchangeCode(code: string) {
   const clientId = process.env.BITRIX24_CLIENT_ID;
   const clientSecret = process.env.BITRIX24_CLIENT_SECRET;
+  const redirectUri = process.env.BITRIX24_REDIRECT_URI;
   
-  const res = await fetch(`https://oauth.bitrix.info/oauth/token/`, {
+  if (!clientId || !clientSecret) {
+    throw new Error('Bitrix24 OAuth credentials missing (BITRIX24_CLIENT_ID / BITRIX24_CLIENT_SECRET)');
+  }
+
+  const url = `https://oauth.bitrix.info/oauth/token/?grant_type=authorization_code&client_id=${clientId}&client_secret=${clientSecret}&code=${code}&redirect_uri=${encodeURIComponent(redirectUri || '')}`;
+
+  const res = await fetch(url, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Accept': 'application/json' },
   });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Bitrix24 OAuth token exchange failed: ${errorText}`);
+  }
 
   return res.json();
 }

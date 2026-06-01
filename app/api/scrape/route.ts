@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
       'artsclub',
       'dhabianequi',
       'alhabtoor',
+      'adgm',
+      'difc',
+      'gazette',
+      'arabianbusiness',
+      'propertymonitor',
+      'abudhabichamber',
     ];
 
     const requestedSources = Array.isArray(sources) && sources.length > 0 ? sources : DEFAULT_SCRAPE_SOURCES;
@@ -49,8 +55,15 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Fire and forget pipeline
-    runHNWIScrapePipeline(session.id, scrapeRun.id, requestedSources, criteria).catch(console.error);
+    const isMockData = process.env.USE_MOCK_DATA === 'true';
+
+    if (isMockData) {
+      console.log(`[Scraper] USE_MOCK_DATA is active. Executing pipeline synchronously to prevent Vercel hanging background runs.`);
+      await runHNWIScrapePipeline(session.id, scrapeRun.id, requestedSources, criteria);
+    } else {
+      // Fire and forget pipeline
+      runHNWIScrapePipeline(session.id, scrapeRun.id, requestedSources, criteria).catch(console.error);
+    }
 
     return NextResponse.json({ 
       message: 'HNWI lead scraping started', 
@@ -142,6 +155,23 @@ async function runHNWIScrapePipeline(
 
     for (const scrapedData of scraperResults) {
       try {
+        // Stage 2: DOM Vital Data Check — reject empty/blocked pages before AI processing
+        const contentText = String(scrapedData.content || '');
+        const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(contentText);
+        const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(contentText);
+        if (contentText.length < 200 || (!hasNameSignal && !hasRoleSignal)) {
+          console.warn(`[Pipeline] Source ${scrapedData.name} failed DOM vital check — content too short (${contentText.length} chars) or missing name/role patterns. Skipping AI extraction.`);
+          logs.push({
+            step: "AI Lead Extraction",
+            status: "SKIPPED",
+            source: scrapedData.name,
+            reason: "DOM vital data check failed",
+            contentLength: contentText.length,
+            time: new Date().toISOString()
+          });
+          continue;
+        }
+
         const foundLeads = await extractHNWILeads(scrapedData, criteria);
         extractedLeads.push(...foundLeads);
         logs.push({

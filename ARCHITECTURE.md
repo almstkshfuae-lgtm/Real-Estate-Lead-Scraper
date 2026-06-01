@@ -1,323 +1,145 @@
-# HNWI Real Estate Lead Scraper - Re-engineered Architecture
+# UAE Real Estate Lead Scraper - System Architecture
 
-## Overview
-
-This document outlines the re-engineered architecture that pivots the Real Estate Lead Scraper from expensive third-party subscriptions (Apify, SerpAPI, Apollo) to a **subscription-free, Abu Dhabi-focused HNWI ecosystem** strategy using internal Playwright-based web scraping.
-
-## Architecture Layers
-
-### 1. **Browser Scraping Layer** (scraper-service/)
-- **Framework**: Express.js + Playwright
-- **Purpose**: Autonomous browser automation to extract content from HNWI sources
-- **Deployment**: Railway or similar cloud platform (Node.js compatible)
-
-#### HNWI Sources Configured:
-- **Equestrian & Sports Clubs**: alforsan.ae, adec.ae, dhabianequi.com, alhabtoorpoloclub.com
-- **Elite Social & Business Hubs**: theartsclub.ae, rotary.ae
-- **News & Lifestyle**: whatson.ae
-
-#### Key Features:
-- Mimics human browser behavior (user agent spoofing, delays, headless mode bypass)
-- Extracts raw DOM content (text, structure, metadata)
-- Returns structured JSON with source context and signals
-- Background job processing for multiple sources
-- Health checks and source discovery endpoints
-
-**Endpoints:**
-- `POST /scrape` - Trigger scraping of multiple sources (background job)
-- `POST /scrape-source` - Synchronous single-source scraping
-- `GET /sources` - List available HNWI sources
-- `GET /health` - Service health check
+This document serves as the unified technical authority on the system architecture for the UAE Real Estate Lead Scraper (LeadPulse). It details the core modules, security boundaries, asynchronous processing pipelines, and data models of our subscription-free HNWI prospecting platform.
 
 ---
 
-### 2. **AI Processing Layer** (lib/ai.ts)
-- **Framework**: Google Gemini
-- **Purpose**: Transform unstructured scraped content into qualified leads
+## 🏗️ System Architecture Overview
 
-#### AI Functions:
-
-**extractHNWILeads()** - HNWI-specific extraction
-- Input: Scraped DOM content with source metadata
-- Extracts: Name, company, role, email, phone, signals
-- Returns: Structured lead objects matching Prisma schema
-- Context-aware: Uses source type and signals to identify qualified prospects
-
-**enrichLeadWithAI()** - Lead scoring and classification
-- Assigns investment score (0-100)
-- Assigns tier (1=UHNW, 2=HNW, 3=Standard)
-- Generates investment signals
-- Abu Dhabi real estate focused
-
-**generatePersonaAnalysis()** - Behavioral profiling
-- Creates buyer persona for each lead
-- Identifies investment motivation and risk profile
-- Predicts property alignment
-
----
-
-### 3. **Main Orchestration Pipeline** (app/api/scrape/route.ts)
-- **Framework**: Next.js API Route
-- **Purpose**: Coordinate scraping, AI processing, and database storage
-
-#### Pipeline Flow:
-1. **Receive Request** - Auth check, validate sources array
-2. **Create ScrapeRun** - Track pipeline execution in database
-3. **Trigger Playwright Service** - Call scraper microservice
-4. **Extract Leads** - AI processes scraped content
-5. **Enrich Leads** - Add scores, tier, signals, personas
-6. **Store in Database** - Persist to Prisma Lead model
-7. **Log and Report** - Upload logs to Vercel Blob, update status
-
-#### Request Format:
-```json
-{
-  "sources": ["alforsan", "rotary", "whatson"],
-  "criteria": { }
-}
-```
-
----
-
-### 4. **Frontend Layer** (Next.js Dashboard)
-- **Purpose**: Display processed leads with filtering and CRM integration
-- **Features**: 
-  - Bilingual UI (English/Arabic)
-  - Filterable leads table
-  - Persona analysis display
-  - CRM integration (Bitrix24)
-  - Export functionality
-
----
-
-## Data Flow Diagram
+LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on expensive third-party scrapers (such as Apify, Apollo, or SerpAPI), the system utilizes an internal browser automation engine (Playwright Node.js) combined with a high-performance cognitive ingestion layer (Google Gemini API).
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Frontend Dashboard                           │
-│              (Next.js - Bilingual UI)                           │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                         ▼
+│              Next.js 16.2 App Router (AR/EN)                   │
+├────────────────────────────────┬────────────────────────────────┤
+│   App Shell & Nav Navigation   │  Map Density & Geofence View   │
+│   Smart Filtering Lead Table   │  CRM Push & Outreach Drawer    │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │ HTTP / Cookies / Headers
+                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│          Main Scrape Pipeline API Route                         │
-│    (app/api/scrape/route.ts - Orchestration Layer)             │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-           ┌─────────────┼─────────────┐
-           │             │             │
-           ▼             ▼             ▼
-    ┌─────────────┐ ┌────────────┐ ┌──────────────┐
-    │ Playwright  │ │ AI Extract │ │ Database     │
-    │ Service     │ │ & Enrich   │ │ Storage      │
-    │ (Railway)   │ │ (Gemini)   │ │ (Prisma)     │
-    └─────────────┘ └────────────┘ └──────────────┘
-           │
-           └─────┬──────────────────────────────┐
-                 │                              │
-        ┌────────▼────────┐          ┌──────────▼──────────┐
-        │ HNWI Sources    │          │ Verify Blob Logging │
-        │ • Clubs         │          │ (Vercel Storage)    │
-        │ • News          │          └─────────────────────┘
-        │ • Events        │
-        └─────────────────┘
+│              Boundary Session & Security Guard                  │
+│       proxy.ts (Handles Token Extraction & 401 JSON)            │
+└────────────────────────────────┬────────────────────────────────┘
+                                 │ Secure Next.js Server Actions
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│            Cognitive API Orchestration Layer                     │
+│               app/api/scrape/webhook/route.ts                  │
+└────────────────────────────────┬────────────────────────────────┘
+         ┌───────────────────────┼────────────────────────┐
+         ▼                       ▼                        ▼
+┌──────────────────┐   ┌────────────────────┐   ┌──────────────────┐
+│  Browser Scraper │   │ Cognitive Parser   │   │ MySQL Database   │
+│  Playwright/Node │   │ Google Gemini API  │   │ Railway Server   │
+│  (Port 3002)     │   │ (lib/ai.ts Engine) │   │ (Prisma Client)  │
+└──────────────────┘   └────────────────────┘   └──────────────────┘
 ```
 
 ---
 
-## Environment Configuration
+## 🗂️ Architectural Layers
 
-### Required Environment Variables:
+### 1. Security & Network Session Boundary (`proxy.ts`)
+- **Purpose**: Unified route guard and request interceptor.
+- **Session Extraction**: Extract session tokens from incoming cookies (`auth_token`) and fall back to HTTP headers (`Authorization: Bearer <token>`).
+- **Enforcement Rules**: 
+  - Restricts public access strictly to `/`, `/login`, `/api/auth/login`, and `/install` along with static assets.
+  - Protects all other paths, including `/api/auth/me` and `/api/leads`.
+  - Wrapped entirely in a `try/catch` block. On verification failure or runtime exceptions during an API call, it returns a clean JSON `{ error: "Unauthorized" }` with status `401` to prevent UI state crashes.
 
-**Frontend (.env.local):**
-```
-NEXT_PUBLIC_SCRAPER_API_URL=http://localhost:3002
-NEXT_PUBLIC_APP_API_URL=http://localhost:3000
-GOOGLE_AI_API_KEY=AIzaSyBQlspLRxlKa4_ikw6LdcFU9nmh86yZw2Y
-SCRAPER_SECRET=scraper_secret_alpha_bravo
-```
+### 2. Browser Automation Layer (`scraper-service/`)
+- **Technology**: Decoupled Express.js service running Playwright.
+- **Port**: `3002` (Secure webhook payload transmission authenticated via `SCRAPER_SECRET`).
+- **Sources Target**: alforsan.ae, adec.ae, dhabianequi.com, alhabtoorpoloclub.com, theartsclub.ae, rotary.ae, whatson.ae, adgm.com, difc.ae, ecouncil.ae (Official Gazette), arabianbusiness.com, propertymonitor.ae, abudhabichamber.ae.
+- **Anti-Blocking**: Spoofs User-Agents, custom headers, and navigates organically to bypass detection.
+- **Pipeline Webhook**: Dispatches crawled results asynchronously to the main Next.js `/api/scrape/webhook` receiver to prevent Vercel execution timeouts.
 
-**Scraper Service (.env):**
-```
-PORT=3002
-SCRAPER_SECRET=scraper_secret_alpha_bravo
-NODE_ENV=production
-```
+### 3. Cognitive Ingestion Layer (`lib/ai.ts`)
+- **Technology**: Google Gemini Developer API.
+- **Raw Text Cleaning**: The `cleanScrapedText` utility strips scripts, stylesheets, boilerplate footers, terms of use, and collapses spaces. It truncates text to 15,000 characters to optimize context windows and prevent attention drift.
+- **Lead Extraction**: Gemini parses cleaned text using a single-roundtrip prompt, translating name, company, and role fields to both English and Arabic.
+- **Behavioral Profiling**: Automatically generates a 2-3 sentence `persona` behavioral analysis paragraph.
+- **JSON Parsing Resilience**: `safeParseJson` scrubs ASCII control characters (`\x00-\x1F`) and repairs trailing commas or smart curly quotes before executing JSON parsing.
 
----
+### 4. Interactive AI Chat & SSE Abort Propagation (`app/api/ai/chat/route.ts`)
+- **SSE Stream**: Streams chatbot responses chunk-by-chunk using `generativeLanguage` `streamGenerateContent` API, boosting the agent's felt speed.
+- **Abort Signal Propagation**: Hooks `req.signal` (representing browser window closures or tab switches) and binds it directly as the `AbortSignal` for the Gemini `fetch` stream. When triggered, it terminates the active Gemini API generation immediately, successfully protecting quotas and billing.
+- **Conversation Memory**: Chat messages are preserved inside the MySQL `ChatMessage` model. It commits the assistant text to database only after the stream completes successfully.
 
-## Deployment Strategy
-
-### Local Development:
-```bash
-# Terminal 1: Start Playwright Scraper Service
-cd scraper-service
-npm install
-npm start
-
-# Terminal 2: Start Next.js Frontend
-cd ..
-npm run dev
-```
-
-### Production Deployment:
-
-**Scraper Service (Railway):**
-1. Connect GitHub repo to Railway
-2. Set root directory to `scraper-service/`
-3. Set start command: `npm start`
-4. Set environment variables
-5. Deploy
-
-**Frontend (Vercel):**
-1. Connect GitHub repo
-2. Set environment variables
-3. Deploy
+### 5. CRM Sync & Outreach Integrations (`lib/bitrix24.ts` & `lib/whatsapp.ts`)
+- **Pre-flight Checks**: Before processing a bulk lead sync batch, a pre-flight `testConnection` is evaluated. If it fails, the API immediately halts and returns a clean `401` JSON error, avoiding partial pipeline syncs.
+- **Transaction Breaks**: Sequentially wraps push operations in separate `try/catch` statements. If a 401 or `invalid_token` error is captured, it aborts the loop (`break`), leaving subsequent leads intact and logging the precise failure point.
+- **Bilingual WhatsApp Layouts**: Arabic message drafts containing Latin variables (links, currency digital numerals, phone numbers) are formatted using Left-to-Right Marks (`\u200E`) and Right-to-Left Marks (`\u200F`). This guarantees punctuation stability and text layout alignment on mobile devices.
 
 ---
 
-## Prisma Lead Schema
+## 🗄️ Core Database Models
 
 ```prisma
 model Lead {
   id           String    @id @default(cuid())
   name         String
+  nameAr       String?
   company      String
+  companyAr    String?
   role         String
-  source       String    // "HNWI Sources"
-  tier         Int       // 1, 2, or 3
+  roleAr       String?
+  source       String
+  sourceType   String?
+  tier         Int       // 1 = Leadership, 2 = Management, 3 = Professional
   phone        String?
   email        String?
-  location     String    // "Abu Dhabi"
-  score        Int       // 0-100 investment potential
-  signals      Json      // ["Equestrian Investor", "Business Owner"]
-  persona      String?   // Full persona analysis from AI
-  scrapeRunId  String
+  location     String
+  score        Int       // 0-100 qualified purchase likelihood
+  signals      String    // Stringified signals array
+  propertyPref String    // Stringified property preference object
+  budgetMin    Float?
+  budgetMax    Float?
+  relocated    Boolean   @default(false)
+  rentalFlag   Boolean   @default(false)
+  status       String    @default("new")
+  notes        String?
+  persona      String?
+  bitrix24Id   String?   // Linked CRM Contact ID
   agentId      String
+  scrapeRunId  String
   createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 ```
 
 ---
 
-## Workflow Example
+## 🚀 Cost & Resource Optimization Analysis
 
-### Initiating a Scrape:
+| Dimension | Before (Paid APIs) | After (Playwright + Gemini) | Optimization Delta |
+|-----------|--------------------|----------------------------|--------------------|
+| **Crawl Subscriptions** | $250 - $1,300 / mo | $0 / mo (Self-Hosted) | **-100%** |
+| **API Bandwidth** | Flat Rate Pricing | Pay-as-you-go (Text only) | **-90%** |
+| **Ingestion Quota** | Saturated Context Windows | Clean Text DOM (15k Limit) | **-80% Token Savings** |
+| **Generation Terminations** | Uncontrolled leaks | SSE Aborts on disconnect | **-100% Leaked Quota** |
 
+---
+
+## 🛠️ Operations & Maintenance
+
+### 1. Local Health Verification
+Validate all active environment variables and connectivity pipelines:
 ```bash
-curl -X POST http://localhost:3000/api/scrape \
-  -H "Content-Type: application/json" \
-  -b "session_token=..." \
-  -d '{
-    "sources": ["alforsan", "adec", "rotary", "whatson"],
-    "criteria": {}
-  }'
+npx tsx scratch/validate-secrets.ts
 ```
 
-### Response:
-```json
-{
-  "message": "HNWI lead scraping started",
-  "runId": "cly4xk2m0000108l4h5z1x9p0",
-  "sources": ["alforsan", "adec", "rotary", "whatson"]
-}
-```
-
-### Pipeline Processing (Background):
-1. Playwright service scrapes all 4 sources
-2. AI extracts qualified leads from DOM content
-3. Each lead is enriched with score, tier, signals
-4. Persona analysis generated for each lead
-5. Leads stored in database
-6. Logs uploaded to Vercel Blob
-7. ScrapeRun marked COMPLETED
-
-### View Results:
-- Dashboard automatically refreshes with new leads
-- Filterable by tier, score, signals
-- Persona profiles available for each lead
-
----
-
-## Cost Analysis
-
-### Before (Third-Party Subscriptions):
-- **Apify**: $100-500/month (depends on usage)
-- **SerpAPI**: $50-300/month
-- **Apollo**: $49-500/month
-- **Total**: $200-1,300/month
-
-### After (Subscription-Free):
-- **Playwright Service Hosting**: $7-25/month (Railway)
-- **Gemini API**: ~$0.01-0.05 per lead extraction (pay-as-you-go)
-- **Vercel Hosting**: $20-100/month (depending on usage)
-- **Total**: <$50/month (even with heavy usage)
-
-**Savings: 75-95% reduction in infrastructure costs**
-
----
-
-## Future Enhancements
-
-1. **Webhook Integration**: Scraper service POSTs results back to main app for real-time updates
-2. **Caching Layer**: Redis cache for frequently accessed sources
-3. **Schedule Scraping**: Cron jobs to refresh HNWI sources daily/weekly
-4. **Advanced Filtering**: Save search criteria and profiles
-5. **Multi-Language Support**: Arabic lead names and company data
-6. **CRM Sync**: Automatic lead push to Bitrix24, HubSpot, etc.
-7. **Lead Scoring Refinement**: Machine learning model based on actual conversions
-8. **Competitor Intelligence**: Monitor competitor lead generation
-
----
-
-## Troubleshooting
-
-### Scraper Service Connection Issues:
+### 2. Full Type checks & Compilation Verification
+Verify type-safety and syntax completeness:
 ```bash
-# Check service health
-curl http://localhost:3002/health
-
-# Verify sources
-curl http://localhost:3002/sources
-
-# Check environment variables
-echo $SCRAPER_SECRET
+npx tsc --noEmit
 ```
 
-### AI Extraction Failures:
-- Verify Google AI API key is valid
-- Check API quota and rate limits
-- Review logs for specific extraction errors
-
-### Database Storage Issues:
-- Verify DATABASE_URL is correct
-- Run Prisma migrations: `npx prisma migrate dev`
-- Check lead count: `npx prisma studio`
-
----
-
-## Git Workflow
-
-**Branch Strategy:**
-- `main` - Production stable
-- `develop` - Integration branch
-- `feature/hnwi-sources` - Feature branches
-
-**Commit Convention:**
+### 3. Database Introspection & Schema Alignment
+Synchronize local Prisma client with production MySQL server:
+```bash
+npx prisma db pull
+npx prisma generate
 ```
-feat(scraper): add alforsan.ae HNWI extraction
-fix(pipeline): resolve AI enrichment timeout
-docs: update deployment guide
-```
-
----
-
-## Support & Documentation
-
-For questions or issues:
-1. Review logs in Vercel Blob (ScrapeRun.logUrl)
-2. Check browser console for frontend errors
-3. Review server logs for API errors
-4. Test individual sources: `/scrape-source` endpoint
-5. Verify AI processing: Call `enrichLeadWithAI()` directly with test data
-

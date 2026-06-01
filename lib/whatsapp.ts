@@ -35,7 +35,7 @@ export async function sendWhatsAppMessage(
   }
 
   // Sanitize phone number (must be in international format without + or leading zeros)
-  const sanitizedTo = to.replace(/\D/g, '');
+  const sanitizedTo = sanitizeUAENumber(to);
 
   const url = `https://graph.facebook.com/v17.0/${phoneId}/messages`;
 
@@ -82,7 +82,7 @@ export async function sendWhatsAppText(
     throw new Error('WhatsApp configuration missing');
   }
 
-  const sanitizedTo = to.replace(/\D/g, '');
+  const sanitizedTo = sanitizeUAENumber(to);
   const url = `https://graph.facebook.com/v17.0/${phoneId}/messages`;
 
   const body = {
@@ -122,4 +122,31 @@ export async function testWhatsAppConnection(phoneId: string, token: string) {
   } catch (e) {
     return false;
   }
+}
+
+/**
+ * Sanitizes and normalizes phone numbers specifically for UAE local and international formats
+ */
+export function sanitizeUAENumber(phone: string): string {
+  // Strip all non-digit characters
+  let cleaned = phone.replace(/\D/g, '');
+
+  // If it starts with 00971, strip 00
+  if (cleaned.startsWith('00971')) {
+    cleaned = cleaned.substring(2);
+  }
+  // If it starts with 971, it's already in international format
+  else if (cleaned.startsWith('971')) {
+    // Keep it as is
+  }
+  // If it starts with a leading 0 followed by 5 (e.g., 050, 052, 054, 055, 056, 058), replace leading 0 with 971
+  else if (cleaned.startsWith('05') && cleaned.length === 10) {
+    cleaned = '971' + cleaned.substring(1);
+  }
+  // If it starts with 5 (e.g., 50, 52, 54, 55, 56, 58) and has length of 9, prepend 971
+  else if (cleaned.startsWith('5') && cleaned.length === 9) {
+    cleaned = '971' + cleaned;
+  }
+  
+  return cleaned;
 }

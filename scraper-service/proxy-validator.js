@@ -196,12 +196,12 @@ function generateProxySuggestions(error) {
 
   if (msg.includes('407') || msg.includes('auth')) {
     suggestions.push('HTTP 407 Proxy Authentication Failed — verify username/password are URL-encoded');
-    suggestions.push('Check OXYLABS_PROXY_USERNAME and OXYLABS_PROXY_PASSWORD values');
+    suggestions.push('Check DATAIMPULSE_PROXY_USERNAME and DATAIMPULSE_PROXY_PASSWORD values');
   }
 
   if (msg.includes('connection refused') || msg.includes('econnrefused')) {
     suggestions.push('Connection refused — proxy server may be down or URL is incorrect');
-    suggestions.push('Verify OXYLABS_PROXY_HOST and OXYLABS_PROXY_PORT are correct');
+    suggestions.push('Verify DATAIMPULSE_PROXY_HOST and DATAIMPULSE_PROXY_PORT are correct');
   }
 
   if (msg.includes('timeout') || msg.includes('etimedout')) {
@@ -211,12 +211,12 @@ function generateProxySuggestions(error) {
 
   if (msg.includes('certificate') || msg.includes('cert')) {
     suggestions.push('SSL certificate error — may need to use http:// instead of https://');
-    suggestions.push('Set OXYLABS_PROXY_SCHEME=http if using residential proxies');
+    suggestions.push('Set DATAIMPULSE_PROXY_SCHEME=http if using residential proxies');
   }
 
   if (msg.includes('enotfound') || msg.includes('dns')) {
     suggestions.push('DNS resolution failed — hostname may be misspelled');
-    suggestions.push('Check OXYLABS_PROXY_HOST (e.g., pr.oxylabs.io for Oxylabs)');
+    suggestions.push('Check DATAIMPULSE_PROXY_HOST (e.g., gw.dataimpulse.com for DataImpulse)');
   }
 
   if (suggestions.length === 0) {

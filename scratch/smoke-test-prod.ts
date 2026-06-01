@@ -40,9 +40,9 @@ async function run() {
   const payload = {
     source: 'https://example.com',
     query: 'test lead',
-    proxyUrl: process.env.OXYLABS_PROXY_URL || '',
-    proxyUsername: process.env.OXYLABS_PROXY_USERNAME || '',
-    proxyPassword: process.env.OXYLABS_PROXY_PASSWORD || ''
+    proxyUrl: process.env.DATAIMPULSE_PROXY_URL || '',
+    proxyUsername: process.env.DATAIMPULSE_PROXY_USERNAME || '',
+    proxyPassword: process.env.DATAIMPULSE_PROXY_PASSWORD || ''
   };
 
   const scrapeResp = await fetch(apiUrl, {

@@ -56,6 +56,34 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
 
   if (!lead) return null;
 
+  const formatBilingualWhatsApp = (text: string, isArabic: boolean): string => {
+    if (!text) return "";
+    if (!isArabic) return text;
+
+    const RLM = "\u200F";
+    const LRM = "\u200E";
+
+    let formatted = text;
+
+    // 1. Wrap URLs in LRM and RLM marks
+    const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    formatted = formatted.replace(urlPattern, (match) => `${LRM}${match}${RLM}`);
+
+    // 2. Wrap pricing / currency blocks (e.g. AED 5,000,000 or 5,000,000 AED)
+    const currencyPattern = /(AED\s*\d+[\d,.]*|\d+[\d,.]*\s*AED)/gi;
+    formatted = formatted.replace(currencyPattern, (match) => `${LRM}${match}${RLM}`);
+
+    // 3. Wrap phone numbers (e.g. +971...)
+    const phonePattern = /(\+?\d[\d\s-]{7,}\d)/g;
+    formatted = formatted.replace(phonePattern, (match) => `${LRM}${match}${RLM}`);
+
+    // 4. Wrap percentages and statistics (e.g. 10% or 5 beds or 500 sqft)
+    const statsPattern = /(\b\d+[\d,.]*\s*(?:%|beds?|sqft|sq\s*m)\b)/gi;
+    formatted = formatted.replace(statsPattern, (match) => `${LRM}${match}${RLM}`);
+
+    return formatted;
+  };
+
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     setCopied(label);
@@ -300,7 +328,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                 <p className="text-sm text-[var(--color-text-primary)] leading-relaxed italic">&ldquo;{pitch}&rdquo;</p>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => copyToClipboard(pitch, "pitch")}
+                    onClick={() => copyToClipboard(formatBilingualWhatsApp(pitch, lang === "ar"), "pitch")}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl text-xs font-bold hover:bg-[var(--color-bg-surface)] transition-all"
                   >
                     {copied === "pitch" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
@@ -309,12 +337,13 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                   <button 
                     onClick={async () => {
                       if (!pitch) return;
+                      const formattedPitch = formatBilingualWhatsApp(pitch, lang === "ar");
                       const toastId = toast.loading(t("common.sending", "Sending..."));
                       try {
                         const res = await fetch(`/api/leads/${lead.id}/whatsapp`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ text: pitch })
+                          body: JSON.stringify({ text: formattedPitch })
                         });
                         const data = await res.json();
                         if (!res.ok) throw new Error(data.error || "Failed to send");

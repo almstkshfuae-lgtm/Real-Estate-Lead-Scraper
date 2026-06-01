@@ -552,7 +552,7 @@ USE_MOCK_DATA=true tsx scratch/validate-secrets.ts
 - `DATABASE_URL` — Railway MySQL connection string
 - `SCRAPER_SERVICE_URL` — Internal scraper service endpoint
 - `SCRAPER_SECRET` — 64-character hex string used for service authentication
-- `OXYLABS_PROXY_URL`, `OXYLABS_PROXY_USERNAME`, `OXYLABS_PROXY_PASSWORD` — Proxy credentials
+- `DATAIMPULSE_PROXY_URL`, `DATAIMPULSE_PROXY_USERNAME`, `DATAIMPULSE_PROXY_PASSWORD` — Proxy credentials
 - At least one AI provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, etc.)
 
 **Output:**
@@ -571,9 +571,9 @@ Performs end-to-end connectivity tests against production endpoints:
 export SCRAPER_SERVICE_URL=https://scraper-service.railway.app
 export VERCEL_URL=https://your-vercel-project.vercel.app
 export SCRAPER_SECRET=<your-64-char-hex>
-export OXYLABS_PROXY_USERNAME=<if-configured>
-export OXYLABS_PROXY_PASSWORD=<if-configured>
-export OXYLABS_PROXY_URL=<if-configured>
+export DATAIMPULSE_PROXY_USERNAME=<if-configured>
+export DATAIMPULSE_PROXY_PASSWORD=<if-configured>
+export DATAIMPULSE_PROXY_URL=<if-configured>
 
 tsx scratch/smoke-test-prod.ts
 ```
@@ -581,7 +581,7 @@ tsx scratch/smoke-test-prod.ts
 **Tests:**
 1. GET `/health` — Verifies scraper service is running
 2. POST `/api/scrape` — Tests Vercel Next.js API route with auth header
-3. Proxy connectivity — If Oxylabs credentials present, validates proxy tunnel
+3. Proxy connectivity — If DataImpulse credentials present, validates proxy tunnel
 
 **Output:**
 ```
@@ -621,7 +621,7 @@ curl -X POST http://localhost:3002/validate-proxy \
   -H "Content-Type: application/json" \
   -d '{
     "secret": "'$SCRAPER_SECRET'",
-    "proxyUrl": "'$OXYLABS_PROXY_URL'"
+    "proxyUrl": "'$DATAIMPULSE_PROXY_URL'"
   }'
 ```
 
@@ -646,7 +646,7 @@ curl -X POST http://localhost:3002/validate-proxy \
   "error": "407 Proxy Authentication Failed",
   "suggestions": [
     "HTTP 407 Proxy Authentication Failed — verify username/password are URL-encoded",
-    "Check OXYLABS_PROXY_USERNAME and OXYLABS_PROXY_PASSWORD values"
+    "Check DATAIMPULSE_PROXY_USERNAME and DATAIMPULSE_PROXY_PASSWORD values"
   ]
 }
 ```
@@ -654,7 +654,7 @@ curl -X POST http://localhost:3002/validate-proxy \
 The validator:
 - Attempts real page load through configured proxy
 - Provides detailed error codes and diagnostic suggestions
-- Helps troubleshoot Oxylabs or other proxy provider issues
+- Helps troubleshoot DataImpulse or other proxy provider issues
 - Safe to run repeatedly without side effects
 
 ---

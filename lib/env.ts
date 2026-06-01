@@ -7,7 +7,7 @@ export function getEnvVar(key: string, fallback: string = ''): string {
     process.env[`NEXT_PUBLIC_VERCEL_${normalized}`]
   ];
   for (const value of candidates) {
-    if (value && value.trim() !== '') {
+    if (value && value.trim() !== '' && !value.startsWith('YOUR_')) {
       return value;
     }
   }
