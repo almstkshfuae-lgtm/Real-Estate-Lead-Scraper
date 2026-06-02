@@ -1,10 +1,14 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
+  let databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL || '';
+  // Strip any surrounding double or single quotes
+  databaseUrl = databaseUrl.replace(/^['"]|['"]$/g, '');
+
   const client = new PrismaClient({
     datasources: {
       db: {
-        url: process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL,
+        url: databaseUrl,
       },
     },
     // Minimal logs in production to reduce noise; full logs in dev
