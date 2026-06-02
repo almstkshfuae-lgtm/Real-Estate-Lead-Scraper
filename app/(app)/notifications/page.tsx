@@ -44,7 +44,16 @@ export default function NotificationsPage() {
     setIsUpdating(true);
 
     try {
-      const res = await fetch("/api/notifications?markRead=true", { method: "GET" });
+      // Collect all currently displayed notification IDs and PATCH them as read.
+      // Uses the decoupled PATCH endpoint — reads and writes are separate operations.
+      const ids = notifications.map((n) => n.id);
+      if (ids.length === 0) return;
+
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }

@@ -9,7 +9,7 @@ const prismaClientSingleton = () => {
 
   let databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL || '';
   // Strip any surrounding double or single quotes
-  databaseUrl = databaseUrl.replace(/^['"]|['"]$/g, '').trim();
+  databaseUrl = databaseUrl.replace(/^['"]]|['"]$/g, '').trim();
 
   // Re-assign the correct fallback url to process.env.DATABASE_URL so that the schema/query engine reads it correctly.
   if (databaseUrl) {
@@ -107,9 +107,49 @@ function checkConnectionError(error: any): boolean {
   return isConn;
 }
 
+/**
+ * GLOBAL RECONNECT LOCK
+ * 
+ * Critical fix for the "Concurrent Reconnect Storm" problem:
+ * When 8 simultaneous requests all hit a connection error, the old proxy
+ * would spawn 8 independent reconnect cycles, each calling $disconnect() +
+ * $connect() at the same time, which multiplied the connection pressure on
+ * Railway's proxy instead of reducing it.
+ *
+ * With this lock, only ONE reconnect attempt runs at a time. All other
+ * concurrent callers wait for the single shared reconnect Promise to settle
+ * before they retry their original query.
+ */
+let reconnectLock: Promise<void> | null = null;
+
+async function reconnectWithBackoff(attempt = 0): Promise<void> {
+  // Exponential backoff: 100ms, 200ms, 400ms... capped at 1000ms + random jitter
+  const base = Math.min(100 * Math.pow(2, attempt), 1000);
+  const jitter = Math.random() * 100;
+  const delay = base + jitter;
+
+  console.warn(`[Prisma Proxy] Reconnect attempt ${attempt + 1}: waiting ${Math.round(delay)}ms...`);
+
+  await new Promise(resolve => setTimeout(resolve, delay));
+
+  try {
+    await rawPrisma.$disconnect();
+  } catch {
+    // Ignore disconnect errors — we're already in a broken state
+  }
+
+  try {
+    await rawPrisma.$connect();
+    console.warn('[Prisma Proxy] Reconnect successful.');
+  } catch (reconnectError) {
+    console.error('[Prisma Proxy] Reconnect failed:', reconnectError);
+    // Do not throw — let the caller's retry handle the next failure
+  }
+}
+
 // 100% Resilient Prisma Connection Proxy
-// Intercepts connection drops (e.g. due to Railway idle timeouts) and retries the query exactly once
-// after re-establishing a fresh TCP socket, ensuring zero downtime for route handlers.
+// Single-retry policy with global reconnect lock to prevent thundering herd
+// against Railway's TCP proxy under concurrent serverless load.
 export const prisma = new Proxy(rawPrisma, {
   get(target, prop, receiver) {
     const value = Reflect.get(target, prop, receiver);
@@ -124,23 +164,24 @@ export const prisma = new Proxy(rawPrisma, {
               try {
                 return await method.apply(modelTarget, args);
               } catch (error: any) {
-                const isConnectionError = checkConnectionError(error);
-
-                if (isConnectionError) {
-                  console.warn('[Prisma Proxy] Database connection error or timeout detected. Re-establishing socket and retrying query...');
-                  try {
-                    await rawPrisma.$disconnect();
-                  } catch { }
-                  
-                  // Wait 200ms to allow TCP socket recycling/retry cooldown
-                  await new Promise(resolve => setTimeout(resolve, 200));
-
-                  try {
-                    await rawPrisma.$connect();
-                  } catch { }
-                  return await method.apply(modelTarget, args);
+                if (!checkConnectionError(error)) {
+                  throw error;
                 }
-                throw error;
+
+                console.warn('[Prisma Proxy] Connection error detected on model method. Acquiring reconnect lock...');
+
+                // If no reconnect is in progress, start one. Otherwise, reuse the existing Promise.
+                if (!reconnectLock) {
+                  reconnectLock = reconnectWithBackoff(0).finally(() => {
+                    reconnectLock = null;
+                  });
+                }
+
+                // All concurrent callers wait for the single shared reconnect to complete
+                await reconnectLock;
+
+                // Single retry after reconnect
+                return await method.apply(modelTarget, args);
               }
             };
           }
@@ -154,23 +195,20 @@ export const prisma = new Proxy(rawPrisma, {
         try {
           return await value.apply(target, args);
         } catch (error: any) {
-          const isConnectionError = checkConnectionError(error);
-
-          if (isConnectionError) {
-            console.warn('[Prisma Proxy] Database connection error or timeout detected. Re-establishing socket and retrying query...');
-            try {
-              await rawPrisma.$disconnect();
-            } catch { }
-            
-            // Wait 200ms to allow TCP socket recycling/retry cooldown
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            try {
-              await rawPrisma.$connect();
-            } catch { }
-            return await value.apply(target, args);
+          if (!checkConnectionError(error)) {
+            throw error;
           }
-          throw error;
+
+          console.warn('[Prisma Proxy] Connection error detected on top-level method. Acquiring reconnect lock...');
+
+          if (!reconnectLock) {
+            reconnectLock = reconnectWithBackoff(0).finally(() => {
+              reconnectLock = null;
+            });
+          }
+
+          await reconnectLock;
+          return await value.apply(target, args);
         }
       };
     }
@@ -180,4 +218,3 @@ export const prisma = new Proxy(rawPrisma, {
 });
 
 export default prisma;
-

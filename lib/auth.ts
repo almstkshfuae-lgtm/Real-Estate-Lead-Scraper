@@ -43,6 +43,23 @@ export function normalizePreferences(preferences: any) {
   return JSON.stringify(preferences || {});
 }
 
+/**
+ * STATELESS JWT SESSION (Primary — used on every API request)
+ *
+ * Performance fix: This function no longer touches the database.
+ * The JWT is cryptographically signed with JWT_SECRET, so it is
+ * tamper-proof. The payload already contains id, email, and role —
+ * everything needed for RBAC — without a DB round-trip.
+ *
+ * Previously, every API call hit prisma.user.findUnique() which,
+ * under 8 concurrent requests, produced 8 competing DB connections
+ * just for authentication — exhausting Railway's connection pool
+ * before any business logic ran.
+ *
+ * Security note: Tokens expire in 7 days. To invalidate a specific
+ * token early (e.g. password change, ban), use getSessionWithDBVerify()
+ * in the specific routes that require it.
+ */
 export async function getSession(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
   let token = cookieStore.get('auth_token')?.value;
@@ -56,6 +73,36 @@ export async function getSession(): Promise<AuthUser | null> {
   }
 
   if (!token) return null;
+
+  const decoded = await verifyToken(token);
+  if (!decoded) return null;
+
+  // Stateless: trust the cryptographically verified JWT payload directly.
+  // No DB query. No connection consumed.
+  return decoded;
+}
+
+/**
+ * DB-VERIFIED SESSION (Use only when you MUST confirm the user still exists
+ * and their role hasn't changed — e.g. admin user-management routes, or
+ * after a password/role change operation.)
+ *
+ * Do NOT use this in high-traffic read routes like /api/leads or /api/notifications.
+ */
+export async function getSessionWithDBVerify(): Promise<AuthUser | null> {
+  const cookieStore = await cookies();
+  let token = cookieStore.get('auth_token')?.value;
+
+  if (!token) {
+    const headersList = await headers();
+    const authHeader = headersList.get('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
+
+  if (!token) return null;
+
   const decoded = await verifyToken(token);
   if (!decoded) return null;
 
@@ -75,7 +122,8 @@ export async function getSession(): Promise<AuthUser | null> {
       return null;
     }
   } catch (error) {
-    console.warn('[getSession] DB check failed or timed out, falling back to stateless session verification:', error);
+    console.warn('[getSessionWithDBVerify] DB check failed or timed out, falling back to stateless:', error);
+    // Graceful fallback to stateless if DB is unreachable
   }
 
   return decoded;

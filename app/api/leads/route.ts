@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
+// Force dynamic rendering — leads must never be served from CDN cache
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   try {
     const session = await getSession();
@@ -123,14 +126,21 @@ export async function GET(request: Request) {
     // Adjust limit dynamically based on payload size
     const finalLimit = minimal ? Math.min(500, limit) : Math.min(100, limit);
 
-    const leads = await prisma.lead.findMany({
-      where,
-      select: selectFields,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: finalLimit,
-    });
-    const total = await prisma.lead.count({ where });
+    // ─── Single $transaction: findMany + count in one DB round-trip ─────────────
+    // Previously these were two sequential queries, each consuming a separate
+    // connection slot. Under concurrent load this doubled the connection pressure
+    // on Railway's proxy. A $transaction groups them into a single logical unit
+    // that the connection pool can serve with one held connection.
+    const [leads, total] = await prisma.$transaction([
+      prisma.lead.findMany({
+        where,
+        select: selectFields,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: finalLimit,
+      }),
+      prisma.lead.count({ where }),
+    ]);
 
     return NextResponse.json({
       leads,
