@@ -48,16 +48,16 @@ export async function validateProxyConnection(proxyUrl, timeoutMs = 30000) {
           status: response.status(),
           statusText: response.statusText(),
           url: response.url(),
-          headers: Object.fromEntries(Object.entries(response.headersForURL(response.url()) || {}))
+          headers: response.headers()
         };
       }
     });
 
     try {
       // Use a proxy-safe test endpoint
-      await page.goto('https://httpbin.org/ip', { 
-        timeout: timeoutMs, 
-        waitUntil: 'domcontentloaded' 
+      await page.goto('https://httpbin.org/ip', {
+        timeout: timeoutMs,
+        waitUntil: 'domcontentloaded'
       });
 
       const responseText = await page.textContent('body');

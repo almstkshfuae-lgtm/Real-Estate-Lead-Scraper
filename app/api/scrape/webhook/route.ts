@@ -75,7 +75,26 @@ export async function POST(request: NextRequest) {
     const contentText = String(scrapedData.content || '');
     const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(contentText);
     const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(contentText);
-    if (contentText.length < 200 || (!hasNameSignal && !hasRoleSignal)) {
+    const hasArabicNameSignal = /[\u0600-\u06FF]{2,}/.test(contentText);
+    const hasArabicRoleSignal = /\b(رئيس|مدير|مؤسس|شريك|عضو)\b/.test(contentText);
+    
+    const sourceKeyLower = String(sourceKey || '').toLowerCase();
+    const isRegistry = sourceKeyLower.includes('registry') || 
+                       sourceKeyLower.includes('chamber') || 
+                       sourceKeyLower.includes('adgm') || 
+                       sourceKeyLower.includes('difc') || 
+                       sourceKeyLower.includes('gazette');
+
+    const passedDOMCheck = isRegistry || (
+      contentText.length >= 200 && (
+        hasNameSignal || 
+        hasRoleSignal || 
+        hasArabicNameSignal || 
+        hasArabicRoleSignal
+      )
+    );
+
+    if (!passedDOMCheck) {
       console.warn(`[Webhook] Source ${sourceKey} failed DOM vital check — content too short (${contentText.length} chars) or missing name/role patterns. Skipping AI extraction.`);
       return NextResponse.json({
         success: true,

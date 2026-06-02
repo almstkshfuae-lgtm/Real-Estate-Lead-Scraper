@@ -389,7 +389,7 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
   const visitedUrls = new Set();
 
   try {
-    await page.goto(source.url, { timeout: 45000, waitUntil: 'networkidle' });
+    await page.goto(source.url, { timeout: 45000, waitUntil: 'domcontentloaded' });
 
     // Force lazy-loaded content: scroll to bottom then back to top
     await page.evaluate(async () => {
@@ -465,7 +465,7 @@ async function scrapePageRecursively(
 
   try {
     // Wait for page load
-    await page.waitForLoadState('networkidle', { timeout: 20000 });
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
     await page.waitForTimeout(getRandomDelay(1000, 2500));
     await simulateHumanBrowsing(page);
 
@@ -1069,10 +1069,36 @@ async function startServer() {
   try {
     const sourceMap = await getSourceConfigMap();
     const availableSources = Object.keys(sourceMap);
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`🎯 Playwright Scraper Service listening on port ${PORT}`);
       console.log(`📍 Available sources: ${availableSources.join(', ')}`);
     });
+
+    // Graceful Shutdown
+    const shutdown = async (signal) => {
+      console.log(`\n🛑 Received ${signal}. Shutting down scraper service gracefully...`);
+      server.close(async () => {
+        console.log('HTTP server closed.');
+        try {
+          await prisma.$disconnect();
+          console.log('Prisma database connection closed successfully.');
+          process.exit(0);
+        } catch (err) {
+          console.error('Error closing Prisma database connection during shutdown:', err);
+          process.exit(1);
+        }
+      });
+
+      // Force shutdown after 10s if graceful shutdown hangs
+      setTimeout(() => {
+        console.error('Forced shutdown due to timeout');
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+
   } catch (error) {
     console.error('Failed to initialize source configs:', error);
     process.exit(1);

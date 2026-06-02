@@ -55,6 +55,7 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
 - **Sources Target**: alforsan.ae, adec.ae, dhabianequi.com, alhabtoorpoloclub.com, theartsclub.ae, rotary.ae, whatson.ae, adgm.com, difc.ae, ecouncil.ae (Official Gazette), arabianbusiness.com, propertymonitor.ae, abudhabichamber.ae.
 - **Anti-Blocking**: Spoofs User-Agents, custom headers, and navigates organically to bypass detection.
 - **Pipeline Webhook**: Dispatches crawled results asynchronously to the main Next.js `/api/scrape/webhook` receiver to prevent Vercel execution timeouts.
+- **Graceful Shutdown**: Listens to system termination signals (`SIGTERM`, `SIGINT`) to gracefully stop the HTTP server and completely disconnect the Prisma client database connection pool (`prisma.$disconnect()`), avoiding socket leaks and connection exhaustion on container recycles.
 
 ### 3. Cognitive Ingestion Layer (`lib/ai.ts`)
 - **Technology**: Google Gemini Developer API.

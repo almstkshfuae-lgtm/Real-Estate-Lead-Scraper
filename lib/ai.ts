@@ -628,7 +628,7 @@ Output ONLY the JSON array. No other text.`,
     ? leads.filter((lead: any) =>
         lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
         && filterLeadByCriteria(lead, criteria)
-        && verifyLeadInSource(lead.name, cleanedContent)
+        && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent)
       )
     : [];
 }
@@ -637,24 +637,37 @@ Output ONLY the JSON array. No other text.`,
  * Verify that the lead's name actually appears in the original source text.
  * Prevents AI hallucinations from entering the database.
  */
-function verifyLeadInSource(name: string, sourceText: string): boolean {
+function verifyLeadInSource(name: string, nameAr: string | null | undefined, sourceText: string): boolean {
   if (!name || !sourceText) return false;
-  const normalizedName = name.toLowerCase().trim();
+  
   const normalizedSource = sourceText.toLowerCase();
-  // Check if at least the first word + last word of the name appear in the source
+
+  // 1. Check English Name Match
+  const normalizedName = name.toLowerCase().trim();
   const nameParts = normalizedName.split(/\s+/);
   if (nameParts.length >= 2) {
     const found = normalizedSource.includes(nameParts[0]) && normalizedSource.includes(nameParts[nameParts.length - 1]);
-    if (!found) {
-      console.warn(`[AI] Hallucination detected: name "${name}" not found in source text — discarding lead`);
+    if (found) return true;
+  } else {
+    const found = normalizedSource.includes(normalizedName);
+    if (found) return true;
+  }
+
+  // 2. Check Arabic Name Match
+  if (nameAr) {
+    const normalizedNameAr = nameAr.trim();
+    const nameArParts = normalizedNameAr.split(/\s+/);
+    if (nameArParts.length >= 2) {
+      const found = normalizedSource.includes(nameArParts[0]) && normalizedSource.includes(nameArParts[nameArParts.length - 1]);
+      if (found) return true;
+    } else {
+      const found = normalizedSource.includes(normalizedNameAr);
+      if (found) return true;
     }
-    return found;
   }
-  const found = normalizedSource.includes(normalizedName);
-  if (!found) {
-    console.warn(`[AI] Hallucination detected: name "${name}" not found in source text — discarding lead`);
-  }
-  return found;
+
+  console.warn(`[AI] Hallucination detected: name "${name}" (Arabic: "${nameAr || ''}") not found in source text — discarding lead`);
+  return false;
 }
 
 /**
@@ -721,7 +734,7 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
   return Array.isArray(leads)
     ? leads.filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
         && filterLeadByCriteria(lead, criteria)
-        && verifyLeadInSource(lead.name, cleanedText)
+        && verifyLeadInSource(lead.name, lead.nameAr, cleanedText)
       )
     : [];
 }

@@ -159,7 +159,26 @@ async function runHNWIScrapePipeline(
         const contentText = String(scrapedData.content || '');
         const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(contentText);
         const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(contentText);
-        if (contentText.length < 200 || (!hasNameSignal && !hasRoleSignal)) {
+        const hasArabicNameSignal = /[\u0600-\u06FF]{2,}/.test(contentText);
+        const hasArabicRoleSignal = /\b(رئيس|مدير|مؤسس|شريك|عضو)\b/.test(contentText);
+        
+        const sourceNameLower = String(scrapedData.name || '').toLowerCase();
+        const isRegistry = sourceNameLower.includes('registry') || 
+                           sourceNameLower.includes('chamber') || 
+                           sourceNameLower.includes('adgm') || 
+                           sourceNameLower.includes('difc') || 
+                           sourceNameLower.includes('gazette');
+
+        const passedDOMCheck = isRegistry || (
+          contentText.length >= 200 && (
+            hasNameSignal || 
+            hasRoleSignal || 
+            hasArabicNameSignal || 
+            hasArabicRoleSignal
+          )
+        );
+
+        if (!passedDOMCheck) {
           console.warn(`[Pipeline] Source ${scrapedData.name} failed DOM vital check — content too short (${contentText.length} chars) or missing name/role patterns. Skipping AI extraction.`);
           logs.push({
             step: "AI Lead Extraction",

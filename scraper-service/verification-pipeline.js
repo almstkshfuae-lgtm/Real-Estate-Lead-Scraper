@@ -1,6 +1,41 @@
 import { chromium } from 'playwright';
 import * as cheerio from 'cheerio';
 
+function getPlaywrightProxyOptions(proxyUrl) {
+  if (!proxyUrl) return null;
+  
+  if (process.env.ACTIVE_PROXY_PROVIDER === 'dataimpulse' || process.env.DATAIMPULSE_PROXY_USERNAME) {
+    const username = process.env.DATAIMPULSE_PROXY_USERNAME;
+    const password = process.env.DATAIMPULSE_PROXY_PASSWORD;
+    const host = process.env.DATAIMPULSE_PROXY_HOST || 'gw.dataimpulse.com';
+    const port = process.env.DATAIMPULSE_PROXY_PORT || '823';
+    
+    if (username && password) {
+      return {
+        server: `http://${host}:${port}`,
+        username,
+        password
+      };
+    }
+  }
+
+  try {
+    const url = new URL(proxyUrl);
+    const options = {
+      server: `${url.protocol}//${url.host}`
+    };
+    if (url.username) {
+      options.username = decodeURIComponent(url.username);
+    }
+    if (url.password) {
+      options.password = decodeURIComponent(url.password);
+    }
+    return options;
+  } catch (e) {
+    return { server: proxyUrl };
+  }
+}
+
 /**
  * Data Extraction Source Verification Pipeline
  * 
@@ -17,8 +52,7 @@ const CLOUDFLARE_INDICATORS = [
   '__cf_bm',
   'managed_rules',
   'Access Denied',
-  'Ray ID',
-  'Something went wrong'
+  'Ray ID'
 ];
 
 const AUTH_INDICATORS = [
@@ -62,14 +96,19 @@ async function technicalAccessTest(url, proxyUrl = null) {
       args: ['--disable-blink-features=AutomationControlled']
     };
 
-    if (proxyUrl) {
-      browserOptions.proxy = { server: proxyUrl };
+    const proxyOptions = getPlaywrightProxyOptions(proxyUrl);
+    if (proxyOptions) {
+      browserOptions.proxy = proxyOptions;
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.newContext({
+    const contextOptions = {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    });
+    };
+    if (proxyOptions) {
+      contextOptions.proxy = proxyOptions;
+    }
+    const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
     // Set request/response interception for diagnostics
@@ -94,6 +133,8 @@ async function technicalAccessTest(url, proxyUrl = null) {
       } else if (navError.message.includes('too many redirects')) {
         testResult.checks.redirectLoop = true;
         testResult.issues.push('Redirect Loop Detected');
+      } else {
+        testResult.issues.push(`Navigation failed: ${navError.message}`);
       }
       return testResult;
     }
@@ -174,15 +215,20 @@ async function domDataVerification(url, proxyUrl = null) {
       args: ['--disable-blink-features=AutomationControlled']
     };
 
-    if (proxyUrl) {
-      browserOptions.proxy = { server: proxyUrl };
+    const proxyOptions = getPlaywrightProxyOptions(proxyUrl);
+    if (proxyOptions) {
+      browserOptions.proxy = proxyOptions;
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.newContext();
+    const contextOptions = {};
+    if (proxyOptions) {
+      contextOptions.proxy = proxyOptions;
+    }
+    const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
     // Wait for potential dynamic content
     await page.waitForTimeout(2000);
@@ -337,12 +383,17 @@ async function interactionMapping(url, proxyUrl = null) {
       args: ['--disable-blink-features=AutomationControlled']
     };
 
-    if (proxyUrl) {
-      browserOptions.proxy = { server: proxyUrl };
+    const proxyOptions = getPlaywrightProxyOptions(proxyUrl);
+    if (proxyOptions) {
+      browserOptions.proxy = proxyOptions;
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.newContext();
+    const contextOptions = {};
+    if (proxyOptions) {
+      contextOptions.proxy = proxyOptions;
+    }
+    const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -496,12 +547,17 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
       args: ['--disable-blink-features=AutomationControlled']
     };
 
-    if (proxyUrl) {
-      browserOptions.proxy = { server: proxyUrl };
+    const proxyOptions = getPlaywrightProxyOptions(proxyUrl);
+    if (proxyOptions) {
+      browserOptions.proxy = proxyOptions;
     }
 
     browser = await chromium.launch(browserOptions);
-    const context = await browser.newContext();
+    const contextOptions = {};
+    if (proxyOptions) {
+      contextOptions.proxy = proxyOptions;
+    }
+    const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
