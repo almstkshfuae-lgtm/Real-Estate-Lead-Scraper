@@ -50,7 +50,7 @@ export default function NotificationListener() {
 
     const handleNotifications = async () => {
       try {
-        const res = await fetch("/api/notifications?markRead=true");
+        const res = await fetch("/api/notifications");
         if (!res.ok) {
           if (res.status === 401) return;
           throw new Error(`HTTP ${res.status}`);

@@ -110,11 +110,25 @@ export async function GET(request: Request) {
       where.AND = conditions;
     }
 
+    const minimal = searchParams.get("minimal") === "true";
+    const selectFields = minimal ? {
+      id: true, name: true, nameAr: true, company: true, companyAr: true,
+      role: true, roleAr: true, source: true, sourceType: true, tier: true,
+      phone: true, email: true, location: true, score: true, propertyPref: true,
+      budgetMin: true, budgetMax: true, latitude: true, longitude: true,
+      relocated: true, rentalFlag: true, status: true, bitrix24Id: true,
+      agentId: true, scrapeRunId: true, createdAt: true, updatedAt: true
+    } : undefined;
+
+    // Adjust limit dynamically based on payload size
+    const finalLimit = minimal ? Math.min(500, limit) : Math.min(100, limit);
+
     const leads = await prisma.lead.findMany({
       where,
+      select: selectFields,
       orderBy: { createdAt: "desc" },
       skip,
-      take: limit,
+      take: finalLimit,
     });
     const total = await prisma.lead.count({ where });
 

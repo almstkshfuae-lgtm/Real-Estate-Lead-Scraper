@@ -21,7 +21,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
     // Log the verification error for debugging (do not log the token)
     try {
       console.warn('[verifyToken] token verification failed:', (error as Error).message);
-    } catch {}
+    } catch { }
     return null;
   }
 }
@@ -46,7 +46,7 @@ export function normalizePreferences(preferences: any) {
 export async function getSession(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
   let token = cookieStore.get('auth_token')?.value;
-  
+
   if (!token) {
     const headersList = await headers();
     const authHeader = headersList.get('Authorization');
@@ -54,21 +54,28 @@ export async function getSession(): Promise<AuthUser | null> {
       token = authHeader.substring(7);
     }
   }
-  
+
   if (!token) return null;
   const decoded = await verifyToken(token);
   if (!decoded) return null;
 
   try {
-    const user = await prisma.user.findUnique({
+    const userPromise = prisma.user.findUnique({
       where: { id: decoded.id },
       select: { email: true, role: true },
     });
+
+    const timeoutPromise = new Promise<any>((_, reject) =>
+      setTimeout(() => reject(new Error('Session DB check timed out')), 2000)
+    );
+
+    const user = await Promise.race([userPromise, timeoutPromise]);
+
     if (!user || user.email !== decoded.email || user.role !== decoded.role) {
       return null;
     }
   } catch (error) {
-    console.warn('[getSession] DB check failed, falling back to stateless session verification:', error);
+    console.warn('[getSession] DB check failed or timed out, falling back to stateless session verification:', error);
   }
 
   return decoded;
