@@ -97,7 +97,12 @@ function checkConnectionError(error: any): boolean {
     errorMessage.includes("ECONN") ||
     errorMessage.includes("ETIMEDOUT") ||
     errorMessage.includes("ENOTFOUND") ||
-    errorMessage.includes("EPIPE");
+    errorMessage.includes("EPIPE") ||
+    errorMessage.includes("P2024") ||
+    errorMessage.includes("P1001") ||
+    errorMessage.includes("P1011") ||
+    errorMessage.includes("P1008") ||
+    errorMessage.includes("Connection reset by peer");
 
   return isConn;
 }
