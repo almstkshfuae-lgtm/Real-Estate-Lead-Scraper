@@ -2,7 +2,7 @@
 
 import React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link2, MessageCircle, Mail, Key, ShieldCheck, Database, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -43,7 +43,18 @@ export default function IntegrationsSettingsPage() {
       })
       .then(data => {
         if (data.integrations) {
-          setIntegrations(data.integrations);
+          // Check for a sessionStorage draft (unsaved edits from before navigation)
+          const draft = typeof window !== 'undefined' ? sessionStorage.getItem('integrations-draft') : null;
+          if (draft) {
+            try {
+              const parsed = JSON.parse(draft);
+              setIntegrations({ ...data.integrations, ...parsed });
+            } catch {
+              setIntegrations(data.integrations);
+            }
+          } else {
+            setIntegrations(data.integrations);
+          }
         }
       })
       .catch(err => console.error("Failed to fetch integrations:", err))
@@ -51,7 +62,12 @@ export default function IntegrationsSettingsPage() {
   }, []);
 
   const handleChange = (key: keyof typeof integrations, value: string) => {
-    setIntegrations(prev => ({ ...prev, [key]: value }));
+    setIntegrations(prev => {
+      const next = { ...prev, [key]: value };
+      // Persist draft to sessionStorage to survive navigation
+      try { sessionStorage.setItem('integrations-draft', JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -63,6 +79,8 @@ export default function IntegrationsSettingsPage() {
         body: JSON.stringify({ integrations })
       });
       if (!res.ok) throw new Error("Failed to save");
+      // Clear sessionStorage draft on successful save
+      try { sessionStorage.removeItem('integrations-draft'); } catch {}
       toast.success(t('settings.integrations.saved', 'Integrations updated successfully.'));
     } catch (e: any) {
       toast.error(e.message);
@@ -80,6 +98,8 @@ export default function IntegrationsSettingsPage() {
   }
 
   const handleTest = async (system: 'scraper' | 'bitrix' | 'whatsapp' | 'smtp') => {
+    // Prevent concurrent tests on the same system (race condition guard)
+    if (testStatus[system] === 'testing') return;
     setTestStatus(prev => ({ ...prev, [system]: 'testing' }));
     
     try {
@@ -159,9 +179,9 @@ export default function IntegrationsSettingsPage() {
                 placeholder="AIza... or bearer token"
                 value={integrations.googleAiApiKey}
                 onChange={(e) => handleChange('googleAiApiKey', e.target.value)}
-                className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+                className="w-full h-10 px-3 ps-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute start-3 top-3" />
             </div>
             <p className="text-[11px] text-[var(--color-text-secondary)]">Powers Gemini-driven scoring, signal extraction, pitches, and chatbot responses.</p>
           </div>

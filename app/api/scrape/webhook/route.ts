@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { extractHNWILeads, enrichLeadWithAI, generatePersonaAnalysis } from "@/lib/ai";
+import { extractHNWILeads, enrichLeadWithAI, generatePersonaAnalysis, deduplicateSignals } from "@/lib/ai";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 import { getEnvVar } from "@/lib/env";
 
@@ -65,6 +65,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: "Scrape run finalized successfully" });
     }
 
+    // Handle failed signal
+    if (body.isFailedSignal) {
+      const errorMsg = body.error ? String(body.error).replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : 'Unknown scraper error';
+      console.error(`[Webhook] Received failure signal for ScrapeRun: ${runId}. Error: ${errorMsg}`);
+
+      await prisma.scrapeRun.update({
+        where: { id: runId },
+        data: {
+          status: "FAILED",
+          completedAt: new Date()
+        }
+      });
+
+      await notifyScrapeCompletion(agentId, 0, runId);
+
+      return NextResponse.json({ success: true, message: "Scrape run marked as failed" });
+    }
+
     if (!scrapedData || !sourceKey) {
       return NextResponse.json({ error: "Missing scrapedData or sourceKey" }, { status: 400 });
     }
@@ -77,19 +95,19 @@ export async function POST(request: NextRequest) {
     const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(contentText);
     const hasArabicNameSignal = /[\u0600-\u06FF]{2,}/.test(contentText);
     const hasArabicRoleSignal = /\b(رئيس|مدير|مؤسس|شريك|عضو)\b/.test(contentText);
-    
+
     const sourceKeyLower = String(sourceKey || '').toLowerCase();
-    const isRegistry = sourceKeyLower.includes('registry') || 
-                       sourceKeyLower.includes('chamber') || 
-                       sourceKeyLower.includes('adgm') || 
-                       sourceKeyLower.includes('difc') || 
-                       sourceKeyLower.includes('gazette');
+    const isRegistry = sourceKeyLower.includes('registry') ||
+      sourceKeyLower.includes('chamber') ||
+      sourceKeyLower.includes('adgm') ||
+      sourceKeyLower.includes('difc') ||
+      sourceKeyLower.includes('gazette');
 
     const passedDOMCheck = isRegistry || (
       contentText.length >= 200 && (
-        hasNameSignal || 
-        hasRoleSignal || 
-        hasArabicNameSignal || 
+        hasNameSignal ||
+        hasRoleSignal ||
+        hasArabicNameSignal ||
         hasArabicRoleSignal
       )
     );
@@ -131,8 +149,10 @@ export async function POST(request: NextRequest) {
             phone: enrichedLead.phone || null,
             email: enrichedLead.email || null,
             location: enrichedLead.location || "Abu Dhabi",
+            latitude: enrichedLead.latitude ?? null,
+            longitude: enrichedLead.longitude ?? null,
             score: enrichedLead.score || 50,
-            signals: JSON.stringify(enrichedLead.signals || []),
+            signals: JSON.stringify(deduplicateSignals(enrichedLead.signals || [])),
             budgetMin: enrichedLead.budgetMin ?? null,
             budgetMax: enrichedLead.budgetMax ?? null,
             relocated: enrichedLead.relocated ?? false,
@@ -154,8 +174,10 @@ export async function POST(request: NextRequest) {
             phone: enrichedLead.phone || null,
             email: enrichedLead.email || null,
             location: enrichedLead.location || "Abu Dhabi",
+            latitude: enrichedLead.latitude ?? null,
+            longitude: enrichedLead.longitude ?? null,
             score: enrichedLead.score || 50,
-            signals: JSON.stringify(enrichedLead.signals || []),
+            signals: JSON.stringify(deduplicateSignals(enrichedLead.signals || [])),
             budgetMin: enrichedLead.budgetMin ?? null,
             budgetMax: enrichedLead.budgetMax ?? null,
             relocated: enrichedLead.relocated ?? false,
@@ -190,7 +212,8 @@ export async function POST(request: NextRequest) {
       leadsProcessed: newLeadsCount
     });
   } catch (error: any) {
-    console.error("[Webhook] Pipeline processing error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const errorMsg = error.message ? error.message.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : String(error);
+    console.error("[Webhook] Pipeline processing error:", errorMsg);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }

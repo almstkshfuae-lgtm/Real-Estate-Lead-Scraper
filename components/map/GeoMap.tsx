@@ -31,6 +31,9 @@ const UAE_AREAS: Record<string, { lat: number; lng: number; emirate: string }> =
   "Ajman": { lat: 25.4052, lng: 55.5136, emirate: "Ajman" },
   "Ras Al Khaimah": { lat: 25.7953, lng: 55.9788, emirate: "RAK" },
   "Fujairah": { lat: 25.1288, lng: 56.3265, emirate: "Fujairah" },
+  "Dubai": { lat: 25.2048, lng: 55.2708, emirate: "Dubai" },
+  "Abu Dhabi": { lat: 24.4539, lng: 54.3773, emirate: "Abu Dhabi" },
+  "Umm Al Quwain": { lat: 25.5647, lng: 55.5534, emirate: "Umm Al Quwain" },
 };
 
 function stableHash(input: string) {
@@ -41,17 +44,17 @@ function stableHash(input: string) {
   return Math.abs(hash);
 }
 
-function getCoords(location: string): { lat: number; lng: number } | null {
+function getCoords(location: string, seed: string = ""): { lat: number; lng: number } {
   const normalized = location?.trim() || "";
   for (const [key, val] of Object.entries(UAE_AREAS)) {
     if (normalized.toLowerCase().includes(key.toLowerCase())) {
-      const hash = stableHash(normalized);
+      const hash = stableHash(normalized + seed);
       const offsetLat = ((hash % 1000) / 1000 - 0.5) * 0.02;
       const offsetLng = (((hash >> 10) % 1000) / 1000 - 0.5) * 0.02;
       return { lat: val.lat + offsetLat, lng: val.lng + offsetLng };
     }
   }
-  const hash = stableHash(normalized || "uae-fallback");
+  const hash = stableHash((normalized || "uae-fallback") + seed);
   return {
     lat: 24.4 + ((hash % 1000) / 1000) * 1.5,
     lng: 54.0 + (((hash >> 10) % 1000) / 1000) * 2.5,
@@ -87,6 +90,8 @@ export interface MapLead {
   notes?: string;
   budgetMin?: number;
   budgetMax?: number;
+  latitude?: number;
+  longitude?: number;
   createdAt: string;
 }
 
@@ -206,8 +211,7 @@ function GeoMap({
         });
 
         Object.entries(clusterMap).forEach(([location, clusterLeads]) => {
-          const coords = getCoords(location);
-          if (!coords) return;
+          const baseCoords = getCoords(location);
 
           if (clusterLeads.length === 1) {
             // Single lead marker
@@ -256,7 +260,9 @@ function GeoMap({
               iconAnchor: [22, 22],
             });
 
-            const marker = L.marker([coords.lat, coords.lng], { icon });
+            const lat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : getCoords(location, lead.id).lat;
+            const lng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : getCoords(location, lead.id).lng;
+            const marker = L.marker([lat, lng], { icon });
             
             const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
             const signals = Array.isArray(lead.signals) ? lead.signals : [];
@@ -342,7 +348,7 @@ function GeoMap({
               iconAnchor: [28, 28],
             });
 
-            const marker = L.marker([coords.lat, coords.lng], { icon });
+            const marker = L.marker([baseCoords.lat, baseCoords.lng], { icon });
             marker.bindPopup(`
               <div style="font-family: 'Inter', sans-serif; padding: 4px; min-width: 200px;">
                 <div style="font-weight: 700; font-size: 13px; color: #111827; margin-bottom: 2px;">${location}</div>
@@ -370,15 +376,26 @@ function GeoMap({
         const heatGroup = L.layerGroup();
 
         leads.forEach((lead) => {
-          const coords = getCoords(lead.location);
-          if (!coords) return;
+          const lat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : getCoords(lead.location, lead.id).lat;
+          const lng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : getCoords(lead.location, lead.id).lng;
+          
+          const bMax = typeof lead.budgetMax === "number" && !isNaN(lead.budgetMax) ? lead.budgetMax : 0;
+          const bMin = typeof lead.budgetMin === "number" && !isNaN(lead.budgetMin) ? lead.budgetMin : 0;
+          const maxBudgetVal = Math.max(bMax, bMin);
+          
+          const budgetMultiplier = maxBudgetVal > 0 
+            ? 1.0 + Math.min(1.5, maxBudgetVal / 10000000) 
+            : 1.0;
+
           const tierWeight = lead.tier === 1 ? 3 : lead.tier === 2 ? 2 : 1;
-          const intensity = Math.max(0.12, Math.min(1, ((lead.score / 100) * tierWeight) / 3));
+          const rawWeight = (lead.score / 100) * tierWeight * budgetMultiplier;
+          const intensity = Math.max(0.12, Math.min(1, rawWeight / 7.5));
+          
           const radius = 16000 + 22000 * intensity;
           const alpha = 0.16 + intensity * 0.24;
           const color = intensity > 0.7 ? "#A32D2D" : intensity > 0.4 ? "#BA7517" : "#185FA5";
 
-          const circle = L.circle([coords.lat, coords.lng], {
+          const circle = L.circle([lat, lng], {
             radius,
             color: "transparent",
             fillColor: color,

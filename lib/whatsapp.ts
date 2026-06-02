@@ -114,11 +114,15 @@ export async function sendWhatsAppText(
  */
 export async function testWhatsAppConnection(phoneId: string, token: string) {
   try {
-    const url = `https://graph.facebook.com/v17.0/${phoneId}`;
+    // Verify the WhatsApp Business Profile is configured (not just that the phoneId exists)
+    const url = `https://graph.facebook.com/v17.0/${phoneId}/whatsapp_business_profile`;
     const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    return response.ok;
+    if (!response.ok) return false;
+    const data = await response.json();
+    // Confirm the profile data exists — this validates messaging is properly configured
+    return Array.isArray(data?.data) && data.data.length > 0;
   } catch (e) {
     return false;
   }

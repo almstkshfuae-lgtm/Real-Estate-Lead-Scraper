@@ -20,9 +20,44 @@ export default function MapStats({ leads, filteredCount, geofencedCount }: MapSt
     
     const t1 = leads.filter((l) => l.tier === 1).length;
     
+    const normalizeClientLocation = (loc: string): string => {
+      const normalized = (loc || "").trim();
+      if (!normalized) return "Abu Dhabi";
+      const lower = normalized.toLowerCase();
+      if (lower.includes("ياس") || lower.includes("yas")) return "Yas Island";
+      if (lower.includes("ريم") || lower.includes("reem")) return "Al Reem Island";
+      if (lower.includes("سعديات") || lower.includes("saadiyat")) return "Saadiyat Island";
+      if (lower.includes("خالدية") || lower.includes("khalidiyah") || lower.includes("khalidiya")) return "Khalidiyah";
+      if (lower.includes("راحه") || lower.includes("raha")) return "Al Raha Beach";
+      if (lower.includes("كورنيش") || lower.includes("corniche")) return "Corniche";
+      if (lower.includes("مارينا") || lower.includes("marina")) return "Dubai Marina";
+      if (lower.includes("نخلة") || lower.includes("palm")) return "Palm Jumeirah";
+      if (lower.includes("وسط المدينة") || lower.includes("downtown")) return "Downtown Dubai";
+      if (lower.includes("خليج الأعمال") || lower.includes("business bay")) return "Business Bay";
+      if (lower.includes("جميرا") || lower.includes("jumeirah")) return "Jumeirah";
+      if (lower.includes("العالمي") || lower.includes("difc")) return "DIFC";
+      if (lower.includes("ممشى جي بي آر") || lower.includes("jbr")) return "JBR";
+      if (lower.includes("المرابع") || lower.includes("ranches")) return "Arabian Ranches";
+      if (lower.includes("البرشاء") || lower.includes("barsha")) return "Al Barsha";
+      if (lower.includes("مردف") || lower.includes("mirdif")) return "Mirdif";
+      if (lower.includes("ديرة") || lower.includes("deira")) return "Deira";
+      if (lower.includes("بر دبي") || lower.includes("bur dubai")) return "Bur Dubai";
+      if (lower.includes("قرية جميرا") || lower.includes("jvc")) return "JVC";
+      if (lower.includes("شارقة") || lower.includes("sharjah")) return "Sharjah City";
+      if (lower.includes("نهدة") || lower.includes("nahda")) return "Al Nahda";
+      if (lower.includes("خان") || lower.includes("khan")) return "Al Khan";
+      if (lower.includes("عجمان") || lower.includes("ajman")) return "Ajman";
+      if (lower.includes("خيمة") || lower.includes("khaimah") || lower.includes("rak")) return "Ras Al Khaimah";
+      if (lower.includes("فجيرة") || lower.includes("fujairah")) return "Fujairah";
+      if (lower.includes("دبي") || lower.includes("dubai")) return "Dubai";
+      if (lower.includes("أبوظبي") || lower.includes("abu dhabi") || lower.includes("abu_dhabi")) return "Abu Dhabi";
+      if (lower.includes("أم القيوين") || lower.includes("quwain") || lower.includes("uaq")) return "Umm Al Quwain";
+      return normalized;
+    };
+
     const locations = Object.entries(
       leads.reduce((acc: Record<string, number>, l) => {
-        const key = l.location?.split(",")[0]?.trim() || "Unknown";
+        const key = normalizeClientLocation(l.location?.split(",")[0]?.trim() || "Unknown");
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {})

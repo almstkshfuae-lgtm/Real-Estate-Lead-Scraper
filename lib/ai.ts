@@ -1,7 +1,6 @@
 import { getSecret } from "./secrets";
 
 interface AIConfig {
-  provider: 'openai' | 'google';
   apiKey: string;
   projectId?: string;
   location?: string;
@@ -9,10 +8,11 @@ interface AIConfig {
 }
 
 export async function getAIConfig(): Promise<AIConfig | null> {
-  const rawOpenAiKey = process.env.OPENAI_API_KEY?.trim();
-  const openAiKey = rawOpenAiKey && !rawOpenAiKey.startsWith('YOUR_') ? rawOpenAiKey : null;
-
-  const rawGoogleKey = (await getSecret("googleAiApiKey"))?.trim();
+  // First prioritize env variables directly (faster, doesn't query DB during builds)
+  const envGoogleKey = (process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY)?.trim();
+  const rawGoogleKey = (envGoogleKey && !envGoogleKey.startsWith('YOUR_')) 
+    ? envGoogleKey 
+    : (await getSecret("googleAiApiKey"))?.trim();
   const googleApiKey = rawGoogleKey && !rawGoogleKey.startsWith('YOUR_') ? rawGoogleKey : null;
   
   const googleProjectId = (process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT)?.trim();
@@ -30,25 +30,14 @@ export async function getAIConfig(): Promise<AIConfig | null> {
   ) {
     googleModel = "gemini-2.5-flash";
   }
-  const openAiModel = (process.env.OPENAI_MODEL || "gpt-4.1-mini")?.trim();
 
   if (googleApiKey) {
     console.info('[AI] using Google provider (apiKey present)');
     return {
-      provider: 'google',
       apiKey: googleApiKey,
       projectId: googleProjectId,
       location: googleLocation,
       model: googleModel
-    };
-  }
-
-  if (openAiKey) {
-    console.info('[AI] using OpenAI provider (apiKey present)');
-    return {
-      provider: 'openai',
-      apiKey: openAiKey,
-      model: openAiModel
     };
   }
 
@@ -150,42 +139,15 @@ function filterLeadByCriteria(lead: any, criteria?: any) {
   return true;
 }
 
-async function generateOpenAIText(systemPrompt: string, userPrompt: string, maxTokens = 1024, apiKey: string, model: string, signal?: AbortSignal) {
-  const endpoint = "https://api.openai.com/v1/responses";
-  const body = {
-    model,
-    input: `${systemPrompt}\n\n${userPrompt}`,
-    max_output_tokens: maxTokens,
-    temperature: 0.0,
-    top_p: 0.95
-  };
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body),
-    signal
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenAI API error ${response.status}: ${errorText}`);
-  }
-
-  const data = await response.json();
-  return extractTextFromAIResponse(data) || "";
-}
 
 function extractTextFromAIResponse(response: any): string {
   if (!response) {
     return "";
   }
 
-  const candidate = response?.predictions?.[0] || response?.candidates?.[0] || response?.output?.[0] || response?.output || response;
-  let contents = candidate?.content || candidate?.output || candidate?.text || candidate;
+  const candidate = response?.predictions?.[0] || response?.candidates?.[0] || response?.choices?.[0] || response?.output?.[0] || response?.output || response;
+  let contents = candidate?.message?.content || candidate?.content || candidate?.output || candidate?.text || candidate;
 
   if (!contents) {
     return "";
@@ -283,6 +245,142 @@ function pickFirstMatch(matches: string[] | null) {
 
 function normalizePhone(phone: string) {
   return phone.replace(/[\s\-().]/g, "").replace(/^00/, "+");
+}
+
+export const UAE_AREAS_COORDS: Record<string, { lat: number; lng: number }> = {
+  "Dubai Marina": { lat: 25.0807, lng: 55.1400 },
+  "Palm Jumeirah": { lat: 25.1124, lng: 55.1390 },
+  "Downtown Dubai": { lat: 25.1972, lng: 55.2744 },
+  "Business Bay": { lat: 25.1860, lng: 55.2650 },
+  "Jumeirah": { lat: 25.2048, lng: 55.2455 },
+  "DIFC": { lat: 25.2108, lng: 55.2820 },
+  "JBR": { lat: 25.0786, lng: 55.1341 },
+  "Arabian Ranches": { lat: 25.0536, lng: 55.2710 },
+  "Al Barsha": { lat: 25.1127, lng: 55.1992 },
+  "Mirdif": { lat: 25.2218, lng: 55.4224 },
+  "Deira": { lat: 25.2697, lng: 55.3095 },
+  "Bur Dubai": { lat: 25.2532, lng: 55.2956 },
+  "JVC": { lat: 25.0657, lng: 55.2105 },
+  "Yas Island": { lat: 24.4672, lng: 54.6031 },
+  "Al Reem Island": { lat: 24.4975, lng: 54.4186 },
+  "Saadiyat Island": { lat: 24.5404, lng: 54.4416 },
+  "Khalidiyah": { lat: 24.4755, lng: 54.3557 },
+  "Al Raha Beach": { lat: 24.4293, lng: 54.5697 },
+  "Corniche": { lat: 24.4638, lng: 54.3444 },
+  "Sharjah City": { lat: 25.3463, lng: 55.4209 },
+  "Al Nahda": { lat: 25.3007, lng: 55.4177 },
+  "Al Khan": { lat: 25.3531, lng: 55.3795 },
+  "Ajman": { lat: 25.4052, lng: 55.5136 },
+  "Ras Al Khaimah": { lat: 25.7953, lng: 55.9788 },
+  "Fujairah": { lat: 25.1288, lng: 56.3265 },
+  "Dubai": { lat: 25.2048, lng: 55.2708 },
+  "Abu Dhabi": { lat: 24.4539, lng: 54.3773 },
+  "Umm Al Quwain": { lat: 25.5647, lng: 55.5534 }
+};
+
+export function resolveCoords(location: string): { lat: number; lng: number } {
+  const normalized = location?.trim() || "";
+  for (const [key, val] of Object.entries(UAE_AREAS_COORDS)) {
+    if (normalized.toLowerCase().includes(key.toLowerCase())) {
+      return val;
+    }
+  }
+  return { lat: 24.4539, lng: 54.3773 }; // Standard Abu Dhabi default center
+}
+
+export function normalizeLocation(loc: string): string {
+  const normalized = (loc || "").trim();
+  if (!normalized) return "Abu Dhabi";
+
+  const lower = normalized.toLowerCase();
+  
+  if (lower.includes("ياس") || lower.includes("yas")) return "Yas Island";
+  if (lower.includes("ريم") || lower.includes("reem")) return "Al Reem Island";
+  if (lower.includes("سعديات") || lower.includes("saadiyat")) return "Saadiyat Island";
+  if (lower.includes("خالدية") || lower.includes("khalidiyah") || lower.includes("khalidiya")) return "Khalidiyah";
+  if (lower.includes("راحه") || lower.includes("raha")) return "Al Raha Beach";
+  if (lower.includes("كورنيش") || lower.includes("corniche")) return "Corniche";
+  if (lower.includes("مارينا") || lower.includes("marina")) return "Dubai Marina";
+  if (lower.includes("نخلة") || lower.includes("palm")) return "Palm Jumeirah";
+  if (lower.includes("وسط المدينة") || lower.includes("downtown")) return "Downtown Dubai";
+  if (lower.includes("خليج الأعمال") || lower.includes("business bay")) return "Business Bay";
+  if (lower.includes("جميرا") || lower.includes("jumeirah")) return "Jumeirah";
+  if (lower.includes("العالمي") || lower.includes("difc")) return "DIFC";
+  if (lower.includes("ممشى جي بي آر") || lower.includes("jbr")) return "JBR";
+  if (lower.includes("المرابع") || lower.includes("ranches")) return "Arabian Ranches";
+  if (lower.includes("البرشاء") || lower.includes("barsha")) return "Al Barsha";
+  if (lower.includes("مردف") || lower.includes("mirdif")) return "Mirdif";
+  if (lower.includes("ديرة") || lower.includes("deira")) return "Deira";
+  if (lower.includes("بر دبي") || lower.includes("bur dubai")) return "Bur Dubai";
+  if (lower.includes("قرية جميرا") || lower.includes("jvc")) return "JVC";
+  if (lower.includes("شارقة") || lower.includes("sharjah")) return "Sharjah City";
+  if (lower.includes("نهدة") || lower.includes("nahda")) return "Al Nahda";
+  if (lower.includes("خان") || lower.includes("khan")) return "Al Khan";
+  if (lower.includes("عجمان") || lower.includes("ajman")) return "Ajman";
+  if (lower.includes("خيمة") || lower.includes("khaimah") || lower.includes("rak")) return "Ras Al Khaimah";
+  if (lower.includes("فجيرة") || lower.includes("fujairah")) return "Fujairah";
+  if (lower.includes("دبي") || lower.includes("dubai")) return "Dubai";
+  if (lower.includes("أبوظبي") || lower.includes("abu dhabi") || lower.includes("abu_dhabi")) return "Abu Dhabi";
+  if (lower.includes("أم القيوين") || lower.includes("quwain") || lower.includes("uaq")) return "Umm Al Quwain";
+
+  for (const key of Object.keys(UAE_AREAS_COORDS)) {
+    if (lower.includes(key.toLowerCase())) {
+      return key;
+    }
+  }
+
+  return "Abu Dhabi";
+}
+
+export function parseBudgetToFloat(val: any): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'number') {
+    return isNaN(val) ? null : val;
+  }
+  if (typeof val !== 'string') return null;
+
+  let str = val.trim().toLowerCase();
+  if (!str) return null;
+
+  // Extract digits and suffix (k, m, million, etc.)
+  // Remove commas, currency symbols like aed, usd, $, etc.
+  str = str.replace(/aed|usd|[\$,]/g, '').trim();
+
+  const numMatch = str.match(/^([\d.]+)\s*(m|million|k|thousand)?/);
+  if (!numMatch) {
+    const fallbackVal = parseFloat(str);
+    return isNaN(fallbackVal) ? null : fallbackVal;
+  }
+
+  let value = parseFloat(numMatch[1]);
+  if (isNaN(value)) return null;
+
+  const suffix = numMatch[2];
+  if (suffix === 'm' || suffix === 'million') {
+    value *= 1000000;
+  } else if (suffix === 'k' || suffix === 'thousand') {
+    value *= 1000;
+  }
+
+  return value;
+}
+
+export function deduplicateSignals(signals: any[]): string[] {
+  if (!Array.isArray(signals)) return [];
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  
+  for (const sig of signals) {
+    if (!sig || typeof sig !== 'string') continue;
+    const cleanSig = sig.trim();
+    if (!cleanSig) continue;
+    const lower = cleanSig.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      unique.push(cleanSig);
+    }
+  }
+  return unique;
 }
 
 export function cleanScrapedText(text: string): string {
@@ -438,11 +536,7 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
   const config = await getAIConfig();
   if (!config) {
     console.error('[AI] no provider configured');
-    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY or OPENAI_API_KEY.");
-  }
-
-  if (config.provider === 'openai') {
-    return await generateOpenAIText(systemPrompt, userPrompt, maxTokens, config.apiKey, config.model, signal);
+    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY.");
   }
 
   const isProjectBased = Boolean(config.projectId);
@@ -625,11 +719,16 @@ Output ONLY the JSON array. No other text.`,
   }
 
   return Array.isArray(leads)
-    ? leads.filter((lead: any) =>
-        lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
-        && filterLeadByCriteria(lead, criteria)
-        && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent)
-      )
+    ? leads
+        .filter((lead: any) =>
+          lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
+          && filterLeadByCriteria(lead, criteria)
+          && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent)
+        )
+        .map((lead: any) => ({
+          ...lead,
+          signals: deduplicateSignals(lead.signals)
+        }))
     : [];
 }
 
@@ -642,27 +741,60 @@ function verifyLeadInSource(name: string, nameAr: string | null | undefined, sou
   
   const normalizedSource = sourceText.toLowerCase();
 
+  const getKeyWords = (str: string) => {
+    const stopWords = new Set([
+      'al', 'el', 'bin', 'ibn', 'the', 'of', 'and', 
+      'sheikh', 'sheikha', 'dr', 'mr', 'mrs', 'ms', 'eng', 'ceo', 'founder', 'president'
+    ]);
+    return str
+      .toLowerCase()
+      .replace(/[\d().,\-_]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !stopWords.has(word));
+  };
+
   // 1. Check English Name Match
-  const normalizedName = name.toLowerCase().trim();
-  const nameParts = normalizedName.split(/\s+/);
-  if (nameParts.length >= 2) {
-    const found = normalizedSource.includes(nameParts[0]) && normalizedSource.includes(nameParts[nameParts.length - 1]);
-    if (found) return true;
+  const enKeyWords = getKeyWords(name);
+  if (enKeyWords.length > 0) {
+    const matches = enKeyWords.filter(word => normalizedSource.includes(word));
+    const matchThreshold = Math.min(2, enKeyWords.length);
+    if (matches.length >= matchThreshold) {
+      return true;
+    }
   } else {
-    const found = normalizedSource.includes(normalizedName);
-    if (found) return true;
+    if (normalizedSource.includes(name.toLowerCase().trim())) {
+      return true;
+    }
   }
 
   // 2. Check Arabic Name Match
   if (nameAr) {
-    const normalizedNameAr = nameAr.trim();
-    const nameArParts = normalizedNameAr.split(/\s+/);
-    if (nameArParts.length >= 2) {
-      const found = normalizedSource.includes(nameArParts[0]) && normalizedSource.includes(nameArParts[nameArParts.length - 1]);
-      if (found) return true;
+    const normalizeArabic = (str: string) => {
+      return str
+        .replace(/[\u064B-\u0652]/g, "") // Remove Arabic diacritics
+        .replace(/[أإآ]/g, "ا")          // Normalize Alef shapes
+        .replace(/ة/g, "ه")             // Normalize Teh Marbouta
+        .replace(/ى/g, "ي")             // Normalize Alef Maksoura
+        .toLowerCase()
+        .trim();
+    };
+
+    const normSourceAr = normalizeArabic(sourceText);
+    const normNameAr = normalizeArabic(nameAr);
+    
+    const stopWordsAr = new Set(['من', 'في', 'بن', 'ال', 'ابن', 'الشيخ', 'الشيخة', 'دكتور', 'سيد', 'سيدة', 'مهندس']);
+    const arKeyWords = normNameAr.split(/\s+/).filter(word => word.length > 2 && !stopWordsAr.has(word));
+
+    if (arKeyWords.length > 0) {
+      const matchesAr = arKeyWords.filter(word => normSourceAr.includes(word));
+      const matchThresholdAr = Math.min(2, arKeyWords.length);
+      if (matchesAr.length >= matchThresholdAr) {
+        return true;
+      }
     } else {
-      const found = normalizedSource.includes(normalizedNameAr);
-      if (found) return true;
+      if (normSourceAr.includes(normNameAr)) {
+        return true;
+      }
     }
   }
 
@@ -732,10 +864,15 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
   }
 
   return Array.isArray(leads)
-    ? leads.filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
-        && filterLeadByCriteria(lead, criteria)
-        && verifyLeadInSource(lead.name, lead.nameAr, cleanedText)
-      )
+    ? leads
+        .filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
+          && filterLeadByCriteria(lead, criteria)
+          && verifyLeadInSource(lead.name, lead.nameAr, cleanedText)
+        )
+        .map((lead: any) => ({
+          ...lead,
+          signals: deduplicateSignals(lead.signals)
+        }))
     : [];
 }
 
@@ -744,6 +881,12 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
  * Maps extracted fields to Prisma Lead schema
  */
 export async function enrichLeadWithAI(lead: any) {
+  const normalizedLoc = normalizeLocation(lead.location);
+  const coords = resolveCoords(normalizedLoc);
+  
+  const parsedMin = parseBudgetToFloat(lead.budgetMin);
+  const parsedMax = parseBudgetToFloat(lead.budgetMax);
+
   const enrichedLead = {
     name: lead.name || "Unknown",
     nameAr: lead.nameAr || lead.name || "Unknown",
@@ -753,14 +896,16 @@ export async function enrichLeadWithAI(lead: any) {
     roleAr: lead.roleAr || lead.role || "Professional",
     email: lead.email || null,
     phone: lead.phone || null,
-    location: lead.location || "Abu Dhabi",
+    location: normalizedLoc,
+    latitude: lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : coords.lat,
+    longitude: lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : coords.lng,
     source: lead.source || "HNWI Sources",
     tier: lead.tier || 2,
     score: lead.score || 50,
-    signals: lead.signals || [],
+    signals: deduplicateSignals(lead.signals || []),
     sourceType: lead.sourceType || "Unknown",
-    budgetMin: lead.budgetMin ?? null,
-    budgetMax: lead.budgetMax ?? null,
+    budgetMin: parsedMin,
+    budgetMax: parsedMax,
     relocated: lead.relocated ?? null,
     propertyPref: lead.propertyPref || null
   };
@@ -860,17 +1005,7 @@ export async function generateGeminiStream(
 ): Promise<ReadableStream<string>> {
   const config = await getAIConfig();
   if (!config) {
-    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY or OPENAI_API_KEY.");
-  }
-
-  if (config.provider === 'openai') {
-    const text = await generateOpenAIText(systemPrompt, userPrompt, maxTokens, config.apiKey, config.model, signal);
-    return new ReadableStream({
-      start(controller) {
-        controller.enqueue(text);
-        controller.close();
-      }
-    });
+    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY.");
   }
 
   const isProjectBased = Boolean(config.projectId);

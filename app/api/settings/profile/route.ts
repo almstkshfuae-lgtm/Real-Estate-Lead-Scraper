@@ -42,20 +42,47 @@ export async function PUT(request: NextRequest) {
 
     const { name, email, language, theme, currentPassword, newPassword } = await request.json();
 
-    if (!name || !email || !language || !theme) {
+    const cleanName = typeof name === 'string' ? name.trim() : '';
+    const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const cleanLanguage = typeof language === 'string' ? language.trim() : '';
+    const cleanTheme = typeof theme === 'string' ? theme.trim() : '';
+
+    if (!cleanName || !cleanEmail || !cleanLanguage || !cleanTheme) {
       return NextResponse.json({ error: 'Missing profile fields' }, { status: 400 });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return NextResponse.json({ error: 'Invalid email address format' }, { status: 400 });
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: cleanEmail,
+        id: { not: session.id },
+      },
+    });
+    if (existingUser) {
+      return NextResponse.json({ error: 'Email address is already in use' }, { status: 409 });
+    }
+
     const updateData: any = {
-      name,
-      email,
-      language,
-      theme,
+      name: cleanName,
+      email: cleanEmail,
+      language: cleanLanguage,
+      theme: cleanTheme,
     };
 
-    if (newPassword) {
-      if (!currentPassword) {
+    const cleanNewPassword = typeof newPassword === 'string' ? newPassword.trim() : '';
+    const cleanCurrentPassword = typeof currentPassword === 'string' ? currentPassword.trim() : '';
+
+    if (cleanNewPassword) {
+      if (!cleanCurrentPassword) {
         return NextResponse.json({ error: 'Current password is required to change password' }, { status: 400 });
+      }
+
+      if (cleanNewPassword.length < 6) {
+        return NextResponse.json({ error: 'New password must be at least 6 characters long' }, { status: 400 });
       }
 
       const user = await prisma.user.findUnique({ where: { id: session.id } });
@@ -63,11 +90,11 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
 
-      if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      if (!(await bcrypt.compare(cleanCurrentPassword, user.passwordHash))) {
         return NextResponse.json({ error: 'Current password is incorrect' }, { status: 401 });
       }
 
-      updateData.passwordHash = await bcrypt.hash(newPassword, 10);
+      updateData.passwordHash = await bcrypt.hash(cleanNewPassword, 10);
     }
 
     const updatedUser = await prisma.user.update({

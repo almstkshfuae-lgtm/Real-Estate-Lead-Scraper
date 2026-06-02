@@ -5,7 +5,7 @@ import { getSession, parsePreferences, normalizePreferences } from "@/lib/auth";
 export async function GET(request: Request) {
   try {
     const session = await getSession();
-    if (!session) {
+    if (!session || session.role !== 'admin') {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -48,25 +48,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ integrations }, { status: 200 });
 
   } catch (error: any) {
-    console.error("Fetch integrations error:", error);
-    return NextResponse.json({ error: "Internal Server Error", detail: error?.message || String(error), stack: error?.stack }, { status: 500 });
+    console.error("Fetch integrations error:", error?.message || error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session) {
+    if (!session || session.role !== 'admin') {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { integrations } = await request.json();
 
-    const user = await prisma.user.findFirst({
-      where: { role: "admin" }
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.id }
     });
 
-    const existingPrefs = parsePreferences((user as any)?.preferences);
+    const existingPrefs = parsePreferences((currentUser as any)?.preferences);
     const newPrefs = { ...existingPrefs, integrations };
 
     await prisma.user.update({

@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { cookies, headers } from 'next/headers';
+import prisma from './prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only';
 
@@ -55,7 +56,22 @@ export async function getSession(): Promise<AuthUser | null> {
   }
   
   if (!token) return null;
-  return verifyToken(token);
+  const decoded = await verifyToken(token);
+  if (!decoded) return null;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { email: true, role: true },
+    });
+    if (!user || user.email !== decoded.email || user.role !== decoded.role) {
+      return null;
+    }
+  } catch (error) {
+    console.warn('[getSession] DB check failed, falling back to stateless session verification:', error);
+  }
+
+  return decoded;
 }
 
 export async function setSession(token: string) {

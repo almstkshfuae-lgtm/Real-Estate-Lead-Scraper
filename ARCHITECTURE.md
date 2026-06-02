@@ -55,6 +55,10 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
 - **Sources Target**: alforsan.ae, adec.ae, dhabianequi.com, alhabtoorpoloclub.com, theartsclub.ae, rotary.ae, whatson.ae, adgm.com, difc.ae, ecouncil.ae (Official Gazette), arabianbusiness.com, propertymonitor.ae, abudhabichamber.ae.
 - **Anti-Blocking**: Spoofs User-Agents, custom headers, and navigates organically to bypass detection.
 - **Pipeline Webhook**: Dispatches crawled results asynchronously to the main Next.js `/api/scrape/webhook` receiver to prevent Vercel execution timeouts.
+- **Selector Validation**: Performs strict Playwright-compatible selector validation (CSS, XPath, Text, and compound selectors) at the API input level (`/create-source`) and skips invalid selectors at the execution level to prevent Playwright Chromium crashes.
+- **Proxy Credentials Masking**: All connection errors, validation results, and diagnostic logger events pass through `maskProxyUrl` to redact sensitive credentials (`username:password`) before logs are stored in Vercel Blob or printed in stdout.
+- **State Synchronization Safeguards**: The default sources seeding logic executes in a non-destructive manner on cold-boot, inserting new default source templates but *never* overwriting existing user-customized selectors, signals, or crawlDepth settings in the shared database.
+- **Global Failover Webhook**: If the scraper microservice encounters a terminal crash (e.g. browser launch failure), it catches the exception and immediately dispatches an `isFailedSignal` webhook back to the Next.js app to transition the scrape run status to `FAILED`, preventing forever-stuck `PROCESSING` statuses.
 - **Graceful Shutdown**: Listens to system termination signals (`SIGTERM`, `SIGINT`) to gracefully stop the HTTP server and completely disconnect the Prisma client database connection pool (`prisma.$disconnect()`), avoiding socket leaks and connection exhaustion on container recycles.
 
 ### 3. Cognitive Ingestion Layer (`lib/ai.ts`)

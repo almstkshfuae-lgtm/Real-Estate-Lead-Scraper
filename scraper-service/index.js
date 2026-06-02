@@ -8,7 +8,7 @@ import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_SCRAPER_SOURCES } from './default-sources.js';
 import { verifySourceCompletePipeline, technicalAccessTest } from './verification-pipeline.js';
-import { validateProxyConnection, formatProxyValidationReport, verifyProxyEgress } from './proxy-validator.js';
+import { validateProxyConnection, formatProxyValidationReport, verifyProxyEgress, maskProxyUrl } from './proxy-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +20,12 @@ console.log('scraper-service existing DATABASE_URL before dotenv:', process.env.
 
 dotenv.config({ path: envLocalPath });
 dotenv.config({ path: envPath });
+
+// Resolve empty DATABASE_URL to MYSQL_PUBLIC_URL if present to avoid Prisma startup crash
+if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === '') {
+  process.env.DATABASE_URL = process.env.MYSQL_PUBLIC_URL || '';
+}
+
 console.log('scraper-service DATABASE_URL after dotenv:', process.env.DATABASE_URL);
 
 const prisma = new PrismaClient();
@@ -28,6 +34,77 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3002;
 const SECRET = process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
+
+export function isValidPlaywrightSelector(selector) {
+  if (!selector || typeof selector !== 'string') return false;
+  const trimmed = selector.trim();
+  if (!trimmed) return false;
+
+  if (trimmed.startsWith('//') || trimmed.startsWith('xpath=')) {
+    const openBrackets = (trimmed.match(/\[/g) || []).length;
+    const closeBrackets = (trimmed.match(/\]/g) || []).length;
+    return openBrackets === closeBrackets;
+  }
+
+  if (trimmed.startsWith('text=')) {
+    return true;
+  }
+
+  if (trimmed.includes('>>')) {
+    const parts = trimmed.split('>>');
+    return parts.every(part => isValidPlaywrightSelector(part.trim()));
+  }
+
+  let cleanSelector = trimmed;
+  if (cleanSelector.startsWith('css=')) {
+    cleanSelector = cleanSelector.substring(4);
+  }
+
+  cleanSelector = cleanSelector
+    .replace(/:has-text\s*\([^)]*\)/g, '')
+    .replace(/:text\s*\([^)]*\)/g, '')
+    .replace(/:visible/g, '')
+    .replace(/:text-is\s*\([^)]*\)/g, '')
+    .replace(/:nth-match\s*\([^)]*\)/g, '');
+
+  if (!cleanSelector.trim()) {
+    return true;
+  }
+
+  try {
+    const $ = cheerio.load('<div></div>');
+    $(cleanSelector);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function validateSelectors(obj) {
+  if (!obj) return { valid: true };
+  const errors = [];
+  const checkValue = (val, path) => {
+    if (typeof val === 'string') {
+      if (!isValidPlaywrightSelector(val)) {
+        errors.push(`Invalid selector at ${path}: "${val}"`);
+      }
+    } else if (Array.isArray(val)) {
+      val.forEach((item, index) => {
+        checkValue(item, `${path}[${index}]`);
+      });
+    } else if (typeof val === 'object' && val !== null) {
+      for (const key of Object.keys(val)) {
+        checkValue(val[key], `${path}.${key}`);
+      }
+    }
+  };
+  checkValue(obj, 'selectors');
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
 
 if (USE_MOCK_DATA) {
@@ -180,10 +257,43 @@ async function simulateHumanBrowsing(page) {
 
 function extractCleanTextFromHTML(html) {
   const $ = cheerio.load(html);
-  $('script, style, noscript, header, footer, nav, aside, form, svg, canvas').remove();
-  const text = $('body').text();
-  return text
-    .replace(/\s+/g, ' ')
+  
+  // Extract and append text content from application/json, application/ld+json, and __NEXT_DATA__ scripts
+  const jsonScriptContents = [];
+  $('script').each((i, el) => {
+    const type = $(el).attr('type');
+    const id = $(el).attr('id');
+    const isJson = type === 'application/json' || type === 'application/ld+json' || id === '__NEXT_DATA__';
+    if (isJson) {
+      const scriptText = $(el).html();
+      if (scriptText && scriptText.trim()) {
+        jsonScriptContents.push(scriptText.trim());
+      }
+    } else {
+      $(el).remove();
+    }
+  });
+
+  // Remove elements that are strictly layout styling, interactive widgets or media
+  $('style, noscript, svg, canvas, iframe').remove();
+
+  // Replace br tags with newlines
+  $('br').replaceWith('\n');
+
+  // Prepend and append spacing to block elements to prevent word merging
+  $('p, div, li, h1, h2, h3, h4, h5, h6, tr, td, th, article, section, header, footer').each((i, el) => {
+    $(el).prepend(' ').append('\n');
+  });
+
+  const bodyText = $('body').text();
+  const jsonText = jsonScriptContents.join('\n');
+  
+  // Combine body text and JSON scripts, keeping newlines for structure
+  const combinedText = bodyText + '\n' + jsonText;
+
+  return combinedText
+    .replace(/[ \t\r]+/g, ' ')
+    .replace(/\n\s*\n+/g, '\n')
     .replace(/\u00A0/g, ' ')
     .trim();
 }
@@ -199,6 +309,10 @@ async function detectAndClickLoadMore(page, source) {
   ];
 
   for (const selector of [...(source.navigationSelectors.pagination || []), ...loadMoreSelectors]) {
+    if (!isValidPlaywrightSelector(selector)) {
+      console.warn(`⚠️ Skipping invalid load more selector: "${selector}"`);
+      continue;
+    }
     try {
       const element = await page.locator(selector).first();
       if (await element.isVisible()) {
@@ -225,7 +339,12 @@ async function getSourceConfigMap() {
     }
 
     return configs.reduce((acc, config) => {
-      acc[config.key] = config;
+      acc[config.key] = {
+        ...config,
+        signals: typeof config.signals === 'string' ? JSON.parse(config.signals) : config.signals,
+        navigationSelectors: typeof config.navigationSelectors === 'string' ? JSON.parse(config.navigationSelectors) : config.navigationSelectors,
+        contentSelectors: typeof config.contentSelectors === 'string' ? JSON.parse(config.contentSelectors) : config.contentSelectors
+      };
       return acc;
     }, {});
   } catch (err) {
@@ -244,34 +363,28 @@ async function getSourceConfigMap() {
 
 async function seedDefaultSources() {
   for (const source of DEFAULT_SCRAPER_SOURCES) {
-    await prisma.sourceConfig.upsert({
-      where: { key: source.key },
-      update: {
-        url: source.url,
-        name: source.name,
-        type: source.type,
-        signals: source.signals,
-        navigationSelectors: source.navigationSelectors,
-        contentSelectors: source.contentSelectors,
-        crawlDepth: source.crawlDepth,
-        maxPages: source.maxPages,
-        delayBetweenPages: source.delayBetweenPages,
-        active: true
-      },
-      create: {
-        key: source.key,
-        url: source.url,
-        name: source.name,
-        type: source.type,
-        signals: source.signals,
-        navigationSelectors: source.navigationSelectors,
-        contentSelectors: source.contentSelectors,
-        crawlDepth: source.crawlDepth,
-        maxPages: source.maxPages,
-        delayBetweenPages: source.delayBetweenPages,
-        active: true
-      }
+    const existing = await prisma.sourceConfig.findUnique({
+      where: { key: source.key }
     });
+
+    if (!existing) {
+      await prisma.sourceConfig.create({
+        data: {
+          key: source.key,
+          url: source.url,
+          name: source.name,
+          type: source.type,
+          signals: JSON.stringify(source.signals),
+          navigationSelectors: JSON.stringify(source.navigationSelectors),
+          contentSelectors: JSON.stringify(source.contentSelectors),
+          crawlDepth: source.crawlDepth,
+          maxPages: source.maxPages,
+          delayBetweenPages: source.delayBetweenPages,
+          active: true
+        }
+      });
+      console.log(`Seeded default source: ${source.key}`);
+    }
   }
 }
 
@@ -472,6 +585,10 @@ async function scrapePageRecursively(
     // Click expand buttons to reveal hidden content
     const expandButtons = source.navigationSelectors.expandButtons || [];
     for (const selector of expandButtons) {
+      if (!isValidPlaywrightSelector(selector)) {
+        console.warn(`⚠️ Skipping invalid expand button selector: "${selector}"`);
+        continue;
+      }
       try {
         const buttons = await page.locator(selector).all();
         for (const button of buttons) {
@@ -498,6 +615,10 @@ async function scrapePageRecursively(
     const paginationSelectors = source.navigationSelectors.pagination || [];
 
     for (const selector of paginationSelectors) {
+      if (!isValidPlaywrightSelector(selector)) {
+        console.warn(`⚠️ Skipping invalid pagination selector: "${selector}"`);
+        continue;
+      }
       try {
         const nextLink = await page.locator(selector).first();
         if (await nextLink.isVisible()) {
@@ -539,16 +660,17 @@ async function scrapePageRecursively(
  * Scrape multiple HNWI sources in parallel with proxy rotation
  */
 async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = null, runId = null) {
-  const browser = await chromium.launch({ 
-    headless: true,
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--disable-web-resources',
-      '--disable-features=IsolateOrigins,site-per-process'
-    ]
-  });
-
+  let browser;
   try {
+    browser = await chromium.launch({ 
+      headless: true,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-web-resources',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ]
+    });
+
     const results = [];
     const sourceMap = await getSourceConfigMap();
 
@@ -568,18 +690,18 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
       try {
         const accessResult = await technicalAccessTest(sourceMap[sourceKey].url, proxyUrl || PROXY_CONFIG.getProxyUrl());
         if (!accessResult.passed) {
-          console.warn(`🚫 Source ${sourceKey} failed Technical Access Test: ${accessResult.issues.join(', ')}`);
+          console.warn(maskProxyUrl(`🚫 Source ${sourceKey} failed Technical Access Test: ${accessResult.issues.join(', ')}`));
           results.push({
             source: sourceKey,
             status: 'blocked',
-            error: `Technical access blocked: ${accessResult.issues.join('; ')}`,
+            error: maskProxyUrl(`Technical access blocked: ${accessResult.issues.join('; ')}`),
             timestamp: new Date().toISOString()
           });
           continue;
         }
         console.log(`✅ Source ${sourceKey} passed Technical Access Test (${accessResult.loadTime}ms, ${accessResult.htmlSize} bytes)`);
       } catch (verifyError) {
-        console.warn(`⚠️  Stage 1 verification error for ${sourceKey}, proceeding with scrape: ${verifyError.message}`);
+        console.warn(maskProxyUrl(`⚠️  Stage 1 verification error for ${sourceKey}, proceeding with scrape: ${verifyError.message}`));
       }
 
       try {
@@ -605,15 +727,15 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
               scrapedData: content
             });
           } catch (webhookErr) {
-            console.error(`[Webhook] Failed to send results for ${sourceKey}:`, webhookErr.message);
+            console.error(maskProxyUrl(`[Webhook] Failed to send results for ${sourceKey}: ${webhookErr.message}`));
           }
         }
       } catch (error) {
-        console.error(`❌ Failed to scrape ${sourceKey}:`, error.message);
+        console.error(maskProxyUrl(`❌ Failed to scrape ${sourceKey}: ${error.message}`));
         results.push({
           source: sourceKey,
           status: 'error',
-          error: error.message,
+          error: maskProxyUrl(error.message),
           timestamp: new Date().toISOString()
         });
       }
@@ -639,8 +761,26 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
     }
 
     return results;
+  } catch (globalError) {
+    const errorMsg = maskProxyUrl(globalError.message || String(globalError));
+    console.error(`❌ Global scraper error in scrapeMultipleSources for run ${runId}:`, errorMsg);
+    if (webhookUrl && runId) {
+      try {
+        await axios.post(webhookUrl, {
+          secret: SECRET,
+          runId: runId,
+          isFailedSignal: true,
+          error: errorMsg
+        });
+      } catch (webhookErr) {
+        console.error(`[Webhook] Failed to post failure signal:`, webhookErr.message);
+      }
+    }
+    throw globalError;
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }
 
@@ -827,7 +967,7 @@ app.post('/verify-source', async (req, res) => {
     console.error('Verification error:', error);
     res.status(500).json({ 
       error: 'Verification pipeline failed',
-      details: error.message 
+      details: maskProxyUrl(error.message) 
     });
   }
 });
@@ -882,6 +1022,20 @@ app.post('/create-source', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields: key, url, name, type' });
   }
 
+  // Validate navigation and content selectors
+  if (navigationSelectors) {
+    const navVal = validateSelectors(navigationSelectors);
+    if (!navVal.valid) {
+      return res.status(400).json({ error: `Invalid navigation selectors: ${navVal.errors.join(', ')}` });
+    }
+  }
+  if (contentSelectors) {
+    const contentVal = validateSelectors(contentSelectors);
+    if (!contentVal.valid) {
+      return res.status(400).json({ error: `Invalid content selectors: ${contentVal.errors.join(', ')}` });
+    }
+  }
+
   try {
     // Check if source already exists
     const existing = await prisma.sourceConfig.findUnique({ where: { key } });
@@ -918,7 +1072,7 @@ app.post('/create-source', async (req, res) => {
     });
   } catch (error) {
     console.error('Failed to create source:', error);
-    res.status(500).json({ error: 'Failed to create source', details: error.message });
+    res.status(500).json({ error: 'Failed to create source', details: maskProxyUrl(error.message) });
   }
 });
 
@@ -961,7 +1115,7 @@ app.post('/verify-sources-batch', async (req, res) => {
         results.push({
           url: url,
           status: 'ERROR',
-          error: error.message
+          error: maskProxyUrl(error.message)
         });
       }
     }
@@ -977,7 +1131,7 @@ app.post('/verify-sources-batch', async (req, res) => {
     });
   } catch (error) {
     console.error('Batch verification error:', error);
-    res.status(500).json({ error: 'Batch verification failed', details: error.message });
+    res.status(500).json({ error: 'Batch verification failed', details: maskProxyUrl(error.message) });
   }
 });
 
@@ -1019,7 +1173,7 @@ app.post('/approve-source', async (req, res) => {
     });
   } catch (error) {
     console.error('Failed to approve source:', error);
-    res.status(500).json({ error: 'Failed to approve source', details: error.message });
+    res.status(500).json({ error: 'Failed to approve source', details: maskProxyUrl(error.message) });
   }
 });
 
@@ -1061,12 +1215,20 @@ app.post('/reject-source', async (req, res) => {
     });
   } catch (error) {
     console.error('Failed to reject source:', error);
-    res.status(500).json({ error: 'Failed to reject source', details: error.message });
+    res.status(500).json({ error: 'Failed to reject source', details: maskProxyUrl(error.message) });
   }
 });
 
 async function startServer() {
   try {
+    // Force seeding on startup to ensure all default sources are present and updated in DB
+    try {
+      console.log('Seeding default scraper sources on startup...');
+      await seedDefaultSources();
+    } catch (seedErr) {
+      console.error('Seeding default sources failed:', seedErr.message);
+    }
+
     const sourceMap = await getSourceConfigMap();
     const availableSources = Object.keys(sourceMap);
     const server = app.listen(PORT, () => {

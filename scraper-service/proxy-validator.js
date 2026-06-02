@@ -5,10 +5,12 @@
 
 import { chromium } from 'playwright';
 
-function maskProxyUrl(url) {
-  if (!url) return null;
+export function maskProxyUrl(str) {
+  if (!str || typeof str !== 'string') return str;
   try {
-    return url.replace(/(https?:\/\/)([^:@\s]+):([^@\s]+)@/, '$1$2:[REDACTED]@');
+    return str.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, (match, scheme) => {
+      return `${scheme || ''}[REDACTED]:[REDACTED]@`;
+    });
   } catch (e) {
     return '[REDACTED]';
   }
@@ -80,7 +82,7 @@ export async function validateProxyConnection(proxyUrl, timeoutMs = 30000) {
       return {
         configured: true,
         status: 'failed',
-        error: error.message || String(error),
+        error: maskProxyUrl(error.message || String(error)),
         errorCode: error.code || 'UNKNOWN',
         elapsedMs,
         suggestions: generateProxySuggestions(error),
@@ -91,7 +93,7 @@ export async function validateProxyConnection(proxyUrl, timeoutMs = 30000) {
     return {
       configured: true,
       status: 'launch_failed',
-      error: launchError.message || String(launchError),
+      error: maskProxyUrl(launchError.message || String(launchError)),
       suggestions: [
         'Ensure Playwright browsers are installed: npx playwright install',
         'Check that proxy credentials are URL-encoded correctly',
@@ -131,7 +133,7 @@ export async function verifyProxyEgress(proxyUrl, timeoutMs = 30000) {
       result.details.directFetchError = `HTTP ${directResp.status}`;
     }
   } catch (e) {
-    result.details.directFetchError = e.message || String(e);
+    result.details.directFetchError = maskProxyUrl(e.message || String(e));
   }
 
   if (!proxyUrl) {
@@ -158,12 +160,12 @@ export async function verifyProxyEgress(proxyUrl, timeoutMs = 30000) {
         }
       }
     } catch (e) {
-      result.details.proxiedFetchError = e.message || String(e);
+      result.details.proxiedFetchError = maskProxyUrl(e.message || String(e));
     }
 
     await context.close();
   } catch (e) {
-    result.details.browserError = e.message || String(e);
+    result.details.browserError = maskProxyUrl(e.message || String(e));
   } finally {
     try { await browser.close(); } catch (e) { }
   }

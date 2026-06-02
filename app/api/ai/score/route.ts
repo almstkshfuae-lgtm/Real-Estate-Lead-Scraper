@@ -42,6 +42,12 @@ Scoring criteria:
 - Location desirability (Palm, Downtown, Marina) → up to 10 pts
 - Status momentum (qualified > contacted > new) → up to 10 pts
 
+STABILITY CONSTRAINTS:
+1. You MUST anchor your score calculations around the Current Score: ${lead.score}.
+2. Unless there is significant new evidence or context in the notes, signals, or status, the refinedScore must NOT deviate from the Current Score by more than +/- 10 points.
+3. If the notes and signals do not contain any new information since the last assessment, you MUST output a refinedScore identical to the Current Score (${lead.score}) and set the delta to 0.
+4. Calculate the difference (refinedScore - Current Score) and report it as "delta".
+
 Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "reasoning": "<1-2 sentence justification>", "recommendations": ["<action 1>", "<action 2>"]}`;
 
     const responseText = await generateGeminiText("", prompt, 256);

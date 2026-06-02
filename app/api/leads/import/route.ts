@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
+import { normalizeLocation, resolveCoords } from "@/lib/ai";
 
 export async function POST(request: Request) {
   try {
@@ -46,7 +47,9 @@ export async function POST(request: Request) {
         const name = (raw.name || raw.Name || raw["Name (EN)"] || raw["Name (AR)"] || "Unknown Contact").trim();
         const company = (raw.company || raw.Company || raw["Company (EN)"] || raw["Company (AR)"] || "Manual Entry").trim();
         const role = (raw.role || raw.Role || raw["Role (EN)"] || raw["Role (AR)"] || "Imported Lead").trim();
-        const location = (raw.location || raw.Location || raw["Location"] || "UAE").trim();
+        const locationRaw = (raw.location || raw.Location || raw["Location"] || "Abu Dhabi").trim();
+        const location = normalizeLocation(locationRaw);
+        const coords = resolveCoords(location);
 
         // Skip empty
         if (!email && !phone && name === "Unknown Contact") {
@@ -71,7 +74,9 @@ export async function POST(request: Request) {
               email: email || existingByUnique.email,
               phone: phone || existingByUnique.phone,
               role,
-              location,
+              location, // normalized location
+              latitude: coords.lat,
+              longitude: coords.lng,
               updatedAt: new Date(),
             }
           });
@@ -106,7 +111,9 @@ export async function POST(request: Request) {
               tier: 1,
               email: email || null,
               phone: phone || null,
-              location,
+              location, // normalized location
+              latitude: coords.lat,
+              longitude: coords.lng,
               score: 50,
               signals: JSON.stringify(["Manual Import"]),
               propertyPref: JSON.stringify({ type: "apartment" }),
@@ -127,12 +134,12 @@ export async function POST(request: Request) {
 
       await notifyScrapeCompletion(session.id, savedCount, importRun.id);
 
-      return NextResponse.json({ 
-        success: true, 
-        savedCount, 
+      return NextResponse.json({
+        success: true,
+        savedCount,
         updatedCount,
         skippedCount,
-        totalProcessed: leads.length 
+        totalProcessed: leads.length
       });
     } catch (dbError: any) {
       console.error("Database Error:", dbError);
@@ -144,7 +151,7 @@ export async function POST(request: Request) {
     console.error("CSV Import Error:", error);
     console.error("Error details:", error.message || error);
     console.error("Stack trace:", error.stack);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: error.message || "Internal Server Error",
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500 });

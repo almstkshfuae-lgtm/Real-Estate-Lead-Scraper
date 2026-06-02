@@ -58,89 +58,69 @@ export default function MapPage() {
   const [tierFilter, setTierFilter] = useState<number | "">("");
   const [statusFilter, setStatusFilter] = useState("");
   const [scoreMin, setScoreMin] = useState<number>(0);
+  const [debouncedScoreMin, setDebouncedScoreMin] = useState<number>(0);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedScoreMin(scoreMin);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [scoreMin]);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     try {
-      let url = "/api/leads?limit=200";
+      let url = `/api/leads?limit=200&scoreMin=${debouncedScoreMin}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (statusFilter) url += `&status=${statusFilter}`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("Fetch failed");
       const data = await res.json();
-
-      const filtered = (data.leads || []).filter(
-        (l: MapLead) => l.score >= scoreMin
-      );
-      setLeads(filtered);
+      setLeads(data.leads || []);
     } catch (e) {
       console.error(e);
       setLeads([]);
     } finally {
       setLoading(false);
     }
-  }, [tierFilter, statusFilter, scoreMin]);
+  }, [tierFilter, statusFilter, debouncedScoreMin]);
 
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
 
   const handleGeofenceDrawn = useCallback(
-    (bounds: { north: number; south: number; east: number; west: number }) => {
+    async (bounds: { north: number; south: number; east: number; west: number }) => {
       setGeofenceBounds(bounds);
       setGeofenceActive(false);
+      setLoading(true);
 
-      // Approximate: filter leads whose coords fall in bounds
-      // We check by location name matching to UAE_AREAS
-      const UAE_AREAS: Record<string, { lat: number; lng: number }> = {
-        "Dubai Marina": { lat: 25.0807, lng: 55.14 },
-        "Palm Jumeirah": { lat: 25.1124, lng: 55.139 },
-        "Downtown Dubai": { lat: 25.1972, lng: 55.2744 },
-        "Business Bay": { lat: 25.186, lng: 55.265 },
-        "Jumeirah": { lat: 25.2048, lng: 55.2455 },
-        "DIFC": { lat: 25.2108, lng: 55.282 },
-        "JBR": { lat: 25.0786, lng: 55.1341 },
-        "Arabian Ranches": { lat: 25.0536, lng: 55.271 },
-        "Al Barsha": { lat: 25.1127, lng: 55.1992 },
-        "Mirdif": { lat: 25.2218, lng: 55.4224 },
-        "Deira": { lat: 25.2697, lng: 55.3095 },
-        "Bur Dubai": { lat: 25.2532, lng: 55.2956 },
-        "JVC": { lat: 25.0657, lng: 55.2105 },
-        "Yas Island": { lat: 24.4672, lng: 54.6031 },
-        "Al Reem Island": { lat: 24.4975, lng: 54.4186 },
-        "Saadiyat Island": { lat: 24.5404, lng: 54.4416 },
-        "Khalidiyah": { lat: 24.4755, lng: 54.3557 },
-        "Al Raha Beach": { lat: 24.4293, lng: 54.5697 },
-        "Corniche": { lat: 24.4638, lng: 54.3444 },
-        "Sharjah City": { lat: 25.3463, lng: 55.4209 },
-        "Al Nahda": { lat: 25.3007, lng: 55.4177 },
-        "Al Khan": { lat: 25.3531, lng: 55.3795 },
-        "Ajman": { lat: 25.4052, lng: 55.5136 },
-        "Ras Al Khaimah": { lat: 25.7953, lng: 55.9788 },
-        "Fujairah": { lat: 25.1288, lng: 56.3265 },
-      };
+      try {
+        let url = `/api/leads?limit=200&north=${bounds.north}&south=${bounds.south}&east=${bounds.east}&west=${bounds.west}`;
+        if (tierFilter) url += `&tier=${tierFilter}`;
+        if (statusFilter) url += `&status=${statusFilter}`;
+        if (debouncedScoreMin) url += `&scoreMin=${debouncedScoreMin}`;
 
-      const inside = leads.filter((lead) => {
-        let coords = { lat: 25.2 + Math.random() * 0.5, lng: 55.2 + Math.random() * 0.5 };
-        for (const [key, val] of Object.entries(UAE_AREAS)) {
-          if (lead.location?.toLowerCase().includes(key.toLowerCase())) {
-            coords = val;
-            break;
-          }
-        }
-        return (
-          coords.lat <= bounds.north &&
-          coords.lat >= bounds.south &&
-          coords.lng <= bounds.east &&
-          coords.lng >= bounds.west
-        );
-      });
-
-      setGeofencedLeads(inside);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Zone fetch failed");
+        const data = await res.json();
+        setGeofencedLeads(data.leads || []);
+      } catch (err) {
+        console.error("Geofence query failed:", err);
+        setGeofencedLeads([]);
+      } finally {
+        setLoading(false);
+      }
     },
-    [leads]
+    [tierFilter, statusFilter, debouncedScoreMin]
   );
+
+  useEffect(() => {
+    if (geofenceBounds) {
+      handleGeofenceDrawn(geofenceBounds);
+    }
+  }, [geofenceBounds, handleGeofenceDrawn]);
 
   const clearGeofence = () => {
     setGeofenceBounds(null);

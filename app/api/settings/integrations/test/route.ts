@@ -9,7 +9,7 @@ import { ScraperClient } from "@/lib/scraper-client";
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session) {
+    if (!session || session.role !== 'admin') {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -58,10 +58,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: "System not supported yet" });
 
   } catch (error: any) {
-    console.error("Test connection error:", error);
+    // Log full error server-side only — never expose to client (tokens may be embedded in error.message URLs)
+    console.error("Test connection error:", error?.message || error);
     return NextResponse.json({ 
       success: false, 
-      error: error.message || "Internal Server Error" 
+      error: "Connection test failed. Please verify your credentials and try again." 
     }, { status: 500 });
   }
 }

@@ -29,33 +29,85 @@ export async function GET(request: Request) {
     const skip = (page - 1) * limit;
 
     const where: any = {};
+    const conditions: any[] = [];
     
     // Agents can only see their own leads, Admins see all
     // Use case-insensitive comparison for role
     if (session.role?.toUpperCase() !== 'ADMIN') {
-      where.agentId = session.id;
+      conditions.push({ agentId: session.id });
     }
 
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { company: { contains: search } },
-      ];
+      conditions.push({
+        OR: [
+          { name: { contains: search } },
+          { company: { contains: search } },
+        ]
+      });
     }
 
     if (status) {
-      where.status = status;
+      conditions.push({ status });
     }
     
     if (tier) {
       const parsedTier = parseInt(tier);
       if (!isNaN(parsedTier)) {
-        where.tier = parsedTier;
+        conditions.push({ tier: parsedTier });
       }
     }
 
     if (scrapeRunId) {
-      where.scrapeRunId = scrapeRunId;
+      conditions.push({ scrapeRunId });
+    }
+
+    const scoreMin = searchParams.get("scoreMin") || "";
+    if (scoreMin) {
+      const parsedScoreMin = parseInt(scoreMin);
+      if (!isNaN(parsedScoreMin)) {
+        conditions.push({ score: { gte: parsedScoreMin } });
+      }
+    }
+
+    const northParam = searchParams.get("north");
+    const southParam = searchParams.get("south");
+    const eastParam = searchParams.get("east");
+    const westParam = searchParams.get("west");
+
+    if (northParam && southParam && eastParam && westParam) {
+      const north = parseFloat(northParam);
+      const south = parseFloat(southParam);
+      const east = parseFloat(eastParam);
+      const west = parseFloat(westParam);
+      
+      if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
+        conditions.push({
+          latitude: {
+            gte: south,
+            lte: north,
+          }
+        });
+        
+        if (west <= east) {
+          conditions.push({
+            longitude: {
+              gte: west,
+              lte: east,
+            }
+          });
+        } else {
+          conditions.push({
+            OR: [
+              { longitude: { gte: west } },
+              { longitude: { lte: east } }
+            ]
+          });
+        }
+      }
+    }
+
+    if (conditions.length > 0) {
+      where.AND = conditions;
     }
 
     const [leads, total] = await Promise.all([

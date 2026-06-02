@@ -115,7 +115,7 @@ class ScraperClient {
    * Trigger scraping of multiple HNWI sources
    * Returns immediately - scraping happens in background
    */
-  async scrapeMultipleSources(sourceKeys: string[]): Promise<ScraperResponse> {
+  async scrapeMultipleSources(sourceKeys: string[], webhookUrl?: string, runId?: string): Promise<ScraperResponse> {
     if (!sourceKeys || sourceKeys.length === 0) {
       throw new Error('At least one source key required');
     }
@@ -129,7 +129,9 @@ class ScraperClient {
           sources: sourceKeys,
           secret: this.secret,
           proxyUrl: this.proxyUrl,
-          proxyApiKey: this.proxyApiKey
+          proxyApiKey: this.proxyApiKey,
+          webhookUrl,
+          runId
         }),
         signal: controller.signal
       });

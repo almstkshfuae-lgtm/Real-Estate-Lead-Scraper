@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import * as cheerio from 'cheerio';
+import { maskProxyUrl } from './proxy-validator.js';
 
 function getPlaywrightProxyOptions(proxyUrl) {
   if (!proxyUrl) return null;
@@ -134,7 +135,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
         testResult.checks.redirectLoop = true;
         testResult.issues.push('Redirect Loop Detected');
       } else {
-        testResult.issues.push(`Navigation failed: ${navError.message}`);
+        testResult.issues.push(maskProxyUrl(`Navigation failed: ${navError.message}`));
       }
       return testResult;
     }
@@ -177,7 +178,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
 
     await context.close();
   } catch (error) {
-    testResult.issues.push(`Test Error: ${error.message}`);
+    testResult.issues.push(maskProxyUrl(`Test Error: ${error.message}`));
   } finally {
     if (browser) {
       await browser.close();
@@ -347,7 +348,7 @@ async function domDataVerification(url, proxyUrl = null) {
 
     await context.close();
   } catch (error) {
-    testResult.issues.push(`DOM Verification Error: ${error.message}`);
+    testResult.issues.push(maskProxyUrl(`DOM Verification Error: ${error.message}`));
   } finally {
     if (browser) {
       await browser.close();
@@ -511,7 +512,7 @@ async function interactionMapping(url, proxyUrl = null) {
 
     await context.close();
   } catch (error) {
-    testResult.issues.push(`Interaction Mapping Error: ${error.message}`);
+    testResult.issues.push(maskProxyUrl(`Interaction Mapping Error: ${error.message}`));
   } finally {
     if (browser) {
       await browser.close();
@@ -628,7 +629,7 @@ Text: ${text}`;
             testResult.issues.push('AI extraction returned null');
           }
         } catch (aiError) {
-          testResult.issues.push(`AI extraction error: ${aiError.message}`);
+          testResult.issues.push(maskProxyUrl(`AI extraction error: ${aiError.message}`));
         }
       } else {
         testResult.issues.push('AI extraction function not provided - skipping viability test');
@@ -643,7 +644,7 @@ Text: ${text}`;
 
     await context.close();
   } catch (error) {
-    testResult.issues.push(`AI Extraction Test Error: ${error.message}`);
+    testResult.issues.push(maskProxyUrl(`AI Extraction Test Error: ${error.message}`));
   } finally {
     if (browser) {
       await browser.close();
@@ -747,10 +748,10 @@ async function verifySourceCompletePipeline(sourceUrl, proxyUrl = null, aiExtrac
     console.log(`   Recommendation: ${report.recommendation}\n`);
 
   } catch (error) {
-    console.error('❌ Pipeline Error:', error);
+    console.error('❌ Pipeline Error:', maskProxyUrl(error.message || String(error)));
     report.overallStatus = 'ERROR';
     report.recommendation = 'FAILED_PIPELINE_ERROR';
-    report.summary.blockers.push(error.message);
+    report.summary.blockers.push(maskProxyUrl(error.message || String(error)));
   }
 
   return report;

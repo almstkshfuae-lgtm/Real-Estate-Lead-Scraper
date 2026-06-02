@@ -44,6 +44,8 @@ model Lead {
   propertyPref String
   budgetMin    Float?
   budgetMax    Float?
+  latitude     Float?
+  longitude    Float?
   relocated    Boolean   @default(false)
   rentalFlag   Boolean   @default(false)
   status       String    @default("new")

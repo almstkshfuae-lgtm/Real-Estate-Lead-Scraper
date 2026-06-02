@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateGeminiText } from "@/lib/ai";
+import { generateGeminiText, deduplicateSignals } from "@/lib/ai";
 
 // Predefined news signals for UAE high-profile individuals (simulated)
 const UAE_SIGNALS_DB = [
@@ -62,7 +62,7 @@ Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<i
 
     return NextResponse.json({
       leadId: lead.id,
-      extractedSignals: parsed.signals || [],
+      extractedSignals: deduplicateSignals(parsed.signals || []),
       summary: parsed.summary || "",
       confidenceScore: parsed.confidenceScore || 75,
       newsSnippets: relevantSignals,

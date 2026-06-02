@@ -37,7 +37,8 @@ export async function GET(request: Request) {
       ]);
       logs.push({ step: "InternalScraper", status: "TRIGGERED", response, time: new Date().toISOString() });
     } catch (err: any) {
-      logs.push({ step: "InternalScraper", status: "FAILED", error: err.message, time: new Date().toISOString() });
+      const maskedError = err.message ? err.message.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : String(err);
+      logs.push({ step: "InternalScraper", status: "FAILED", error: maskedError, time: new Date().toISOString() });
     }
 
     // 4. Trigger registry scrapes
@@ -47,7 +48,8 @@ export async function GET(request: Request) {
       totalLeadsFound += saved;
       logs.push({ step: "Registry", status: "COMPLETED", saved, time: new Date().toISOString() });
     } catch (err: any) {
-      logs.push({ step: "Registry", status: "FAILED", error: err.message, time: new Date().toISOString() });
+      const maskedError = err.message ? err.message.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : String(err);
+      logs.push({ step: "Registry", status: "FAILED", error: maskedError, time: new Date().toISOString() });
     }
 
     // Upload logs to Vercel Blob
@@ -75,7 +77,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, leadsFound: totalLeadsFound });
   } catch (error: any) {
-    console.error("Cron scrape error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const errorMsg = error.message ? error.message.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : String(error);
+    console.error("Cron scrape error:", errorMsg);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 }
