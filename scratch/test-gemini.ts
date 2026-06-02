@@ -1,5 +1,5 @@
 async function test() {
-  const apiKey = 'AIzaSyDjM21BSd35IdMtlrAwl3JEXuRrX93OLko';
+  const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || '';
   
   // 1. Try to list available models
   console.log('Fetching available models from Google AI API...');
