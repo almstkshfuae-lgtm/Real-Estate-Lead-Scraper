@@ -78,10 +78,10 @@ export const prisma = new Proxy(rawPrisma, {
                   console.warn('[Prisma Proxy] Idle connection terminated by MySQL server. Re-establishing fresh socket and retrying query...');
                   try {
                     await rawPrisma.$disconnect();
-                  } catch {}
+                  } catch { }
                   try {
                     await rawPrisma.$connect();
-                  } catch {}
+                  } catch { }
                   return await method.apply(modelTarget, args);
                 }
                 throw error;
@@ -109,10 +109,10 @@ export const prisma = new Proxy(rawPrisma, {
             console.warn('[Prisma Proxy] Query failed due to closed connection. Retrying...');
             try {
               await rawPrisma.$disconnect();
-            } catch {}
+            } catch { }
             try {
               await rawPrisma.$connect();
-            } catch {}
+            } catch { }
             return await value.apply(target, args);
           }
           throw error;
