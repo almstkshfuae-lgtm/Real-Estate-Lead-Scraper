@@ -40,9 +40,7 @@ async function testProxyInfo() {
   console.log('🔧 Step 2: Get Source Configuration\n');
   try {
     const response = await fetch(`${SERVICE_URL}/sources`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: SECRET })
+      method: 'GET'
     });
 
     if (!response.ok) {
@@ -156,7 +154,7 @@ async function runTests() {
     }
 
     const connOk = await testProxyConnection();
-    
+
     // Only test actual scraping if user confirms
     if (process.argv.includes('--scrape')) {
       console.log('Starting live scraping test...\n');
