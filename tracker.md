@@ -130,8 +130,8 @@
 | 9B.1 | `pushDeal()` using `crm.deal.add` — linked to contact | ✅ Done | Medium | Add after 9A confirmed working |
 | 9B.2 | Map property type + budget + emirate → Bitrix24 deal fields | ✅ Done | Medium | |
 | 9B.3 | Settings: push mode toggle (Contacts only / Contacts + Deals) | ✅ Done | Medium | Default: Contacts only |
-| 9B.4 | Campaign manager view — group leads by property type or tier | 🔲 Todo | Medium | |
-| 9B.5 | Bitrix24 calendar sync — schedule follow-ups | 🔄 In progress | Low | |
+| 9B.4 | Campaign manager view — group leads by property type or tier | ✅ Done | Medium | |
+| 9B.5 | Bitrix24 calendar sync — schedule follow-ups | ✅ Done | Low | |
 
 ### Phase 9C — Bidirectional Sync (Optional, only if agents request it) 🔲
 
