@@ -10,7 +10,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true 
 const dbUrl = process.env.DATABASE_URL || "";
 const cleanDbUrl = dbUrl.includes('connection_limit') 
   ? dbUrl 
-  : `${dbUrl}${dbUrl.includes('?') ? '&' : '?'}connection_limit=10&socket_timeout=60000`;
+  : `${dbUrl}${dbUrl.includes('?') ? '&' : '?'}connection_limit=10`;
 
 const envs: Record<string, string> = {
   DATABASE_URL: cleanDbUrl,

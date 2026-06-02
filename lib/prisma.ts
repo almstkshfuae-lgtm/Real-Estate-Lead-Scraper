@@ -5,6 +5,22 @@ const prismaClientSingleton = () => {
   // Strip any surrounding double or single quotes
   databaseUrl = databaseUrl.replace(/^['"]|['"]$/g, '');
 
+  // Remove unsupported parameters like socket_timeout to prevent Prisma validation crash
+  try {
+    if (databaseUrl.includes('socket_timeout')) {
+      const [base, query] = databaseUrl.split('?');
+      if (query) {
+        const cleanedParams = query
+          .split('&')
+          .filter(param => !param.startsWith('socket_timeout='))
+          .join('&');
+        databaseUrl = cleanedParams ? `${base}?${cleanedParams}` : base;
+      }
+    }
+  } catch (e) {
+    console.error('[Prisma URL Parser Error]', e);
+  }
+
   const client = new PrismaClient({
     datasources: {
       db: {
