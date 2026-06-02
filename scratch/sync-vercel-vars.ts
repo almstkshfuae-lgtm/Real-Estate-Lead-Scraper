@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Load variables from .env.production first, then override with .env.local if present
-dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.production'), override: true });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 
 // Clean database URL to ensure connection limit is correct for production
 const dbUrl = process.env.DATABASE_URL || "";
