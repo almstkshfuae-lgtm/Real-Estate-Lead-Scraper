@@ -1,9 +1,20 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
+  // Ensure that if process.env.DATABASE_URL is empty or whitespace, we delete it to allow proper fallback
+  const rawUrl = process.env.DATABASE_URL;
+  if (!rawUrl || rawUrl.trim() === '') {
+    delete process.env.DATABASE_URL;
+  }
+
   let databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL || '';
   // Strip any surrounding double or single quotes
-  databaseUrl = databaseUrl.replace(/^['"]|['"]$/g, '');
+  databaseUrl = databaseUrl.replace(/^['"]|['"]$/g, '').trim();
+
+  // Re-assign the correct fallback url to process.env.DATABASE_URL so that the schema/query engine reads it correctly.
+  if (databaseUrl) {
+    process.env.DATABASE_URL = databaseUrl;
+  }
 
   // Remove unsupported parameters like socket_timeout to prevent Prisma validation crash
   try {
@@ -50,6 +61,47 @@ if (process.env.NODE_ENV !== 'production') {
   globalThis.prisma = rawPrisma
 }
 
+/**
+ * Robust helper to detect any database connection, initialization, handshake, or timeout error.
+ */
+function checkConnectionError(error: any): boolean {
+  if (!error) return false;
+  const errorMessage = String(error.message || error);
+  
+  // Check Prisma-specific error codes
+  // P1xxx error codes cover all database engine startup/connection issues
+  // P2024 is the connection pool timeout error
+  const code = error.code;
+  if (code && typeof code === 'string') {
+    if (code.startsWith('P1') || code === 'P2024') {
+      return true;
+    }
+  }
+
+  // Match known initialization/connection error names
+  if (error.name === 'PrismaClientInitializationError') {
+    return true;
+  }
+
+  // Match common system/driver/Prisma message patterns
+  const isConn =
+    errorMessage.includes("closed the connection") ||
+    errorMessage.includes("Can't reach database") ||
+    errorMessage.includes("socket") ||
+    errorMessage.includes("connection closed") ||
+    errorMessage.includes("pool") ||
+    errorMessage.includes("timeout") ||
+    errorMessage.includes("timed out") ||
+    errorMessage.includes("handshake") ||
+    errorMessage.includes("Handshake") ||
+    errorMessage.includes("ECONN") ||
+    errorMessage.includes("ETIMEDOUT") ||
+    errorMessage.includes("ENOTFOUND") ||
+    errorMessage.includes("EPIPE");
+
+  return isConn;
+}
+
 // 100% Resilient Prisma Connection Proxy
 // Intercepts connection drops (e.g. due to Railway idle timeouts) and retries the query exactly once
 // after re-establishing a fresh TCP socket, ensuring zero downtime for route handlers.
@@ -67,18 +119,17 @@ export const prisma = new Proxy(rawPrisma, {
               try {
                 return await method.apply(modelTarget, args);
               } catch (error: any) {
-                const errorMessage = String(error.message || error);
-                const isConnectionError =
-                  errorMessage.includes("closed the connection") ||
-                  errorMessage.includes("Can't reach database") ||
-                  errorMessage.includes("socket") ||
-                  errorMessage.includes("connection closed");
+                const isConnectionError = checkConnectionError(error);
 
                 if (isConnectionError) {
-                  console.warn('[Prisma Proxy] Idle connection terminated by MySQL server. Re-establishing fresh socket and retrying query...');
+                  console.warn('[Prisma Proxy] Database connection error or timeout detected. Re-establishing socket and retrying query...');
                   try {
                     await rawPrisma.$disconnect();
                   } catch { }
+                  
+                  // Wait 200ms to allow TCP socket recycling/retry cooldown
+                  await new Promise(resolve => setTimeout(resolve, 200));
+
                   try {
                     await rawPrisma.$connect();
                   } catch { }
@@ -98,18 +149,17 @@ export const prisma = new Proxy(rawPrisma, {
         try {
           return await value.apply(target, args);
         } catch (error: any) {
-          const errorMessage = String(error.message || error);
-          const isConnectionError =
-            errorMessage.includes("closed the connection") ||
-            errorMessage.includes("Can't reach database") ||
-            errorMessage.includes("socket") ||
-            errorMessage.includes("connection closed");
+          const isConnectionError = checkConnectionError(error);
 
           if (isConnectionError) {
-            console.warn('[Prisma Proxy] Query failed due to closed connection. Retrying...');
+            console.warn('[Prisma Proxy] Database connection error or timeout detected. Re-establishing socket and retrying query...');
             try {
               await rawPrisma.$disconnect();
             } catch { }
+            
+            // Wait 200ms to allow TCP socket recycling/retry cooldown
+            await new Promise(resolve => setTimeout(resolve, 200));
+
             try {
               await rawPrisma.$connect();
             } catch { }

@@ -317,6 +317,22 @@ mysql -u <username> -p<password> -h localhost
 
 ---
 
+### Problem: Connection timeouts (408) or 500 crashes on Vercel Production environment
+
+**Error**: `500 (Internal Server Error)` or `408 (Request Timeout)` on Vercel after periods of inactivity.
+
+**Causes**:
+1. **Idle Connections**: MySQL/Railway closes inactive connections. If the Prisma proxy checks only a few specific string phrases inside the error message, serverless cold starts or other platform-specific error states (like `P1001`, `P1002`, `P1017`, `P2024`) might bypass retry logic.
+2. **Empty DATABASE_URL env var**: If `DATABASE_URL` is set to an empty string on Vercel, Node.js sees the key as defined, bypassing the `||` fallback to `MYSQL_PUBLIC_URL` while Prisma's query/Rust engine still attempts to read it, leading to failures.
+3. **Promise.all Concurrent Starvation**: Executing parallel queries (`leads` and `count`) with `Promise.all` triggers simultaneous connection pool handshakes, causing race conditions and fail-fast collapses if database connections are cold/reconnecting.
+
+**Solution**:
+1. **Hardened Proxy**: The `lib/prisma.ts` proxy intercepts all Prisma connection codes (starting with `P1`, plus pool timeout `P2024`) and handles common TCP network error strings. It terminates the bad socket, waits `200ms` for TCP recycling, and automatically retries the query exactly once.
+2. **Dynamic URL Fallback**: The client strips empty/whitespace `DATABASE_URL` values and re-injects the resolved public database URL back into the environment (`process.env.DATABASE_URL`) to satisfy Prisma requirements.
+3. **Sequential Query Execution**: In the API endpoints (e.g. `app/api/leads/route.ts`), we run the query steps sequentially instead of via `Promise.all`. This allows the first query to warm up the database connection pool, preventing connection handshake conflicts.
+
+---
+
 ### Problem: Prisma Migration Fails
 
 **Error**: `Error: Migration failed`

@@ -110,15 +110,13 @@ export async function GET(request: Request) {
       where.AND = conditions;
     }
 
-    const [leads, total] = await Promise.all([
-      prisma.lead.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
-      }),
-      prisma.lead.count({ where }),
-    ]);
+    const leads = await prisma.lead.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    });
+    const total = await prisma.lead.count({ where });
 
     return NextResponse.json({
       leads,
