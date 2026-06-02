@@ -12,14 +12,14 @@ const prisma = new PrismaClient({
 
 // Helper to stringify BigInt values safely
 function safeJson(obj: any) {
-  return JSON.stringify(obj, (key, value) => 
+  return JSON.stringify(obj, (key, value) =>
     typeof value === 'bigint' ? value.toString() : value
-  , 2);
+    , 2);
 }
 
 async function main() {
   console.log('=== Inspecting PRODUCTION Database Locks & Processlist ===');
-  
+
   try {
     // 1. Show active transactions
     console.log('\nChecking active InnoDB transactions...');
@@ -35,7 +35,7 @@ async function main() {
       SHOW PROCESSLIST
     `;
     console.log(`Processes found: ${processes.length}`);
-    
+
     // Map BigInts for nice output
     const cleanProcesses = processes.map((p: any) => ({
       Id: p.Id?.toString() || p.id?.toString(),
@@ -47,7 +47,7 @@ async function main() {
       State: p.State || p.state,
       Info: p.Info || p.info
     }));
-    
+
     console.log('All Processes:', safeJson(cleanProcesses));
 
     // 3. Terminate active queries that are blocking
@@ -65,7 +65,7 @@ async function main() {
         await prisma.$executeRawUnsafe(`KILL ${threadId}`);
         killedCount++;
       }
-      
+
       // Also kill old sleep connections that might be holding locks/connections
       if (command === 'Sleep' && time > 120) {
         console.log(`⚠️ Killing stale sleep connection (Thread ID: ${threadId}, Time: ${time}s)`);
@@ -73,7 +73,7 @@ async function main() {
         killedCount++;
       }
     }
-    
+
     console.log(`\n✅ Finished lock inspection. Stale connections killed: ${killedCount}`);
 
   } catch (err: any) {
