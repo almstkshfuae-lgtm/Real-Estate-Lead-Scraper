@@ -12,6 +12,8 @@ interface ScraperConfig {
   proxyUrl?: string;
   proxyApiKey?: string;
   timeout?: number;
+  handshakeTimeout?: number;
+  triggerTimeout?: number;
 }
 
 interface ScrapedContent {
@@ -38,6 +40,8 @@ class ScraperClient {
   private proxyUrl?: string;
   private proxyApiKey?: string;
   private timeout: number;
+  private handshakeTimeout: number;
+  private triggerTimeout: number;
 
   /**
    * TIMEOUT RATIONALE:
@@ -49,8 +53,8 @@ class ScraperClient {
    * DO NOT lower below 60s; the /scrape endpoint may take up to 45s to respond
    * if source verification checks are slow.
    */
-  private static readonly HANDSHAKE_TIMEOUT_MS = 10_000;  // 10s — health checks
-  private static readonly SCRAPE_TRIGGER_TIMEOUT_MS = 120_000; // 120s — scrape ack
+  private static readonly DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000;  // 10s — health checks
+  private static readonly DEFAULT_SCRAPE_TRIGGER_TIMEOUT_MS = 120_000; // 120s — scrape ack
 
   constructor(config: ScraperConfig) {
     this.baseUrl = config.baseUrl || 'http://localhost:3002';
@@ -64,8 +68,17 @@ class ScraperClient {
     this.secret = secret;
     this.proxyUrl = config.proxyUrl;
     this.proxyApiKey = config.proxyApiKey;
-    // Legacy timeout field kept for backwards compat; internal callers use the static constants
-    this.timeout = config.timeout || ScraperClient.SCRAPE_TRIGGER_TIMEOUT_MS;
+
+    // Resolve handshake timeout from config, env variable, or static default
+    this.handshakeTimeout = config.handshakeTimeout ||
+      (process.env.SCRAPER_HANDSHAKE_TIMEOUT_MS ? parseInt(process.env.SCRAPER_HANDSHAKE_TIMEOUT_MS, 10) : ScraperClient.DEFAULT_HANDSHAKE_TIMEOUT_MS);
+
+    // Resolve trigger timeout from config, env variable, or static default
+    this.triggerTimeout = config.triggerTimeout || config.timeout ||
+      (process.env.SCRAPER_TRIGGER_TIMEOUT_MS ? parseInt(process.env.SCRAPER_TRIGGER_TIMEOUT_MS, 10) : ScraperClient.DEFAULT_SCRAPE_TRIGGER_TIMEOUT_MS);
+
+    // Keep legacy timeout field in sync for backward compatibility
+    this.timeout = this.triggerTimeout;
   }
 
   private createAbortController() {
@@ -79,7 +92,7 @@ class ScraperClient {
    */
   async health(): Promise<boolean> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), ScraperClient.HANDSHAKE_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), this.handshakeTimeout);
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
         signal: controller.signal
@@ -98,7 +111,7 @@ class ScraperClient {
    */
   async testConnection(): Promise<boolean> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), ScraperClient.HANDSHAKE_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), this.handshakeTimeout);
     try {
       const response = await fetch(`${this.baseUrl}/test-connection`, {
         method: 'POST',
@@ -145,7 +158,7 @@ class ScraperClient {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), ScraperClient.SCRAPE_TRIGGER_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), this.triggerTimeout);
     try {
       const response = await fetch(`${this.baseUrl}/scrape`, {
         method: 'POST',
