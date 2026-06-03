@@ -32,10 +32,18 @@ export default function ProfileSettingsPage() {
   useEffect(() => {
     fetch('/api/settings/profile')
       .then((res) => {
-        if (!res.ok) throw new Error('Unable to fetch profile');
+        // 401 = session expired or auth cookie missing — send user to login
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return null;
+        }
+        if (!res.ok) {
+          throw new Error(`Unable to fetch profile (HTTP ${res.status})`);
+        }
         return res.json();
       })
       .then((data) => {
+        if (!data) return; // navigating to /login, don't update state
         if (data?.user) {
           setForm((prev) => ({
             ...prev,

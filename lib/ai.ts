@@ -188,6 +188,52 @@ function extractTextFromAIResponse(response: any): string {
   return "";
 }
 
+/**
+ * Retry a function with exponential backoff on rate-limit or transient errors.
+ * Handles Gemini 429 (Too Many Requests) and 503 (Service Unavailable).
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1000
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const msg = String(err?.message || '');
+      const isRateLimit =
+        msg.includes('429') ||
+        msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.includes('503') ||
+        msg.includes('Service Unavailable');
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (!isRateLimit || isLastAttempt) throw err;
+
+      // Exponential backoff with ±500ms jitter to avoid thundering herd
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * 500;
+      console.warn(
+        `[AI] Gemini rate-limited (attempt ${attempt}/${maxAttempts}). Retrying in ${Math.round(delay)}ms...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('[AI] withRetry: max attempts exceeded — this line should be unreachable');
+}
+
+/**
+ * Detect whether a Gemini JSON response was likely truncated due to maxOutputTokens limit.
+ * Truncated responses end mid-structure (no closing ] or }) and are non-trivially long.
+ */
+function isLikelyTruncated(text: string): boolean {
+  if (!text || text.length < 50) return false;
+  const trimmed = text.trim();
+  // A complete JSON array/object always ends with ] or }
+  const lastChar = trimmed[trimmed.length - 1];
+  return lastChar !== ']' && lastChar !== '}';
+}
+
 function safeParseJson(text: string, fallback: any = []): any {
   if (!text) return fallback;
 
@@ -222,8 +268,17 @@ function safeParseJson(text: string, fallback: any = []): any {
   try {
     return JSON.parse(jsonStr);
   } catch (e) {
-    console.error('[AI] JSON Parse failed for raw text:', text.substring(0, 500));
-    console.error('[AI] Cleaned text attempt:', jsonStr.substring(0, 500));
+    // Check for likely truncation before generic error logging
+    if (isLikelyTruncated(text)) {
+      console.warn('[AI] TRUNCATION DETECTED — Gemini response cut off before closing bracket.', {
+        inputLength: text.length,
+        lastChars: text.slice(-120),
+        firstChars: text.slice(0, 120)
+      });
+    } else {
+      console.error('[AI] JSON Parse failed for raw text:', text.substring(0, 500));
+      console.error('[AI] Cleaned text attempt:', jsonStr.substring(0, 500));
+    }
     
     // 4. Try automatic recovery for common defects (trailing commas, unescaped quotes)
     try {
@@ -576,32 +631,35 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
     ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`
     : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body),
-    signal
-  });
+  // Wrap the fetch in withRetry to handle 429 / 503 rate-limits gracefully
+  return withRetry(async () => {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    // Log the error details for debugging (masking any potential sensitive snippets)
-    try {
-      console.error('[AI] Gemini API error', { status: response.status, body: errorText.substring(0, 1000) });
-    } catch {}
-    if (response.status === 400 && errorText.includes("API key not valid")) {
-      throw new Error("Gemini API key invalid or unauthorized. Verify GOOGLE_AI_API_KEY and project settings.");
+    if (!response.ok) {
+      const errorText = await response.text();
+      // Log the error details for debugging (masking any potential sensitive snippets)
+      try {
+        console.error('[AI] Gemini API error', { status: response.status, body: errorText.substring(0, 1000) });
+      } catch {}
+      if (response.status === 400 && errorText.includes("API key not valid")) {
+        throw new Error("Gemini API key invalid or unauthorized. Verify GOOGLE_AI_API_KEY and project settings.");
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(`Gemini authentication error ${response.status}: ${errorText}`);
+      }
+      throw new Error(`Gemini API error ${response.status}: ${errorText}`);
     }
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(`Gemini authentication error ${response.status}: ${errorText}`);
-    }
-    throw new Error(`Gemini API error ${response.status}: ${errorText}`);
-  }
 
-  const data = await response.json();
-  return extractTextFromAIResponse(data) || "";
+    const data = await response.json();
+    return extractTextFromAIResponse(data) || "";
+  }, 3, 1000);
 }
 
 /**
@@ -711,7 +769,24 @@ Output ONLY the JSON array. No other text.`,
     return [];
   }
 
-  const leads = safeParseJson(content, []);
+  let leads = safeParseJson(content, []);
+
+  // Fix 5: If parse returned empty AND response looks truncated, retry with a smaller budget
+  if ((!Array.isArray(leads) || leads.length === 0) && isLikelyTruncated(content)) {
+    console.warn('[AI] Truncated response detected — retrying Gemini call with reduced token budget (max 5 leads)...');
+    const retryContent = await generateGeminiText(
+      `You are an expert at extracting HNWI leads from UAE business content.
+ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names are found.
+Return a JSON array of at most 5 leads. Each lead MUST have: name, nameAr, company, companyAr, role, roleAr, location, tier, score, email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals, persona.
+Output ONLY the JSON array. No other text.`,
+      `Page Title: ${scrapedData.title}\nSource: ${scrapedData.name}\nContent (truncated):\n${cleanedContent.substring(0, 6000)}`,
+      2048
+    );
+    if (retryContent) {
+      leads = safeParseJson(retryContent, []);
+      console.info(`[AI] Truncation retry yielded ${Array.isArray(leads) ? leads.length : 0} leads.`);
+    }
+  }
 
   if (!Array.isArray(leads) || leads.length === 0) {
     console.warn("[AI] AI extraction returned no structured leads — returning empty (no heuristic fallback)");

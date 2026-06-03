@@ -34,6 +34,15 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3002;
 const SECRET = process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
+const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || '';
+const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX 2: Concurrency Gate — prevents multiple simultaneous Playwright browsers
+// which would exhaust Railway container RAM and crash the service.
+// ─────────────────────────────────────────────────────────────────────────────
+let activeScrapeJobs = 0;
+const MAX_CONCURRENT_SCRAPES = 1;
 
 export function isValidPlaywrightSelector(selector) {
   if (!selector || typeof selector !== 'string') return false;
@@ -402,14 +411,57 @@ app.post('/scrape', async (req, res) => {
     return res.status(400).json({ error: 'sources array required' });
   }
 
+  // ── FIX 2: Concurrency Gate ──────────────────────────────────────────────
+  // Reject if a scrape job is already running to prevent OOM from multiple
+  // simultaneous Playwright browser instances.
+  if (activeScrapeJobs >= MAX_CONCURRENT_SCRAPES) {
+    console.warn(`[Concurrency] Scrape request rejected — ${activeScrapeJobs} job(s) already running (max: ${MAX_CONCURRENT_SCRAPES}). runId: ${runId}`);
+    return res.status(429).json({
+      error: 'Scraper busy',
+      status: 'queued',
+      message: `A scrape job is already in progress. Please retry in a few minutes. (Active jobs: ${activeScrapeJobs}/${MAX_CONCURRENT_SCRAPES})`
+    });
+  }
+
   console.log('Received scrape request for sources:', sources, 'proxyUrl:', proxyUrl ? 'provided' : 'default', 'webhookUrl:', webhookUrl || 'none');
 
-  // Background processing - return immediately
+  // Increment BEFORE starting background work
+  activeScrapeJobs++;
+  console.log(`[Concurrency] Job started. Active scrape jobs: ${activeScrapeJobs}/${MAX_CONCURRENT_SCRAPES}`);
+
+  // ── FIX 3: Zombie Watchdog ───────────────────────────────────────────────
+  // Force-kill any hung browser after 25 minutes to prevent zombie processes.
+  // This timer is cleared in the finally block of scrapeMultipleSources.
+  let zombieWatchdog = null;
+  const ZOMBIE_KILL_MS = 25 * 60 * 1000; // 25 minutes
+  zombieWatchdog = setTimeout(async () => {
+    console.error(`[Watchdog] Job ${runId} exceeded ${ZOMBIE_KILL_MS / 60000}min hard limit. Force-killing.`);
+    activeScrapeJobs = Math.max(0, activeScrapeJobs - 1);
+    if (webhookUrl && runId) {
+      try {
+        await axios.post(webhookUrl, {
+          secret: SECRET,
+          runId,
+          isFailedSignal: true,
+          error: 'Job timeout: exceeded 25-minute hard limit. Zombie process killed.'
+        });
+      } catch (e) {
+        console.error('[Watchdog] Failed to post failure signal:', e.message);
+      }
+    }
+  }, ZOMBIE_KILL_MS);
+
+  // Background processing — return 200 immediately, scrape runs on Railway
   (async () => {
     try {
       await scrapeMultipleSources(sources, proxyUrl, webhookUrl, runId);
     } catch (error) {
       console.error('Scrape pipeline error:', error);
+    } finally {
+      // Always release the concurrency slot and clear the watchdog
+      activeScrapeJobs = Math.max(0, activeScrapeJobs - 1);
+      clearTimeout(zombieWatchdog);
+      console.log(`[Concurrency] Job finished. Active scrape jobs: ${activeScrapeJobs}/${MAX_CONCURRENT_SCRAPES}`);
     }
   })().catch(console.error);
 
@@ -656,6 +708,252 @@ async function scrapePageRecursively(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX 1 + FIX 4 (JS equivalent): Gemini AI enrichment inside Railway service
+// No serverless timeout — runs on long-lived Node.js process.
+// Includes exponential backoff retry for 429 / 503 errors.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retry wrapper with exponential backoff for transient Gemini errors.
+ * @param {() => Promise<any>} fn
+ * @param {number} maxAttempts
+ * @param {number} baseDelayMs
+ */
+async function withRetryJS(fn, maxAttempts = 3, baseDelayMs = 1000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = String(err?.message || '');
+      const isRateLimit =
+        msg.includes('429') ||
+        msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.includes('503') ||
+        msg.includes('Service Unavailable');
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (!isRateLimit || isLastAttempt) throw err;
+
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * 500;
+      console.warn(`[ScraperAI] Gemini rate-limited (attempt ${attempt}/${maxAttempts}). Retrying in ${Math.round(delay)}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('[ScraperAI] withRetryJS: max attempts exceeded');
+}
+
+/**
+ * Check whether a Gemini JSON response was likely cut off by the token limit.
+ * @param {string} text
+ */
+function isLikelyTruncatedJS(text) {
+  if (!text || text.length < 50) return false;
+  const lastChar = text.trim().slice(-1);
+  return lastChar !== ']' && lastChar !== '}';
+}
+
+/**
+ * Safe JSON parse with cleanup of markdown fences and trailing comma recovery.
+ * @param {string} text
+ * @param {any} fallback
+ */
+function safeParseJsonJS(text, fallback = []) {
+  if (!text) return fallback;
+  let clean = text.trim();
+  if (clean.includes('```')) {
+    const m = clean.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (m && m[1]) clean = m[1].trim();
+  }
+  const fb = clean.indexOf('[');
+  const lb = clean.lastIndexOf(']');
+  const fo = clean.indexOf('{');
+  const lo = clean.lastIndexOf('}');
+  let jsonStr = clean;
+  if (fb !== -1 && lb !== -1 && (fo === -1 || fb < fo)) {
+    jsonStr = clean.substring(fb, lb + 1);
+  } else if (fo !== -1 && lo !== -1) {
+    jsonStr = clean.substring(fo, lo + 1);
+  }
+  jsonStr = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
+    try {
+      return JSON.parse(
+        jsonStr
+          .replace(/,\s*\]/g, ']')
+          .replace(/,\s*\}/g, '}')
+          .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+      );
+    } catch {
+      return fallback;
+    }
+  }
+}
+
+/**
+ * Call Gemini API from Node.js to extract and enrich leads from scraped content.
+ * Runs on Railway — no serverless timeout risk.
+ * Returns an array of enriched lead objects ready for DB upsert via webhook.
+ *
+ * @param {{ url, name, type, signals, title, content }} scrapedContent
+ * @param {object} criteria  Search criteria from ScrapeRun
+ * @returns {Promise<Array>} enrichedLeads
+ */
+async function callGeminiForLeads(scrapedContent, criteria = {}) {
+  if (!GOOGLE_AI_API_KEY || GOOGLE_AI_API_KEY.startsWith('YOUR_')) {
+    console.warn('[ScraperAI] GOOGLE_AI_API_KEY not configured — skipping AI enrichment.');
+    return [];
+  }
+
+  // Truncate content to 12,000 chars to stay well within Gemini context window
+  const cleanContent = (scrapedContent.content || '').substring(0, 12000);
+
+  // DOM vital check — skip pages with no extractable lead signals
+  const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(cleanContent);
+  const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(cleanContent);
+  const hasArabicSignal = /[\u0600-\u06FF]{2,}/.test(cleanContent);
+  if (cleanContent.length < 200 && !hasNameSignal && !hasRoleSignal && !hasArabicSignal) {
+    console.warn(`[ScraperAI] Source ${scrapedContent.name} skipped — insufficient content for AI extraction.`);
+    return [];
+  }
+
+  const criteriaLines = [];
+  if (criteria.budgetMin !== undefined) criteriaLines.push(`Budget minimum: ${criteria.budgetMin}`);
+  if (criteria.budgetMax !== undefined) criteriaLines.push(`Budget maximum: ${criteria.budgetMax}`);
+  if (Array.isArray(criteria.emirates) && criteria.emirates.length > 0) criteriaLines.push(`Locations: ${criteria.emirates.join(', ')}`);
+  if (Array.isArray(criteria.signals) && criteria.signals.length > 0) criteriaLines.push(`Target signals: ${criteria.signals.join(', ')}`);
+  const criteriaPrompt = criteriaLines.length > 0
+    ? 'Use these as strict filters — discard any profile that does not match:\n' + criteriaLines.join('\n')
+    : '';
+
+  const systemPrompt = `You are an expert at extracting HNWI leads from UAE business websites.
+ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names with business roles are found. NEVER invent data.
+For each lead provide ALL required fields:
+- name, nameAr, company, companyAr, role, roleAr, location, tier (1-3), score (0-100), email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals (array), persona (2-3 sentence behavioral profile).
+Tier 1=Founders/CEOs/Chairmen. Tier 2=Directors/Managers. Tier 3=Professionals.
+Score 90-100: UHNWI. 80-89: Elite HNWI. 70-79: HNWI. 60-69: Premium. 50-59: Standard.
+${criteriaPrompt}
+Output ONLY a JSON array. No other text.`;
+
+  const userPrompt = `Extract leads:\nPage Title: ${scrapedContent.title}\nSource: ${scrapedContent.name}\nType: ${scrapedContent.type}\nContent:\n${cleanContent}`;
+
+  const requestBody = {
+    contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+    generationConfig: { temperature: 0.0, maxOutputTokens: 4096, topP: 0.95, topK: 40 }
+  };
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${encodeURIComponent(GOOGLE_AI_API_KEY)}`;
+
+  let rawText = '';
+  try {
+    rawText = await withRetryJS(async () => {
+      const resp = await axios.post(endpoint, requestBody, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 60000
+      });
+      const data = resp.data;
+      const candidate = data?.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+      return parts.map(p => p.text || '').join('');
+    }, 3, 1000);
+  } catch (err) {
+    console.error(`[ScraperAI] Gemini call failed for source ${scrapedContent.name}:`, err.message);
+    return [];
+  }
+
+  if (!rawText) return [];
+
+  let leads = safeParseJsonJS(rawText, []);
+
+  // If truncated, retry with reduced budget
+  if ((!Array.isArray(leads) || leads.length === 0) && isLikelyTruncatedJS(rawText)) {
+    console.warn(`[ScraperAI] Truncation detected for ${scrapedContent.name} — retrying with 2048 token budget...`);
+    const retryBody = {
+      contents: [{ parts: [{ text: `Extract max 5 HNWI leads from this UAE business content. Return JSON array only.\n\n${cleanContent.substring(0, 5000)}` }] }],
+      generationConfig: { temperature: 0.0, maxOutputTokens: 2048, topP: 0.95, topK: 40 }
+    };
+    try {
+      const retryResp = await withRetryJS(() => axios.post(endpoint, retryBody, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000
+      }), 2, 1000);
+      const retryText = (retryResp.data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+      leads = safeParseJsonJS(retryText, []);
+      console.info(`[ScraperAI] Truncation retry: ${Array.isArray(leads) ? leads.length : 0} leads from ${scrapedContent.name}`);
+    } catch (retryErr) {
+      console.error('[ScraperAI] Retry failed:', retryErr.message);
+    }
+  }
+
+  if (!Array.isArray(leads) || leads.length === 0) return [];
+
+  // Normalize and enrich each lead with coords lookup
+  const UAE_COORDS = {
+    'Dubai Marina': { lat: 25.0807, lng: 55.1400 }, 'Palm Jumeirah': { lat: 25.1124, lng: 55.1390 },
+    'Downtown Dubai': { lat: 25.1972, lng: 55.2744 }, 'Business Bay': { lat: 25.1860, lng: 55.2650 },
+    'Jumeirah': { lat: 25.2048, lng: 55.2455 }, 'DIFC': { lat: 25.2108, lng: 55.2820 },
+    'Dubai': { lat: 25.2048, lng: 55.2708 }, 'Abu Dhabi': { lat: 24.4539, lng: 54.3773 },
+    'Yas Island': { lat: 24.4672, lng: 54.6031 }, 'Al Reem Island': { lat: 24.4975, lng: 54.4186 },
+    'Saadiyat Island': { lat: 24.5404, lng: 54.4416 }, 'Sharjah City': { lat: 25.3463, lng: 55.4209 },
+    'Ajman': { lat: 25.4052, lng: 55.5136 }, 'Ras Al Khaimah': { lat: 25.7953, lng: 55.9788 }
+  };
+
+  const resolveCoords = (loc) => {
+    const l = (loc || '').toLowerCase();
+    for (const [key, val] of Object.entries(UAE_COORDS)) {
+      if (l.includes(key.toLowerCase())) return val;
+    }
+    return { lat: 24.4539, lng: 54.3773 }; // Abu Dhabi default
+  };
+
+  const parseBudget = (val) => {
+    if (!val) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    const str = String(val).replace(/aed|usd|[$,]/gi, '').trim();
+    const m = str.match(/^([\d.]+)\s*(m|million|k|thousand)?/i);
+    if (!m) return null;
+    let v = parseFloat(m[1]);
+    if (isNaN(v)) return null;
+    if (/^(m|million)$/i.test(m[2])) v *= 1000000;
+    else if (/^(k|thousand)$/i.test(m[2])) v *= 1000;
+    return v;
+  };
+
+  const enrichedLeads = leads
+    .filter(l => l.name && l.company && l.role)
+    .map(l => {
+      const coords = resolveCoords(l.location);
+      return {
+        name: l.name || 'Unknown',
+        nameAr: l.nameAr || l.name || 'Unknown',
+        company: l.company || 'Not Specified',
+        companyAr: l.companyAr || l.company || 'Not Specified',
+        role: l.role || 'Professional',
+        roleAr: l.roleAr || l.role || 'Professional',
+        source: l.source || scrapedContent.name,
+        sourceType: l.sourceType || scrapedContent.type || 'Unknown',
+        tier: Math.max(1, Math.min(3, Number(l.tier) || 2)),
+        score: Math.max(0, Math.min(100, Number(l.score) || 50)),
+        email: l.email || null,
+        phone: l.phone || null,
+        location: l.location || 'Abu Dhabi',
+        latitude: (l.latitude != null && !isNaN(l.latitude)) ? l.latitude : coords.lat,
+        longitude: (l.longitude != null && !isNaN(l.longitude)) ? l.longitude : coords.lng,
+        budgetMin: parseBudget(l.budgetMin),
+        budgetMax: parseBudget(l.budgetMax),
+        relocated: l.relocated ?? null,
+        signals: Array.isArray(l.signals) ? [...new Set(l.signals.map(s => String(s).trim()).filter(Boolean))] : [],
+        persona: l.persona || null,
+        propertyPref: l.propertyPref || null
+      };
+    });
+
+  console.info(`[ScraperAI] Extracted ${enrichedLeads.length} leads from ${scrapedContent.name}`);
+  return enrichedLeads;
+}
+
 /**
  * Scrape multiple HNWI sources in parallel with proxy rotation
  */
@@ -716,16 +1014,25 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
         
         console.log(`✅ ${sourceKey}: ${content.pagesScraped} pages, ${content.contentLength} bytes`);
 
-        // Secure Webhook Integration (POST raw scraped data back to Next.js)
+        // ── FIX 1: AI enrichment happens HERE on Railway (no Vercel timeout risk) ──
+        let enrichedLeads = [];
+        try {
+          enrichedLeads = await callGeminiForLeads(content, {});
+          console.info(`[ScraperAI] ${sourceKey}: ${enrichedLeads.length} leads enriched locally.`);
+        } catch (aiErr) {
+          console.error(`[ScraperAI] Enrichment failed for ${sourceKey}:`, aiErr.message);
+        }
+
+        // Post pre-enriched leads to webhook — webhook is now a pure DB writer
         if (webhookUrl && runId) {
-          console.log(`[Webhook] Posting scraped results for ${sourceKey} to: ${webhookUrl}`);
+          console.log(`[Webhook] Posting ${enrichedLeads.length} pre-enriched leads for ${sourceKey} to: ${webhookUrl}`);
           try {
             await axios.post(webhookUrl, {
               secret: SECRET,
               runId: runId,
               sourceKey: sourceKey,
-              scrapedData: content
-            });
+              enrichedLeads: enrichedLeads  // ← pre-enriched, no AI needed in webhook
+            }, { timeout: 30000 });
           } catch (webhookErr) {
             console.error(maskProxyUrl(`[Webhook] Failed to send results for ${sourceKey}: ${webhookErr.message}`));
           }

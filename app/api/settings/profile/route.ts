@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
+      console.error(`[Profile GET] User not found in DB. Session ID from JWT: "${session.id}" | Email: "${session.id}" — JWT may be stale (DB was reset or user was deleted).`);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 

@@ -39,12 +39,26 @@ class ScraperClient {
   private proxyApiKey?: string;
   private timeout: number;
 
+  /**
+   * TIMEOUT RATIONALE:
+   * - Health / test-connection: 10s (fast handshake only)
+   * - scrapeMultipleSources: 120s (scraper returns immediately, this covers the initial HTTP ack)
+   * The scraper-service processes jobs asynchronously in background and delivers results
+   * via webhook — so the 120s window only needs to cover the job-acceptance handshake,
+   * not the full scraping duration.
+   * DO NOT lower below 60s; the /scrape endpoint may take up to 45s to respond
+   * if source verification checks are slow.
+   */
+  private static readonly HANDSHAKE_TIMEOUT_MS = 10_000;  // 10s — health checks
+  private static readonly SCRAPE_TRIGGER_TIMEOUT_MS = 120_000; // 120s — scrape ack
+
   constructor(config: ScraperConfig) {
     this.baseUrl = config.baseUrl || 'http://localhost:3002';
     this.secret = config.secret || 'scraper_secret_alpha_bravo';
     this.proxyUrl = config.proxyUrl;
     this.proxyApiKey = config.proxyApiKey;
-    this.timeout = config.timeout || 30000;
+    // Legacy timeout field kept for backwards compat; internal callers use the static constants
+    this.timeout = config.timeout || ScraperClient.SCRAPE_TRIGGER_TIMEOUT_MS;
   }
 
   private createAbortController() {
@@ -54,10 +68,11 @@ class ScraperClient {
   }
 
   /**
-   * Check health of scraper service
+   * Check health of scraper service (fast 10s timeout)
    */
   async health(): Promise<boolean> {
-    const { controller, timeoutId } = this.createAbortController();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ScraperClient.HANDSHAKE_TIMEOUT_MS);
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
         signal: controller.signal
@@ -72,10 +87,11 @@ class ScraperClient {
   }
 
   /**
-   * Check scraper service connection and optional proxy access
+   * Check scraper service connection and optional proxy access (fast 10s timeout)
    */
   async testConnection(): Promise<boolean> {
-    const { controller, timeoutId } = this.createAbortController();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ScraperClient.HANDSHAKE_TIMEOUT_MS);
     try {
       const response = await fetch(`${this.baseUrl}/test-connection`, {
         method: 'POST',
@@ -113,14 +129,16 @@ class ScraperClient {
 
   /**
    * Trigger scraping of multiple HNWI sources
-   * Returns immediately - scraping happens in background
+   * Returns immediately — scraping happens in background on Railway.
+   * Uses 120s timeout to cover slow source verification checks.
    */
   async scrapeMultipleSources(sourceKeys: string[], webhookUrl?: string, runId?: string): Promise<ScraperResponse> {
     if (!sourceKeys || sourceKeys.length === 0) {
       throw new Error('At least one source key required');
     }
 
-    const { controller, timeoutId } = this.createAbortController();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ScraperClient.SCRAPE_TRIGGER_TIMEOUT_MS);
     try {
       const response = await fetch(`${this.baseUrl}/scrape`, {
         method: 'POST',

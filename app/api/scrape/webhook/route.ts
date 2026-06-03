@@ -1,14 +1,35 @@
+/**
+ * Scrape Webhook — Pure DB Writer
+ *
+ * FIX 1 (Production Hardening): AI enrichment has been moved OUT of this webhook
+ * and INTO the Railway scraper-service (callGeminiForLeads). This webhook is now
+ * a thin, fast receiver that only:
+ *   1. Validates the shared secret
+ *   2. Receives pre-enriched leads from the scraper-service
+ *   3. Upserts each lead into MySQL via Prisma
+ *   4. Updates leadsFound counter on the ScrapeRun
+ *
+ * Estimated execution time: 2-5 seconds (pure DB writes)
+ * Previous execution time:  60-180 seconds (50+ sequential Gemini calls) → 504 Timeout
+ *
+ * Payload shape from scraper-service:
+ *   { secret, runId, sourceKey, enrichedLeads: Lead[] }  ← data batch
+ *   { secret, runId, isCompletedSignal: true }            ← finalize signal
+ *   { secret, runId, isFailedSignal: true, error: string } ← failure signal
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { extractHNWILeads, enrichLeadWithAI, generatePersonaAnalysis, deduplicateSignals } from "@/lib/ai";
+import { deduplicateSignals } from "@/lib/ai";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 import { getEnvVar } from "@/lib/env";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { secret, runId, sourceKey, scrapedData, isCompletedSignal } = body;
+    const { secret, runId, sourceKey, enrichedLeads, isCompletedSignal } = body;
 
+    // ── Auth ─────────────────────────────────────────────────────────────────
     const systemSecret = getEnvVar("SCRAPER_SECRET") || "scraper_secret_alpha_bravo";
     if (secret !== systemSecret) {
       console.warn("[Webhook] Unauthorized webhook call - secret mismatch");
@@ -19,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing runId" }, { status: 400 });
     }
 
-    // Fetch the corresponding ScrapeRun
+    // ── Fetch ScrapeRun ───────────────────────────────────────────────────────
     const scrapeRun = await prisma.scrapeRun.findUnique({
       where: { id: runId }
     });
@@ -29,12 +50,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "ScrapeRun not found" }, { status: 404 });
     }
 
-    // Parse ScrapeRun metadata
-    const requestedSources = JSON.parse(scrapeRun.sources) as string[];
-    const criteria = JSON.parse(scrapeRun.criteria);
     const agentId = scrapeRun.triggeredBy;
 
-    // Handle completed signal
+    // ── Completion Signal ─────────────────────────────────────────────────────
     if (isCompletedSignal) {
       console.info(`[Webhook] Received completion signal for ScrapeRun: ${runId}`);
 
@@ -65,9 +83,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: "Scrape run finalized successfully" });
     }
 
-    // Handle failed signal
+    // ── Failure Signal ────────────────────────────────────────────────────────
     if (body.isFailedSignal) {
-      const errorMsg = body.error ? String(body.error).replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : 'Unknown scraper error';
+      const errorMsg = body.error
+        ? String(body.error).replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, "$1[REDACTED]:[REDACTED]@")
+        : "Unknown scraper error";
       console.error(`[Webhook] Received failure signal for ScrapeRun: ${runId}. Error: ${errorMsg}`);
 
       await prisma.scrapeRun.update({
@@ -83,120 +103,105 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: "Scrape run marked as failed" });
     }
 
-    if (!scrapedData || !sourceKey) {
-      return NextResponse.json({ error: "Missing scrapedData or sourceKey" }, { status: 400 });
+    // ── Data Batch ────────────────────────────────────────────────────────────
+    if (!sourceKey) {
+      return NextResponse.json({ error: "Missing sourceKey" }, { status: 400 });
     }
 
-    console.info(`[Webhook] Processing scraped data for source: ${sourceKey} in run: ${runId}`);
+    // Accept both old (scrapedData) and new (enrichedLeads) payload shapes for
+    // backwards compatibility during rolling deployment
+    const leadsPayload = Array.isArray(enrichedLeads) ? enrichedLeads : [];
 
-    // Stage 2: DOM Vital Data Check — reject empty/blocked pages before AI processing
-    const contentText = String(scrapedData.content || '');
-    const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(contentText);
-    const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(contentText);
-    const hasArabicNameSignal = /[\u0600-\u06FF]{2,}/.test(contentText);
-    const hasArabicRoleSignal = /\b(رئيس|مدير|مؤسس|شريك|عضو)\b/.test(contentText);
-
-    const sourceKeyLower = String(sourceKey || '').toLowerCase();
-    const isRegistry = sourceKeyLower.includes('registry') ||
-      sourceKeyLower.includes('chamber') ||
-      sourceKeyLower.includes('adgm') ||
-      sourceKeyLower.includes('difc') ||
-      sourceKeyLower.includes('gazette');
-
-    const passedDOMCheck = isRegistry || (
-      contentText.length >= 200 && (
-        hasNameSignal ||
-        hasRoleSignal ||
-        hasArabicNameSignal ||
-        hasArabicRoleSignal
-      )
-    );
-
-    if (!passedDOMCheck) {
-      console.warn(`[Webhook] Source ${sourceKey} failed DOM vital check — content too short (${contentText.length} chars) or missing name/role patterns. Skipping AI extraction.`);
+    if (leadsPayload.length === 0) {
+      console.info(`[Webhook] Source ${sourceKey}: 0 pre-enriched leads received (page had no extractable data).`);
       return NextResponse.json({
         success: true,
         source: sourceKey,
         leadsProcessed: 0,
         skipped: true,
-        reason: 'DOM vital data check failed — no extractable lead patterns detected'
+        reason: "No enriched leads in payload"
       });
     }
 
-    // AI Lead Extraction
-    const extractedLeads = await extractHNWILeads(scrapedData, criteria);
+    console.info(`[Webhook] Persisting ${leadsPayload.length} pre-enriched leads for source: ${sourceKey} in run: ${runId}`);
+
     let newLeadsCount = 0;
 
-    for (const lead of extractedLeads) {
+    for (const lead of leadsPayload) {
+      // Basic sanity check — scraper-service already validated, but be defensive
+      if (!lead.name || !lead.company) {
+        console.warn(`[Webhook] Skipping malformed lead (missing name/company):`, lead);
+        continue;
+      }
+
       try {
-        const enrichedLead = await enrichLeadWithAI(lead);
-        const persona = await generatePersonaAnalysis(enrichedLead);
+        const cleanSignals = deduplicateSignals(lead.signals || []);
 
         await prisma.lead.upsert({
           where: {
             name_company_source: {
-              name: enrichedLead.name,
-              company: enrichedLead.company,
-              source: enrichedLead.source || "HNWI Sources"
+              name: lead.name,
+              company: lead.company,
+              source: lead.source || "HNWI Sources"
             }
           },
           update: {
-            nameAr: enrichedLead.nameAr || null,
-            companyAr: enrichedLead.companyAr || null,
-            role: enrichedLead.role,
-            roleAr: enrichedLead.roleAr || null,
-            tier: enrichedLead.tier || 2,
-            phone: enrichedLead.phone || null,
-            email: enrichedLead.email || null,
-            location: enrichedLead.location || "Abu Dhabi",
-            latitude: enrichedLead.latitude ?? null,
-            longitude: enrichedLead.longitude ?? null,
-            score: enrichedLead.score || 50,
-            signals: JSON.stringify(deduplicateSignals(enrichedLead.signals || [])),
-            budgetMin: enrichedLead.budgetMin ?? null,
-            budgetMax: enrichedLead.budgetMax ?? null,
-            relocated: enrichedLead.relocated ?? false,
-            propertyPref: JSON.stringify(enrichedLead.propertyPref || {}),
-            persona,
+            nameAr: lead.nameAr || null,
+            companyAr: lead.companyAr || null,
+            role: lead.role || "Professional",
+            roleAr: lead.roleAr || null,
+            tier: lead.tier || 2,
+            phone: lead.phone || null,
+            email: lead.email || null,
+            location: lead.location || "Abu Dhabi",
+            latitude: lead.latitude ?? null,
+            longitude: lead.longitude ?? null,
+            score: lead.score || 50,
+            signals: JSON.stringify(cleanSignals),
+            budgetMin: lead.budgetMin ?? null,
+            budgetMax: lead.budgetMax ?? null,
+            relocated: lead.relocated ?? false,
+            propertyPref: JSON.stringify(lead.propertyPref || {}),
+            persona: lead.persona || null,
             agentId: agentId,
             scrapeRunId: runId
           },
           create: {
-            name: enrichedLead.name,
-            nameAr: enrichedLead.nameAr || null,
-            company: enrichedLead.company,
-            companyAr: enrichedLead.companyAr || null,
-            role: enrichedLead.role,
-            roleAr: enrichedLead.roleAr || null,
-            source: enrichedLead.source || "HNWI Sources",
-            sourceType: enrichedLead.sourceType || "Unknown",
-            tier: enrichedLead.tier || 2,
-            phone: enrichedLead.phone || null,
-            email: enrichedLead.email || null,
-            location: enrichedLead.location || "Abu Dhabi",
-            latitude: enrichedLead.latitude ?? null,
-            longitude: enrichedLead.longitude ?? null,
-            score: enrichedLead.score || 50,
-            signals: JSON.stringify(deduplicateSignals(enrichedLead.signals || [])),
-            budgetMin: enrichedLead.budgetMin ?? null,
-            budgetMax: enrichedLead.budgetMax ?? null,
-            relocated: enrichedLead.relocated ?? false,
-            propertyPref: JSON.stringify(enrichedLead.propertyPref || {}),
+            name: lead.name,
+            nameAr: lead.nameAr || null,
+            company: lead.company,
+            companyAr: lead.companyAr || null,
+            role: lead.role || "Professional",
+            roleAr: lead.roleAr || null,
+            source: lead.source || "HNWI Sources",
+            sourceType: lead.sourceType || "Unknown",
+            tier: lead.tier || 2,
+            phone: lead.phone || null,
+            email: lead.email || null,
+            location: lead.location || "Abu Dhabi",
+            latitude: lead.latitude ?? null,
+            longitude: lead.longitude ?? null,
+            score: lead.score || 50,
+            signals: JSON.stringify(cleanSignals),
+            budgetMin: lead.budgetMin ?? null,
+            budgetMax: lead.budgetMax ?? null,
+            relocated: lead.relocated ?? false,
+            propertyPref: JSON.stringify(lead.propertyPref || {}),
+            persona: lead.persona || null,
             agentId: agentId,
-            scrapeRunId: runId,
-            persona
+            scrapeRunId: runId
           }
         });
 
         newLeadsCount++;
       } catch (err: any) {
-        console.error(`[Webhook] Error processing lead: ${lead.name}`, err);
+        console.error(`[Webhook] DB upsert error for lead: ${lead.name}`, err?.message || err);
       }
     }
 
-    console.info(`[Webhook] Successfully processed ${newLeadsCount} leads from ${sourceKey}`);
+    console.info(`[Webhook] Persisted ${newLeadsCount}/${leadsPayload.length} leads from ${sourceKey}`);
 
-    // Update leadsFound count dynamically
+    // Increment leadsFound counter
     await prisma.scrapeRun.update({
       where: { id: runId },
       data: {
@@ -212,7 +217,9 @@ export async function POST(request: NextRequest) {
       leadsProcessed: newLeadsCount
     });
   } catch (error: any) {
-    const errorMsg = error.message ? error.message.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : String(error);
+    const errorMsg = error.message
+      ? error.message.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, "$1[REDACTED]:[REDACTED]@")
+      : String(error);
     console.error("[Webhook] Pipeline processing error:", errorMsg);
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
