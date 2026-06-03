@@ -98,8 +98,8 @@ model Lead {
   email        String?
   location     String
   score        Int       // 0-100 qualified purchase likelihood
-  signals      String    // Stringified signals array
-  propertyPref String    // Stringified property preference object
+  signals      Json      // Array of signals
+  propertyPref Json      // Property preference object
   budgetMin    Float?
   budgetMax    Float?
   relocated    Boolean   @default(false)

@@ -34,34 +34,35 @@ model Lead {
   role         String
   roleAr       String?
   source       String
-  sourceType   String?
   tier         Int
   phone        String?
   email        String?
   location     String
   score        Int
-  signals      String    @db.Text
-  propertyPref String
+  signals      Json
+  propertyPref Json
   budgetMin    Float?
   budgetMax    Float?
-  latitude     Float?
-  longitude    Float?
   relocated    Boolean   @default(false)
   rentalFlag   Boolean   @default(false)
   status       String    @default("new")
   notes        String?   @db.Text
-  persona      String?   @db.Text
   bitrix24Id   String?
   agentId      String
   scrapeRunId  String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  persona      String?   @db.Text
+  sourceType   String?
+  latitude     Float?
+  longitude    Float?
   agent        User      @relation(fields: [agentId], references: [id])
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
 
   @@unique([name, company, source, agentId])
   @@index([agentId], map: "Lead_agentId_fkey")
   @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
+  @@index([source])
 }
 
 model SourceConfig {
@@ -70,9 +71,9 @@ model SourceConfig {
   url                   String
   name                  String
   type                  String
-  signals               String    @db.Text
-  navigationSelectors   String    @db.Text
-  contentSelectors      String    @db.Text
+  signals               Json
+  navigationSelectors   Json
+  contentSelectors      Json
   crawlDepth            Int?
   maxPages              Int?
   delayBetweenPages     Int?
@@ -96,9 +97,9 @@ model ScrapeRun {
   criteria    String
   status      String
   leadsFound  Int       @default(0)
-  logUrl      String?
   startedAt   DateTime  @default(now())
   completedAt DateTime?
+  logUrl      String?
   leads       Lead[]
 }
 

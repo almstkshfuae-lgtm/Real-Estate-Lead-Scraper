@@ -206,8 +206,8 @@ async function main() {
       ...lead,
       agentId: admin.id,
       scrapeRunId: scrapeRun.id,
-      signals: JSON.stringify(lead.signals),
-      propertyPref: JSON.stringify(lead.propertyPref),
+      signals: lead.signals,
+      propertyPref: lead.propertyPref,
     };
 
     await prisma.lead.upsert({

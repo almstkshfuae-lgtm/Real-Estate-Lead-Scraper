@@ -190,8 +190,8 @@ model Lead {
   email        String?
   location     String
   score        Int
-  signals      String    @db.Text
-  propertyPref String
+  signals      Json
+  propertyPref Json
   budgetMin    Float?
   budgetMax    Float?
   latitude     Float?
@@ -210,6 +210,7 @@ model Lead {
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
 
   @@unique([name, company, source, agentId])
+  @@index([source])
 }
 
 model ScrapeRun {

@@ -40,8 +40,8 @@ model Lead {
   email        String?
   location     String
   score        Int
-  signals      String    @db.Text
-  propertyPref String
+  signals      Json
+  propertyPref Json
   budgetMin    Float?
   budgetMax    Float?
   relocated    Boolean   @default(false)
@@ -60,6 +60,7 @@ model Lead {
   @@unique([name, company, source])
   @@index([agentId], map: "Lead_agentId_fkey")
   @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
+  @@index([source])
 }
 
 model SourceConfig {
@@ -68,9 +69,9 @@ model SourceConfig {
   url                   String
   name                  String
   type                  String
-  signals               String    @db.Text
-  navigationSelectors   String    @db.Text
-  contentSelectors      String    @db.Text
+  signals               Json
+  navigationSelectors   Json
+  contentSelectors      Json
   crawlDepth            Int?
   maxPages              Int?
   delayBetweenPages     Int?
