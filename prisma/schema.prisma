@@ -57,7 +57,7 @@ model Lead {
   latitude     Float?
   longitude    Float?
   agent        User      @relation(fields: [agentId], references: [id])
-  scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
+  scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
 
   @@unique([name, company, source, agentId])
   @@index([agentId], map: "Lead_agentId_fkey")

@@ -176,10 +176,10 @@ async function main() {
     const lastNames = ["Al Suwaidi", "Smith", "Khan", "Wang", "Al Ketbi", "Johnson"];
     const companies = ["Etisalat", "Du", "DP World", "Mubadala", "ADIA", "Google Gulf", "Amazon UAE"];
     const locations = ["Dubai Marina", "Palm Jumeirah", "Downtown Dubai", "Saadiyat Island", "Yas Island", "Sharjah"];
-    
+
     const name = `${names[i % names.length]} ${lastNames[i % lastNames.length]}`;
     const company = companies[i % companies.length];
-    
+
     leadsData.push({
       name: name,
       nameAr: "",

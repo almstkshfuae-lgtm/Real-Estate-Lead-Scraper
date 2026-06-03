@@ -55,7 +55,7 @@ model Lead {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   agent        User      @relation(fields: [agentId], references: [id])
-  scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
+  scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
 
   @@unique([name, company, source])
   @@index([agentId], map: "Lead_agentId_fkey")
