@@ -23,11 +23,56 @@ import prisma from "@/lib/prisma";
 import { deduplicateSignals } from "@/lib/ai";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 import { getEnvVar, getRequiredEnvVar } from "@/lib/env";
+import { z } from "zod";
+
+// Schema for individual lead validation
+const leadSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  nameAr: z.string().optional().nullable(),
+  company: z.string().trim().min(1, "Company is required"),
+  companyAr: z.string().optional().nullable(),
+  role: z.string().optional().nullable(),
+  roleAr: z.string().optional().nullable(),
+  source: z.string().optional().nullable(),
+  sourceType: z.string().optional().nullable(),
+  tier: z.number().int().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
+  score: z.number().int().min(0).max(100).optional().nullable(),
+  signals: z.array(z.string()).optional().nullable(),
+  budgetMin: z.number().optional().nullable(),
+  budgetMax: z.number().optional().nullable(),
+  relocated: z.boolean().optional().nullable(),
+  propertyPref: z.any().optional().nullable(),
+  persona: z.string().optional().nullable(),
+});
+
+// Schema for webhook request payload
+const webhookPayloadSchema = z.object({
+  secret: z.string(),
+  runId: z.string().min(1, "runId is required"),
+  sourceKey: z.string().optional().nullable(),
+  isCompletedSignal: z.boolean().optional().nullable(),
+  isFailedSignal: z.boolean().optional().nullable(),
+  error: z.any().optional().nullable(),
+  enrichedLeads: z.array(leadSchema).optional().nullable(),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { secret, runId, sourceKey, enrichedLeads, isCompletedSignal } = body;
+    const rawBody = await request.json();
+
+    // Strict payload validation using Zod
+    const validation = webhookPayloadSchema.safeParse(rawBody);
+    if (!validation.success) {
+      console.warn("[Webhook] Invalid payload format:", validation.error.format());
+      return NextResponse.json({ error: "Invalid payload format", details: validation.error.format() }, { status: 400 });
+    }
+
+    const { secret, runId, sourceKey, enrichedLeads, isCompletedSignal, isFailedSignal, error } = validation.data;
 
     let systemSecret = process.env.SCRAPER_SECRET;
     if (!systemSecret || systemSecret.trim() === '') {
@@ -39,10 +84,6 @@ export async function POST(request: NextRequest) {
     if (secret !== systemSecret) {
       console.warn("[Webhook] Unauthorized webhook call - secret mismatch");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!runId) {
-      return NextResponse.json({ error: "Missing runId" }, { status: 400 });
     }
 
     // ── Fetch ScrapeRun ───────────────────────────────────────────────────────
@@ -89,9 +130,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Failure Signal ────────────────────────────────────────────────────────
-    if (body.isFailedSignal) {
-      const errorMsg = body.error
-        ? String(body.error).replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, "$1[REDACTED]:[REDACTED]@")
+    if (isFailedSignal) {
+      const errorMsg = error
+        ? String(error).replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, "$1[REDACTED]:[REDACTED]@")
         : "Unknown scraper error";
       console.error(`[Webhook] Received failure signal for ScrapeRun: ${runId}. Error: ${errorMsg}`);
 
