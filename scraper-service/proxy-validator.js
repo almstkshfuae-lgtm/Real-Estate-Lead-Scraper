@@ -6,6 +6,9 @@
 import { chromium } from 'playwright';
 
 export function maskProxyUrl(str) {
+  if (process.env.DISABLE_PROXY_MASKING === 'true') {
+    return str;
+  }
   if (!str || typeof str !== 'string') return str;
   try {
     return str.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, (match, scheme) => {
