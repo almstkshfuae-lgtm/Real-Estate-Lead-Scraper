@@ -19,7 +19,7 @@ export async function GET(request: Request) {
         triggeredBy: "cron",
         sources: JSON.stringify(["InternalScraper", "Registry"]),
         criteria: JSON.stringify({ type: "daily_sync" }),
-        status: "PROCESSING",
+        status: "PENDING",
       }
     });
 

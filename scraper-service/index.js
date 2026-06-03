@@ -45,11 +45,128 @@ const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_AP
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIX 2: Concurrency Gate — prevents multiple simultaneous Playwright browsers
-// which would exhaust Railway container RAM and crash the service.
+// Concurrency Queue — queues incoming jobs to run sequentially and prevent OOM
 // ─────────────────────────────────────────────────────────────────────────────
 let activeScrapeJobs = 0;
 const MAX_CONCURRENT_SCRAPES = 1;
+const scrapeQueue = [];
+let queueProcessing = false;
+
+function enqueueJob(job) {
+  scrapeQueue.push(job);
+  console.log(`[Queue] Job ${job.runId} added to queue. Queue size: ${scrapeQueue.length}`);
+  processQueue().catch(err => console.error('[Queue] processQueue uncaught error:', err));
+}
+
+async function processQueue() {
+  if (queueProcessing) {
+    return;
+  }
+  
+  if (scrapeQueue.length === 0) {
+    queueProcessing = false;
+    return;
+  }
+
+  queueProcessing = true;
+
+  const currentJob = scrapeQueue[0];
+  console.log(`[Queue] Processing job ${currentJob.runId} from queue. Remaining in queue: ${scrapeQueue.length - 1}`);
+
+  // Send Started webhook signal to Next.js
+  if (currentJob.webhookUrl && currentJob.runId) {
+    console.log(`[Queue] Sending started signal for job ${currentJob.runId} to webhook: ${currentJob.webhookUrl}`);
+    try {
+      await axios.post(currentJob.webhookUrl, {
+        secret: SECRET,
+        runId: currentJob.runId,
+        isStartedSignal: true
+      }, { timeout: 15000 });
+      console.log(`[Queue] Started signal sent for job ${currentJob.runId}`);
+    } catch (err) {
+      console.error(`[Queue] Failed to send started signal webhook for job ${currentJob.runId}:`, err.message);
+    }
+  }
+
+  activeScrapeJobs++;
+
+  // ── Zombie Watchdog ───────────────────────────────────────────────────────
+  // Force-kill any hung browser after configured or default minutes to prevent zombie processes.
+  let zombieWatchdog = null;
+  const ZOMBIE_KILL_MS = process.env.SCRAPER_ZOMBIE_KILL_MS
+    ? parseInt(process.env.SCRAPER_ZOMBIE_KILL_MS, 10)
+    : 25 * 60 * 1000; // 25 minutes default
+
+  let watchdogTriggered = false;
+
+  zombieWatchdog = setTimeout(async () => {
+    watchdogTriggered = true;
+    console.error(`[Watchdog] Job ${currentJob.runId} exceeded ${ZOMBIE_KILL_MS / 60000}min hard limit. Force-killing.`);
+    console.error(`[Watchdog] Diagnostics at timeout:`, {
+      currentSource: currentJob.jobDiagnostics.currentSource,
+      currentPageUrl: currentJob.jobDiagnostics.currentPageUrl,
+      pagesScraped: currentJob.jobDiagnostics.pagesScraped,
+      hasBrowser: !!currentJob.jobDiagnostics.browserInstance
+    });
+
+    if (currentJob.jobDiagnostics.browserInstance) {
+      console.warn(`[Watchdog] Closing active browser instance to reclaim memory...`);
+      try {
+        await currentJob.jobDiagnostics.browserInstance.close();
+        console.log(`[Watchdog] Active browser instance closed successfully.`);
+      } catch (err) {
+        console.error(`[Watchdog] Failed to close active browser instance:`, err.message);
+      }
+    } else {
+      console.warn(`[Watchdog] No active browser instance found to close.`);
+    }
+
+    activeScrapeJobs = Math.max(0, activeScrapeJobs - 1);
+    if (currentJob.webhookUrl && currentJob.runId) {
+      try {
+        await axios.post(currentJob.webhookUrl, {
+          secret: SECRET,
+          runId: currentJob.runId,
+          isFailedSignal: true,
+          error: `Job timeout: exceeded ${ZOMBIE_KILL_MS / 60000}-minute hard limit. Zombie process killed.`,
+          diagnostics: {
+            currentSource: currentJob.jobDiagnostics.currentSource,
+            currentPageUrl: currentJob.jobDiagnostics.currentPageUrl,
+            pagesScraped: currentJob.jobDiagnostics.pagesScraped
+          }
+        });
+      } catch (e) {
+        console.error('[Watchdog] Failed to post failure signal:', e.message);
+      }
+    }
+
+    // Remove job and trigger next
+    scrapeQueue.shift();
+    queueProcessing = false;
+    processQueue().catch(err => console.error('[Queue] processQueue post-timeout uncaught error:', err));
+  }, ZOMBIE_KILL_MS);
+
+  try {
+    await scrapeMultipleSources(
+      currentJob.sources,
+      currentJob.proxyUrl,
+      currentJob.webhookUrl,
+      currentJob.runId,
+      currentJob.jobDiagnostics
+    );
+  } catch (error) {
+    console.error(`[Queue] Error running job ${currentJob.runId}:`, error);
+  } finally {
+    if (!watchdogTriggered) {
+      clearTimeout(zombieWatchdog);
+      activeScrapeJobs = Math.max(0, activeScrapeJobs - 1);
+      scrapeQueue.shift();
+      queueProcessing = false;
+      console.log(`[Queue] Job ${currentJob.runId} finished. Queue size: ${scrapeQueue.length}`);
+      processQueue().catch(err => console.error('[Queue] processQueue post-finish uncaught error:', err));
+    }
+  }
+}
 
 export function isValidPlaywrightSelector(selector) {
   if (!selector || typeof selector !== 'string') return false;
@@ -119,6 +236,157 @@ export function validateSelectors(obj) {
     valid: errors.length === 0,
     errors
   };
+}
+
+export async function resolveRobustLocator(page, configuredSelectors, type, brokenSelectorsAccumulator = []) {
+  // 1. Try configured selectors first
+  const selectorsToTry = Array.isArray(configuredSelectors) ? configuredSelectors.filter(Boolean) : [];
+  
+  for (const sel of selectorsToTry) {
+    if (!isValidPlaywrightSelector(sel)) {
+      brokenSelectorsAccumulator.push(`Invalid selector config: "${sel}"`);
+      continue;
+    }
+    try {
+      const locator = page.locator(sel);
+      const count = await locator.count();
+      for (let i = 0; i < count; i++) {
+        const el = locator.nth(i);
+        if (await el.isVisible()) {
+          return { locator: el, selectorUsed: sel, isFallback: false };
+        }
+      }
+      if (count > 0) {
+        console.log(`[SelectorCheck] Configured selector "${sel}" matched ${count} elements, but none were visible.`);
+      }
+    } catch (e) {
+      brokenSelectorsAccumulator.push(`Error executing selector "${sel}": ${e.message}`);
+    }
+  }
+
+  // 2. If configured selectors failed, use smart semantic/bilingual fallbacks
+  console.log(`[SelectorCheck] All configured selectors for "${type}" failed/hidden. Trying robust semantic fallbacks.`);
+  
+  const fallbacks = {
+    pagination: [
+      'a[rel="next" i]',
+      'button[aria-label*="next" i]',
+      'a[aria-label*="next" i]',
+      'a:has-text("Next")',
+      'button:has-text("Next")',
+      'a:has-text("التالي")',
+      'button:has-text("التالي")',
+      'a:has-text("الصفحة التالية")',
+      'button:has-text("الصفحة التالية")',
+      '[class*="pagination-next" i]',
+      '[class*="next-page" i]',
+      'a[href*="page=" i]',
+      'a[href*="p=" i]'
+    ],
+    expandButtons: [
+      'button[aria-expanded="false"]',
+      'button[aria-expanded]',
+      '[class*="expand" i]',
+      '[class*="toggle" i]',
+      '[class*="show-more" i]',
+      'button:has-text("Expand")',
+      'button:has-text("Show")',
+      'button:has-text("More")',
+      'button:has-text("توسيع")',
+      'button:has-text("عرض")',
+      'button:has-text("المزيد")',
+      '[role="button"]:has-text("More")',
+      '[role="button"]:has-text("المزيد")'
+    ],
+    memberLinks: [
+      'a[href*="member" i]',
+      'a[href*="profile" i]',
+      'a[href*="rider" i]',
+      'a[href*="player" i]',
+      'a[href*="patron" i]',
+      'a[href*="entity" i]',
+      'a[href*="decree" i]',
+      'a[href*="leader" i]',
+      'a[href*="report" i]',
+      'a[href*="view-entity" i]',
+      'a[href*="company" i]',
+      '[class*="member" i] a',
+      '[class*="profile" i] a',
+      '.company-link',
+      '.directory-link',
+      '.entity-link'
+    ]
+  };
+
+  const fallbackList = fallbacks[type] || [];
+  for (const sel of fallbackList) {
+    try {
+      const locator = page.locator(sel);
+      const count = await locator.count();
+      for (let i = 0; i < count; i++) {
+        const el = locator.nth(i);
+        if (await el.isVisible()) {
+          console.log(`[SelectorCheck] Robust fallback succeeded! Used selector: "${sel}"`);
+          if (selectorsToTry.length > 0) {
+            brokenSelectorsAccumulator.push(`Configured selectors [${selectorsToTry.join(', ')}] were not visible/found. Resolved via fallback selector: "${sel}"`);
+          }
+          return { locator: el, selectorUsed: sel, isFallback: true };
+        }
+      }
+    } catch (e) {
+      // Skip invalid or failing fallbacks
+    }
+  }
+
+  if (selectorsToTry.length > 0) {
+    brokenSelectorsAccumulator.push(`Configured selectors [${selectorsToTry.join(', ')}] not found/visible, and all robust fallbacks failed.`);
+  }
+  return null;
+}
+
+export async function checkContentSelectors(page, source, brokenSelectorsAccumulator = []) {
+  const contentSelectors = source.contentSelectors || {};
+  
+  const fieldsToCheck = [
+    { key: 'namePatterns', label: 'Name' },
+    { key: 'companyPatterns', label: 'Company' },
+    { key: 'rolePatterns', label: 'Role' }
+  ];
+
+  for (const field of fieldsToCheck) {
+    const patterns = contentSelectors[field.key] || [];
+    if (patterns.length === 0) continue;
+
+    let matchFound = false;
+    for (const pattern of patterns) {
+      let selector = pattern;
+      if (pattern.startsWith('class*=')) {
+        selector = `[class*="${pattern.split('=')[1]}"]`;
+      } else if (pattern.startsWith('data-')) {
+        selector = `[${pattern}]`;
+      } else if (pattern.startsWith('href*=')) {
+        selector = `[href*="${pattern.split('=')[1]}"]`;
+      }
+
+      if (!isValidPlaywrightSelector(selector)) {
+        continue;
+      }
+
+      try {
+        const count = await page.locator(selector).count();
+        if (count > 0) {
+          matchFound = true;
+          break;
+        }
+      } catch (e) {
+        // Skip check errors
+      }
+    }
+
+    if (!matchFound && patterns.length > 0) {
+      brokenSelectorsAccumulator.push(`Content selectors for ${field.label} [${patterns.join(', ')}] matched 0 elements on the page.`);
+    }
+  }
 }
 
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
@@ -273,7 +541,7 @@ async function simulateHumanBrowsing(page) {
 
 function extractCleanTextFromHTML(html) {
   const $ = cheerio.load(html);
-  
+
   // Extract and append text content from application/json, application/ld+json, and __NEXT_DATA__ scripts
   const jsonScriptContents = [];
   $('script').each((i, el) => {
@@ -290,8 +558,31 @@ function extractCleanTextFromHTML(html) {
     }
   });
 
+  // Extract canvas labels/alternative text before removing the element
+  $('canvas').each((i, el) => {
+    const ariaLabel = $(el).attr('aria-label') || '';
+    const title = $(el).attr('title') || '';
+    const fallbackText = $(el).text() || '';
+    const textNode = [ariaLabel, title, fallbackText].filter(Boolean).join(' ');
+    if (textNode.trim()) {
+      $(el).replaceWith(`<span> ${textNode} </span>`);
+    } else {
+      $(el).remove();
+    }
+  });
+
+  // Extract iframe titles before removing
+  $('iframe').each((i, el) => {
+    const title = $(el).attr('title') || '';
+    if (title.trim()) {
+      $(el).replaceWith(`<span> Embedded Frame: ${title} </span>`);
+    } else {
+      $(el).remove();
+    }
+  });
+
   // Remove elements that are strictly layout styling, interactive widgets or media
-  $('style, noscript, svg, canvas, iframe').remove();
+  $('style, noscript, svg').remove();
 
   // Replace br tags with newlines
   $('br').replaceWith('\n');
@@ -303,7 +594,7 @@ function extractCleanTextFromHTML(html) {
 
   const bodyText = $('body').text();
   const jsonText = jsonScriptContents.join('\n');
-  
+
   // Combine body text and JSON scripts, keeping newlines for structure
   const combinedText = bodyText + '\n' + jsonText;
 
@@ -418,65 +709,49 @@ app.post('/scrape', async (req, res) => {
     return res.status(400).json({ error: 'sources array required' });
   }
 
-  // ── FIX 2: Concurrency Gate ──────────────────────────────────────────────
-  // Reject if a scrape job is already running to prevent OOM from multiple
-  // simultaneous Playwright browser instances.
-  if (activeScrapeJobs >= MAX_CONCURRENT_SCRAPES) {
-    console.warn(`[Concurrency] Scrape request rejected — ${activeScrapeJobs} job(s) already running (max: ${MAX_CONCURRENT_SCRAPES}). runId: ${runId}`);
-    return res.status(429).json({
-      error: 'Scraper busy',
-      status: 'queued',
-      message: `A scrape job is already in progress. Please retry in a few minutes. (Active jobs: ${activeScrapeJobs}/${MAX_CONCURRENT_SCRAPES})`
-    });
-  }
-
   console.log('Received scrape request for sources:', sources, 'proxyUrl:', proxyUrl ? 'provided' : 'default', 'webhookUrl:', webhookUrl || 'none');
 
-  // Increment BEFORE starting background work
-  activeScrapeJobs++;
-  console.log(`[Concurrency] Job started. Active scrape jobs: ${activeScrapeJobs}/${MAX_CONCURRENT_SCRAPES}`);
+  const jobDiagnostics = {
+    currentSource: 'none',
+    currentPageUrl: 'none',
+    pagesScraped: 0,
+    browserInstance: null
+  };
 
-  // ── FIX 3: Zombie Watchdog ───────────────────────────────────────────────
-  // Force-kill any hung browser after 25 minutes to prevent zombie processes.
-  // This timer is cleared in the finally block of scrapeMultipleSources.
-  let zombieWatchdog = null;
-  const ZOMBIE_KILL_MS = 25 * 60 * 1000; // 25 minutes
-  zombieWatchdog = setTimeout(async () => {
-    console.error(`[Watchdog] Job ${runId} exceeded ${ZOMBIE_KILL_MS / 60000}min hard limit. Force-killing.`);
-    activeScrapeJobs = Math.max(0, activeScrapeJobs - 1);
-    if (webhookUrl && runId) {
-      try {
-        await axios.post(webhookUrl, {
-          secret: SECRET,
-          runId,
-          isFailedSignal: true,
-          error: 'Job timeout: exceeded 25-minute hard limit. Zombie process killed.'
-        });
-      } catch (e) {
-        console.error('[Watchdog] Failed to post failure signal:', e.message);
-      }
-    }
-  }, ZOMBIE_KILL_MS);
+  const job = {
+    runId,
+    sources,
+    proxyUrl,
+    webhookUrl,
+    jobDiagnostics
+  };
 
-  // Background processing — return 200 immediately, scrape runs on Railway
-  (async () => {
-    try {
-      await scrapeMultipleSources(sources, proxyUrl, webhookUrl, runId);
-    } catch (error) {
-      console.error('Scrape pipeline error:', error);
-    } finally {
-      // Always release the concurrency slot and clear the watchdog
-      activeScrapeJobs = Math.max(0, activeScrapeJobs - 1);
-      clearTimeout(zombieWatchdog);
-      console.log(`[Concurrency] Job finished. Active scrape jobs: ${activeScrapeJobs}/${MAX_CONCURRENT_SCRAPES}`);
-    }
-  })().catch(console.error);
+  enqueueJob(job);
 
-  res.json({ 
-    message: 'Scrape job started', 
-    status: 'processing',
+  res.json({
+    message: 'Scrape job queued',
+    status: 'queued',
     sources: sources,
-    runId: runId
+    runId: runId,
+    queuePosition: scrapeQueue.length
+  });
+});
+
+app.get('/queue', (req, res) => {
+  res.json({
+    activeScrapeJobs,
+    maxConcurrent: MAX_CONCURRENT_SCRAPES,
+    queueLength: scrapeQueue.length,
+    processing: queueProcessing,
+    queue: scrapeQueue.map((job, index) => ({
+      position: index + 1,
+      runId: job.runId,
+      sources: job.sources,
+      webhookUrl: job.webhookUrl,
+      currentSource: job.jobDiagnostics.currentSource,
+      currentPageUrl: job.jobDiagnostics.currentPageUrl,
+      pagesScraped: job.jobDiagnostics.pagesScraped
+    }))
   });
 });
 
@@ -499,7 +774,7 @@ app.post('/scrape-source', async (req, res) => {
     }
 
     const content = await scrapeSource(sourceKey, proxyUrl);
-    res.json({ 
+    res.json({
       source: sourceKey,
       content: content,
       timestamp: new Date().toISOString()
@@ -515,7 +790,7 @@ app.post('/scrape-source', async (req, res) => {
  * Supports multi-page traversal and content extraction
  * If USE_MOCK_DATA is enabled, returns simulated lead data instead
  */
-async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = null) {
+async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = null, jobDiagnostics = null, brokenSelectors = []) {
   // Return mock data if enabled for testing
   if (USE_MOCK_DATA) {
     console.log(`🎭 Mock Mode: Returning simulated data for ${sourceKey || source.key}`);
@@ -561,6 +836,9 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
   const visitedUrls = new Set();
 
   try {
+    if (jobDiagnostics) {
+      jobDiagnostics.currentPageUrl = source.url;
+    }
     await page.goto(source.url, { timeout: 45000, waitUntil: 'domcontentloaded' });
 
     // Force lazy-loaded content: scroll to bottom then back to top
@@ -582,7 +860,7 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
     await page.waitForTimeout(1000);
 
     await simulateHumanBrowsing(page);
-    await scrapePageRecursively(page, source, sourceKey, allContent, visitedUrls, source.maxPages || 5);
+    await scrapePageRecursively(page, source, sourceKey, allContent, visitedUrls, source.maxPages || 5, jobDiagnostics, brokenSelectors);
 
     // Combine all scraped content
     const combinedContent = allContent.join('\n\n---PAGE BREAK---\n\n');
@@ -623,7 +901,9 @@ async function scrapePageRecursively(
   sourceKey,
   allContent,
   visitedUrls,
-  maxPages = source.maxPages || 5
+  maxPages = source.maxPages || 5,
+  jobDiagnostics = null,
+  brokenSelectors = []
 ) {
   const currentUrl = page.url();
 
@@ -633,6 +913,10 @@ async function scrapePageRecursively(
   }
 
   visitedUrls.add(currentUrl);
+  if (jobDiagnostics) {
+    jobDiagnostics.currentPageUrl = currentUrl;
+    jobDiagnostics.pagesScraped = visitedUrls.size;
+  }
   console.log(`📄 Scraping page ${visitedUrls.size}/${maxPages}: ${currentUrl}`);
 
   try {
@@ -641,60 +925,68 @@ async function scrapePageRecursively(
     await page.waitForTimeout(getRandomDelay(1000, 2500));
     await simulateHumanBrowsing(page);
 
+    // Verify content selectors for DOM change detection
+    await checkContentSelectors(page, source, brokenSelectors);
+
     // Click expand buttons to reveal hidden content
     const expandButtons = source.navigationSelectors.expandButtons || [];
-    for (const selector of expandButtons) {
-      if (!isValidPlaywrightSelector(selector)) {
-        console.warn(`⚠️ Skipping invalid expand button selector: "${selector}"`);
-        continue;
-      }
+    const resolvedExpand = await resolveRobustLocator(page, expandButtons, 'expandButtons', brokenSelectors);
+    if (resolvedExpand) {
       try {
-        const buttons = await page.locator(selector).all();
-        for (const button of buttons) {
+        const { selectorUsed } = resolvedExpand;
+        const allButtons = await page.locator(selectorUsed).all();
+        console.log(`[SelectorCheck] Clicking all ${allButtons.length} expand buttons found with "${selectorUsed}"`);
+        for (const button of allButtons) {
           if (await button.isVisible()) {
             await button.scrollIntoViewIfNeeded();
-            await page.waitForTimeout(getRandomDelay(500, 1200));
+            await page.waitForTimeout(getRandomDelay(300, 800));
             await button.click();
-            await page.waitForTimeout(getRandomDelay(500, 1000));
+            await page.waitForTimeout(getRandomDelay(300, 800));
           }
         }
       } catch (e) {
-        // Expand button selector not found, continue
+        console.warn(`⚠️ Failed to click expand buttons:`, e.message);
       }
     }
 
-    const rawHtml = await page.content();
-    const cleanedText = extractCleanTextFromHTML(rawHtml);
+    const frames = page.frames();
+    const frameTexts = [];
+    for (const frame of frames) {
+      try {
+        const frameHtml = await frame.content();
+        const cleanedFrameText = extractCleanTextFromHTML(frameHtml);
+        if (cleanedFrameText && cleanedFrameText.length > 50) {
+          frameTexts.push(cleanedFrameText);
+        }
+      } catch (err) {
+        // Ignore cross-origin frame reading errors
+      }
+    }
+    const cleanedText = frameTexts.join('\n\n---FRAME BREAK---\n\n');
     if (cleanedText && cleanedText.length > 100) {
       allContent.push(cleanedText);
     }
 
-    // Look for pagination and load more elements
+    // Look for pagination and load more elements robustly
     let foundNextPage = false;
     const paginationSelectors = source.navigationSelectors.pagination || [];
 
-    for (const selector of paginationSelectors) {
-      if (!isValidPlaywrightSelector(selector)) {
-        console.warn(`⚠️ Skipping invalid pagination selector: "${selector}"`);
-        continue;
-      }
+    const resolvedPagination = await resolveRobustLocator(page, paginationSelectors, 'pagination', brokenSelectors);
+    if (resolvedPagination) {
+      const { locator, selectorUsed } = resolvedPagination;
       try {
-        const nextLink = await page.locator(selector).first();
-        if (await nextLink.isVisible()) {
-          const href = await nextLink.getAttribute('href');
-          if (href && !visitedUrls.has(href)) {
-            console.log(`  → Found next page link: ${href}`);
-            await nextLink.scrollIntoViewIfNeeded();
-            await page.waitForTimeout(getRandomDelay(900, 1800));
-            await nextLink.click();
-            await page.waitForLoadState('domcontentloaded', { timeout: 15000 });
-            await page.waitForTimeout(source.delayBetweenPages || getRandomDelay(1500, 3000));
-            foundNextPage = true;
-            break;
-          }
+        const href = await locator.getAttribute('href');
+        if (!href || (!visitedUrls.has(href) && href !== currentUrl)) {
+          console.log(`  → Found next page element via "${selectorUsed}"${href ? ` (link: ${href})` : ''}`);
+          await locator.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(getRandomDelay(900, 1800));
+          await locator.click();
+          await page.waitForLoadState('domcontentloaded', { timeout: 15000 });
+          await page.waitForTimeout(source.delayBetweenPages || getRandomDelay(1500, 3000));
+          foundNextPage = true;
         }
       } catch (e) {
-        // Pagination selector not found, continue
+        console.warn(`⚠️ Failed to navigate using pagination element:`, e.message);
       }
     }
 
@@ -706,7 +998,7 @@ async function scrapePageRecursively(
     }
 
     if (foundNextPage && visitedUrls.size < maxPages) {
-      await scrapePageRecursively(page, source, sourceKey, allContent, visitedUrls, maxPages);
+      await scrapePageRecursively(page, source, sourceKey, allContent, visitedUrls, maxPages, jobDiagnostics, brokenSelectors);
     }
 
   } catch (error) {
@@ -814,8 +1106,9 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
     return [];
   }
 
-  // Truncate content to 12,000 chars to stay well within Gemini context window
-  const cleanContent = (scrapedContent.content || '').substring(0, 12000);
+  // Truncate content to configurable length (default 100,000 characters)
+  const maxInputChars = process.env.SCRAPER_MAX_INPUT_CHARS ? parseInt(process.env.SCRAPER_MAX_INPUT_CHARS, 10) : 100000;
+  const cleanContent = (scrapedContent.content || '').substring(0, maxInputChars);
 
   // DOM vital check — skip pages with no extractable lead signals
   const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(cleanContent);
@@ -876,10 +1169,12 @@ Output ONLY a JSON array. No other text.`;
 
   // If truncated, retry with reduced budget
   if ((!Array.isArray(leads) || leads.length === 0) && isLikelyTruncatedJS(rawText)) {
-    console.warn(`[ScraperAI] Truncation detected for ${scrapedContent.name} — retrying with 2048 token budget...`);
+    const retryMaxInputChars = process.env.SCRAPER_RETRY_MAX_INPUT_CHARS ? parseInt(process.env.SCRAPER_RETRY_MAX_INPUT_CHARS, 10) : 50000;
+    const retryTokens = process.env.SCRAPER_RETRY_TOKENS ? parseInt(process.env.SCRAPER_RETRY_TOKENS, 10) : 2048;
+    console.warn(`[ScraperAI] Truncation detected for ${scrapedContent.name} — retrying with ${retryTokens} token budget and first ${retryMaxInputChars} characters...`);
     const retryBody = {
-      contents: [{ parts: [{ text: `Extract max 5 HNWI leads from this UAE business content. Return JSON array only.\n\n${cleanContent.substring(0, 5000)}` }] }],
-      generationConfig: { temperature: 0.0, maxOutputTokens: 2048, topP: 0.95, topK: 40 }
+      contents: [{ parts: [{ text: `Extract max 10 HNWI leads from this UAE business content. Return JSON array only.\n\n${cleanContent.substring(0, retryMaxInputChars)}` }] }],
+      generationConfig: { temperature: 0.0, maxOutputTokens: retryTokens, topP: 0.95, topK: 40 }
     };
     try {
       const retryResp = await withRetryJS(() => axios.post(endpoint, retryBody, {
@@ -964,10 +1259,10 @@ Output ONLY a JSON array. No other text.`;
 /**
  * Scrape multiple HNWI sources in parallel with proxy rotation
  */
-async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = null, runId = null) {
+async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = null, runId = null, jobDiagnostics = null) {
   let browser;
   try {
-    browser = await chromium.launch({ 
+    browser = await chromium.launch({
       headless: true,
       args: [
         '--disable-blink-features=AutomationControlled',
@@ -975,11 +1270,20 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
         '--disable-features=IsolateOrigins,site-per-process'
       ]
     });
+    if (jobDiagnostics) {
+      jobDiagnostics.browserInstance = browser;
+    }
 
     const results = [];
     const sourceMap = await getSourceConfigMap();
 
     for (const sourceKey of sourceKeys) {
+      if (jobDiagnostics) {
+        jobDiagnostics.currentSource = sourceKey;
+        jobDiagnostics.currentPageUrl = 'initializing';
+        jobDiagnostics.pagesScraped = 0;
+      }
+
       if (!sourceMap[sourceKey]) {
         console.warn(`⚠️  Unknown source key: ${sourceKey}`);
         results.push({
@@ -1009,19 +1313,57 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
         console.warn(maskProxyUrl(`⚠️  Stage 1 verification error for ${sourceKey}, proceeding with scrape: ${verifyError.message}`));
       }
 
+      const sourceBrokenSelectors = [];
       try {
         console.log(`\n🎯 Scraping ${sourceKey}...`);
-        const content = await scrapeSourceWithBrowser(browser, sourceMap[sourceKey], sourceKey, proxyUrl);
+        const content = await scrapeSourceWithBrowser(browser, sourceMap[sourceKey], sourceKey, proxyUrl, jobDiagnostics, sourceBrokenSelectors);
         results.push({
           source: sourceKey,
           content: content,
           status: 'success',
           timestamp: new Date().toISOString()
         });
-        
+
         console.log(`✅ ${sourceKey}: ${content.pagesScraped} pages, ${content.contentLength} bytes`);
 
-        // ── FIX 1: AI enrichment happens HERE on Railway (no Vercel timeout risk) ──
+        // Update database SourceConfig selector health status directly
+        const uniqueIssues = [...new Set(sourceBrokenSelectors)];
+        if (uniqueIssues.length > 0) {
+          console.warn(`[SelectorHealth] Broken selectors detected for ${sourceKey}:`, uniqueIssues);
+          try {
+            await prisma.sourceConfig.update({
+              where: { key: sourceKey },
+              data: {
+                verificationStatus: 'needs_review',
+                interactionsPassed: false,
+                verificationNotes: `Automatic health check failed during scrape: ${uniqueIssues.join('; ')}`
+              }
+            });
+            console.log(`[SelectorHealth] Updated DB status for ${sourceKey} to needs_review.`);
+          } catch (dbErr) {
+            console.error(`[SelectorHealth] Failed to update sourceConfig in DB:`, dbErr.message);
+          }
+        } else {
+          // Healthy scrape check
+          try {
+            const config = await prisma.sourceConfig.findUnique({ where: { key: sourceKey } });
+            if (config && config.verificationStatus === 'needs_review') {
+              await prisma.sourceConfig.update({
+                where: { key: sourceKey },
+                data: {
+                  verificationStatus: 'verified',
+                  interactionsPassed: true,
+                  verificationNotes: 'Automatic health check passed successfully.'
+                }
+              });
+              console.log(`[SelectorHealth] Restored DB status for ${sourceKey} to verified.`);
+            }
+          } catch (dbErr) {
+            // ignore
+          }
+        }
+
+        // ── AI enrichment happens HERE on Railway ──
         let enrichedLeads = [];
         try {
           enrichedLeads = await callGeminiForLeads(content, {});
@@ -1038,7 +1380,8 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
               secret: SECRET,
               runId: runId,
               sourceKey: sourceKey,
-              enrichedLeads: enrichedLeads  // ← pre-enriched, no AI needed in webhook
+              enrichedLeads: enrichedLeads, // ← pre-enriched, no AI needed in webhook
+              selectorIssues: uniqueIssues
             }, { timeout: 30000 });
           } catch (webhookErr) {
             console.error(maskProxyUrl(`[Webhook] Failed to send results for ${sourceKey}: ${webhookErr.message}`));
@@ -1102,7 +1445,7 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
  * Fallback single-source scraper (for on-demand requests)
  */
 async function scrapeSource(sourceKey, proxyUrl = null) {
-  const browser = await chromium.launch({ 
+  const browser = await chromium.launch({
     headless: true,
     args: ['--disable-blink-features=AutomationControlled']
   });
@@ -1181,9 +1524,9 @@ app.post('/validate-proxy', async (req, res) => {
     });
   } catch (error) {
     console.error('Proxy validation error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Proxy validation failed',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1268,10 +1611,10 @@ app.post('/verify-source', async (req, res) => {
 
   try {
     console.log(`\n🔍 Starting verification for: ${url}`);
-    
+
     // Run verification pipeline
     const report = await verifySourceCompletePipeline(url, proxyUrl || PROXY_CONFIG.getProxyUrl(), null);
-    
+
     return res.json({
       status: report.overallStatus,
       recommendation: report.recommendation,
@@ -1279,9 +1622,9 @@ app.post('/verify-source', async (req, res) => {
     });
   } catch (error) {
     console.error('Verification error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Verification pipeline failed',
-      details: maskProxyUrl(error.message) 
+      details: maskProxyUrl(error.message)
     });
   }
 });
@@ -1374,7 +1717,7 @@ app.post('/create-source', async (req, res) => {
     });
 
     console.log(`✅ Source created: ${key} (${url})`);
-    
+
     res.json({
       status: 'created',
       source: {
@@ -1408,7 +1751,7 @@ app.post('/verify-sources-batch', async (req, res) => {
 
   try {
     console.log(`\n🔍 Starting batch verification for ${urls.length} sources...`);
-    
+
     const results = [];
     const proxyConfig = proxyUrl || PROXY_CONFIG.getProxyUrl();
 
@@ -1435,7 +1778,7 @@ app.post('/verify-sources-batch', async (req, res) => {
     }
 
     console.log(`\n✅ Batch verification complete`);
-    
+
     res.json({
       total: urls.length,
       approved: results.filter(r => r.status === 'APPROVED').length,
@@ -1476,7 +1819,7 @@ app.post('/approve-source', async (req, res) => {
     });
 
     console.log(`✅ Source approved: ${sourceKey}`);
-    
+
     res.json({
       status: 'approved',
       source: {
@@ -1518,7 +1861,7 @@ app.post('/reject-source', async (req, res) => {
     });
 
     console.log(`❌ Source rejected: ${sourceKey}`);
-    
+
     res.json({
       status: 'rejected',
       source: {

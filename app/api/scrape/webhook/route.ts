@@ -55,10 +55,12 @@ const webhookPayloadSchema = z.object({
   secret: z.string(),
   runId: z.string().min(1, "runId is required"),
   sourceKey: z.string().optional().nullable(),
+  isStartedSignal: z.boolean().optional().nullable(),
   isCompletedSignal: z.boolean().optional().nullable(),
   isFailedSignal: z.boolean().optional().nullable(),
   error: z.any().optional().nullable(),
   enrichedLeads: z.array(leadSchema).optional().nullable(),
+  selectorIssues: z.array(z.string()).optional().nullable(),
 });
 
 export async function POST(request: NextRequest) {
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid payload format", details: validation.error.format() }, { status: 400 });
     }
 
-    const { secret, runId, sourceKey, enrichedLeads, isCompletedSignal, isFailedSignal, error } = validation.data;
+    const { secret, runId, sourceKey, enrichedLeads, isStartedSignal, isCompletedSignal, isFailedSignal, error, selectorIssues } = validation.data;
 
     let systemSecret = process.env.SCRAPER_SECRET;
     if (!systemSecret || systemSecret.trim() === '') {
@@ -97,6 +99,18 @@ export async function POST(request: NextRequest) {
     }
 
     const agentId = scrapeRun.triggeredBy;
+
+    // ── Started Signal ────────────────────────────────────────────────────────
+    if (isStartedSignal) {
+      console.info(`[Webhook] Received started signal for ScrapeRun: ${runId}`);
+      await prisma.scrapeRun.update({
+        where: { id: runId },
+        data: {
+          status: "PROCESSING"
+        }
+      });
+      return NextResponse.json({ success: true, message: "Scrape run marked as processing" });
+    }
 
     // ── Completion Signal ─────────────────────────────────────────────────────
     if (isCompletedSignal) {
@@ -152,6 +166,39 @@ export async function POST(request: NextRequest) {
     // ── Data Batch ────────────────────────────────────────────────────────────
     if (!sourceKey) {
       return NextResponse.json({ error: "Missing sourceKey" }, { status: 400 });
+    }
+
+    // Process selector issues if reported
+    if (selectorIssues && Array.isArray(selectorIssues) && selectorIssues.length > 0) {
+      console.warn(`[Webhook] Selector issues reported for source ${sourceKey}:`, selectorIssues);
+      try {
+        const sourceObj = await prisma.sourceConfig.findUnique({ where: { key: sourceKey } });
+        const sourceName = sourceObj?.name || sourceKey;
+        
+        // Update SourceConfig in DB
+        await prisma.sourceConfig.update({
+          where: { key: sourceKey },
+          data: {
+            verificationStatus: "needs_review",
+            interactionsPassed: false,
+            verificationNotes: `Automatic health check failed: ${selectorIssues.join('; ')}`
+          }
+        });
+
+        // Create alert notification for developer
+        await prisma.notification.create({
+          data: {
+            agentId: agentId,
+            title: `Scraper Alert: Broken Selectors in ${sourceName}`,
+            body: `The system detected that some selectors for "${sourceName}" are no longer matching the DOM: ${selectorIssues.join(', ')}. Please check and update them in settings.`,
+            type: "warning",
+            data: JSON.stringify({ sourceKey, issues: selectorIssues })
+          }
+        });
+        console.info(`[Webhook] Alert notification created for selector issues in ${sourceName}`);
+      } catch (err: any) {
+        console.error(`[Webhook] Failed to process selector issues for ${sourceKey}:`, err?.message || err);
+      }
     }
 
     // Accept both old (scrapedData) and new (enrichedLeads) payload shapes for

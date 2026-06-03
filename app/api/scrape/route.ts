@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         triggeredBy: session.id,
         sources: JSON.stringify(requestedSources),
         criteria: JSON.stringify(criteria || {}),
-        status: "PROCESSING",
+        status: "PENDING",
       }
     });
 

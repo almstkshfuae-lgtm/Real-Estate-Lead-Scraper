@@ -47,24 +47,36 @@ function getPlaywrightProxyOptions(proxyUrl) {
  * 4. AI Extraction Viability Test (AI Model Compatibility)
  */
 
-const CLOUDFLARE_INDICATORS = [
-  'cf_challenge',
-  'cf_clearance',
-  '__cf_bm',
-  'managed_rules',
-  'Access Denied',
-  'Ray ID'
-];
+const getCloudflareIndicators = () => {
+  const envVal = process.env.CLOUDFLARE_INDICATORS || '';
+  if (envVal.trim()) {
+    return envVal.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return [
+    'cf_challenge',
+    'cf_clearance',
+    '__cf_bm',
+    'managed_rules',
+    'Access Denied',
+    'Ray ID'
+  ];
+};
 
-const AUTH_INDICATORS = [
-  'login',
-  'signin',
-  'sign-in',
-  'authenticate',
-  'register',
-  'create account',
-  'enter password'
-];
+const getAuthIndicators = () => {
+  const envVal = process.env.AUTH_WALL_INDICATORS || '';
+  if (envVal.trim()) {
+    return envVal.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return [
+    'login',
+    'signin',
+    'sign-in',
+    'authenticate',
+    'register',
+    'create account',
+    'enter password'
+  ];
+};
 
 /**
  * Stage 1: Technical Access Test
@@ -149,7 +161,8 @@ async function technicalAccessTest(url, proxyUrl = null) {
     testResult.htmlSize = html.length;
 
     // Check for Cloudflare
-    const cloudflareFound = CLOUDFLARE_INDICATORS.some(indicator => 
+    const cloudflareIndicators = getCloudflareIndicators();
+    const cloudflareFound = cloudflareIndicators.some(indicator => 
       html.includes(indicator) || page.url().includes('challenge')
     );
     if (cloudflareFound) {
@@ -158,7 +171,8 @@ async function technicalAccessTest(url, proxyUrl = null) {
     }
 
     // Check for authentication walls
-    const authFound = AUTH_INDICATORS.some(indicator => 
+    const authIndicators = getAuthIndicators();
+    const authFound = authIndicators.some(indicator => 
       html.toLowerCase().includes(indicator)
     );
     // Heuristic: if page is mostly login form, mark as auth wall

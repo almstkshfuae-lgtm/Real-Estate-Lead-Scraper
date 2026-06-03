@@ -468,8 +468,9 @@ export function cleanScrapedText(text: string): string {
   cleaned = cleaned.replace(/\n\s*\n+/g, "\n"); // Collapse multiple blank lines
   cleaned = cleaned.replace(/ {2,}/g, " ");     // Collapse multiple double spaces
 
-  // 5. Truncate content length to 15,000 characters (~3,500 words) to avoid context saturation
-  const maxChars = 15000;
+  // 5. Configurable truncation limit (default 100,000 characters) to avoid context saturation
+  const envMax = process.env.AI_MAX_INPUT_CHARS || process.env.NEXT_PUBLIC_AI_MAX_INPUT_CHARS;
+  const maxChars = envMax ? parseInt(envMax, 10) : 100000;
   if (cleaned.length > maxChars) {
     cleaned = cleaned.substring(0, maxChars) + "... [Truncated due to context window limits]";
   }

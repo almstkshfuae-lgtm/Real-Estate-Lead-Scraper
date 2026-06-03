@@ -117,6 +117,7 @@ signal_bonus:
 ### Scraper
 - Sources: Bayut, Dubizzle, Zawya Invest, Bloomberg MENA, Forbes ME, ADGM/DIFC Registry, DED Registry, Private Banking directories, Family Office networks, Elite Lifestyle/Concierge, News & Press
 - Playwright (Node.js) — headless, proxy-rotated
+- Selector Stability & DOM Change Detection — Resolves pagination, expand buttons, and links using robust semantic/bilingual fallbacks and case-insensitive class matches. Checks selectors against loaded DOM during crawls. If a selector is broken, updates source status to `needs_review` and creates a system warning notification.
 - Incremental scrape — new leads appended, previous data never overwritten
 - Optional: save selected leads only (agent manually flags before committing to DB)
 - Vercel Cron: daily at 02:00 GST
