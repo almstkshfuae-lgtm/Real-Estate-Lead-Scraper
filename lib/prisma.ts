@@ -152,6 +152,9 @@ async function reconnectWithBackoff(attempt = 0): Promise<void> {
 // against Railway's TCP proxy under concurrent serverless load.
 export const prisma = new Proxy(rawPrisma, {
   get(target, prop, receiver) {
+    if (prop === '$raw') {
+      return rawPrisma;
+    }
     const value = Reflect.get(target, prop, receiver);
 
     // If it's a Prisma model (e.g. user, lead, chatMessage) or a relation namespace

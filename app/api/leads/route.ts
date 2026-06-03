@@ -132,14 +132,14 @@ export async function GET(request: Request) {
     // on Railway's proxy. A $transaction groups them into a single logical unit
     // that the connection pool can serve with one held connection.
     const [leads, total] = await prisma.$transaction([
-      prisma.lead.findMany({
+      (prisma as any).$raw.lead.findMany({
         where,
         select: selectFields,
         orderBy: { createdAt: "desc" },
         skip,
         take: finalLimit,
       }),
-      prisma.lead.count({ where }),
+      (prisma as any).$raw.lead.count({ where }),
     ]);
 
     return NextResponse.json({

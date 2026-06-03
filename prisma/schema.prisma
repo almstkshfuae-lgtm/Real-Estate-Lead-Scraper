@@ -17,7 +17,7 @@ model User {
   theme         String          @default("system")
   language      String          @default("en")
   createdAt     DateTime        @default(now())
-  preferences   String?
+  preferences   String?         @db.Text
   chatHistory   ChatMessage[]
   exports       ExportHistory[]
   leads         Lead[]

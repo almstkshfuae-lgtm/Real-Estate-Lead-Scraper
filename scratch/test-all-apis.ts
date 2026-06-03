@@ -190,7 +190,7 @@ async function runTests() {
   console.log('\n[Test 8] Fetching /api/ai/chat (True Chatbot SSE Stream)...');
   try {
     const payload = {
-      messages: [{ role: 'user', content: 'What is the best real estate investment area in Abu Dhabi right now?' }],
+      messages: [{ role: 'user', content: 'Hello! Respond with exactly "Hi"' }],
       lang: 'en'
     };
 
@@ -215,11 +215,14 @@ async function runTests() {
       let completedCorrectly = false;
 
       while (!done) {
+        console.log('Reading SSE chunk...');
         const { value, done: doneReading } = await reader.read();
+        console.log('SSE chunk resolved:', doneReading, value ? `length: ${value.length}` : 'null');
         done = doneReading;
         if (value) {
           chunksCount++;
           const chunkText = decoder.decode(value);
+          console.log('Decoded text:', chunkText);
           if (chunkText.includes('[DONE]')) {
             completedCorrectly = true;
           }
