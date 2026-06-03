@@ -224,19 +224,7 @@ async function createScraperClient(): Promise<ScraperClient> {
   const proxyUrl = (await getSecret('proxyServiceUrl')) || process.env.PROXY_SERVICE_URL || undefined;
   const proxyApiKey = (await getSecret('proxyApiKey')) || process.env.PROXY_API_KEY || undefined;
 
-  let baseUrl = configuredBaseUrl;
-
-  if (configuredBaseUrl !== defaultLocalUrl) {
-    try {
-      const health = await fetch(`${defaultLocalUrl}/health`, { method: 'GET' });
-      if (health.ok) {
-        console.log(`Using local scraper service at ${defaultLocalUrl} instead of configured ${configuredBaseUrl}`);
-        baseUrl = defaultLocalUrl;
-      }
-    } catch (error) {
-      console.warn(`Local scraper service at ${defaultLocalUrl} not reachable, using configured service: ${configuredBaseUrl}`);
-    }
-  }
+  const baseUrl = configuredBaseUrl;
 
   return new ScraperClient({ baseUrl, secret, proxyUrl, proxyApiKey });
 }
