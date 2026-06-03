@@ -126,7 +126,7 @@ export async function getSessionWithDBVerify(): Promise<AuthUser | null> {
     });
 
     const timeoutPromise = new Promise<any>((_, reject) =>
-      setTimeout(() => reject(new Error('Session DB check timed out')), 2000)
+      setTimeout(() => reject(new Error('Session DB check timed out')), 3000)
     );
 
     const user = await Promise.race([userPromise, timeoutPromise]);
@@ -135,8 +135,8 @@ export async function getSessionWithDBVerify(): Promise<AuthUser | null> {
       return null;
     }
   } catch (error) {
-    console.warn('[getSessionWithDBVerify] DB check failed or timed out, falling back to stateless:', error);
-    // Graceful fallback to stateless if DB is unreachable
+    console.error('[getSessionWithDBVerify] DB check failed or timed out, denying access:', error);
+    return null; // Fail-secure: Deny authentication if DB check fails/times out
   }
 
   return decoded;
