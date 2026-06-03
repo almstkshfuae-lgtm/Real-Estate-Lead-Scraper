@@ -19,7 +19,9 @@ export async function fetchAdgmCompanies(licenseType?: string) {
   ];
 
   const pw = await getPlaywright();
-  if (!pw) return defaultCompanies;
+  if (!pw) {
+    throw new Error("Playwright is not available in this environment. Cannot perform real-time ADGM registry scraping.");
+  }
 
   let browser;
   try {
@@ -58,7 +60,9 @@ export async function fetchDifcCompanies() {
   ];
 
   const pw = await getPlaywright();
-  if (!pw) return defaultCompanies;
+  if (!pw) {
+    throw new Error("Playwright is not available in this environment. Cannot perform real-time DIFC registry scraping.");
+  }
 
   let browser;
   try {
@@ -95,7 +99,9 @@ export async function fetchDedCompanies() {
   ];
 
   const pw = await getPlaywright();
-  if (!pw) return defaultCompanies;
+  if (!pw) {
+    throw new Error("Playwright is not available in this environment. Cannot perform real-time DED registry scraping.");
+  }
 
   let browser;
   try {
@@ -128,7 +134,7 @@ export async function fetchDedCompanies() {
 // 7C.4: Send company names to Gemini API for enrichment
 export async function enrichCompanyData(companies: any[], source: string, agentId: string, scrapeRunId: string) {
   let savedCount = 0;
-  
+
   for (const company of companies) {
     // In reality, we would send company.name to the Gemini API to guess role/signals.
     // For local fallback or seed runs, we construct the enriched lead object.
@@ -140,8 +146,8 @@ export async function enrichCompanyData(companies: any[], source: string, agentI
       tier: 2,
       location: source.includes("ADGM") ? "Abu Dhabi" : "Dubai",
       score: 55,
-      signals: JSON.stringify(["Public Registry", company.category]),
-      propertyPref: JSON.stringify({ type: "commercial" }),
+      signals: ["Public Registry", company.category],
+      propertyPref: { type: "commercial" },
       status: "new",
       agentId,
       scrapeRunId,

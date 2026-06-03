@@ -36,7 +36,9 @@ export async function GET(request: Request) {
       const response = await scraperClient.scrapeMultipleSources([
         "abudhabi-elites", 
         "abu-dhabi-business-directories", 
-        "abu-dhabi-news-signals"
+        "abu-dhabi-news-signals",
+        "adgm",
+        "difc"
       ], webhookUrl, scrapeRun.id);
       logs.push({ step: "InternalScraper", status: "TRIGGERED", response, time: new Date().toISOString() });
       asyncScraperTriggered = true;
