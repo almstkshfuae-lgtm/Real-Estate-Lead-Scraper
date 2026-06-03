@@ -557,9 +557,19 @@ select: { id: true, name: true, score: true, ... }
 
 **Solution**: Review `lib/bitrix24.ts` and test credentials
 
+## 8. Build & Deployment Issues
+
+### Problem: Vercel or local Next.js build fails with FATAL: JWT_SECRET environment variable is missing in production!
+
+**Error**: `Error: FATAL: JWT_SECRET environment variable is missing in production!` during static page collection/build step.
+
+**Cause**: Next.js evaluates route handlers and pages at build time to determine if they can be statically generated. During this module evaluation, code importing `lib/auth.ts` executed strict environment checks which threw a fatal error if `JWT_SECRET` was not provided in the build-time environment.
+
+**Solution**: The initialization check has been deferred and bypassed during the build phase (`process.env.NEXT_PHASE === 'phase-production-build'` or `process.env.CI === 'true'`) using the `getJwtSecret()` helper. At actual runtime in production, it will still strictly enforce that the secret is present.
+
 ---
 
-## 8. Quick Fix Checklist
+## 9. Quick Fix Checklist
 
 For any issue, try in order:
 

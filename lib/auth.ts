@@ -2,12 +2,19 @@ import jwt from 'jsonwebtoken';
 import { cookies, headers } from 'next/headers';
 import prisma from './prisma';
 
-let JWT_SECRET = process.env.JWT_SECRET as string;
-if (!JWT_SECRET || JWT_SECRET.trim() === '') {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error("FATAL: JWT_SECRET environment variable is missing in production!");
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.trim() === '') {
+    if (process.env.NODE_ENV === 'production') {
+      const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build' || process.env.CI === 'true';
+      if (isBuildPhase) {
+        return 'temp-build-secret-key';
+      }
+      throw new Error("FATAL: JWT_SECRET environment variable is missing in production!");
+    }
+    return 'dev-secret-key-change-in-production';
   }
-  JWT_SECRET = 'dev-secret-key-change-in-production';
+  return secret;
 }
 
 export type AuthUser = {
@@ -17,12 +24,12 @@ export type AuthUser = {
 };
 
 export async function createToken(user: AuthUser) {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(user, getJwtSecret(), { expiresIn: '7d' });
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
-    return jwt.verify(token, JWT_SECRET) as unknown as AuthUser;
+    return jwt.verify(token, getJwtSecret()) as unknown as AuthUser;
   } catch (error) {
     // Log the verification error for debugging (do not log the token)
     try {
