@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionWithDBVerify, normalizePreferences, parsePreferences } from "@/lib/auth";
+import { getSession, normalizePreferences, parsePreferences } from "@/lib/auth";
 import { defaultNotificationPrefs, type NotificationPreferences } from "@/lib/notifications";
 
 // ── Validation helpers ──────────────────────────────────────────────
@@ -52,7 +52,7 @@ function sanitizePreferences(raw: unknown): NotificationPreferences {
 // ── GET: fetch current notification preferences ─────────────────────
 export async function GET(request: Request) {
   try {
-    const session = await getSessionWithDBVerify();
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
 // ── POST: save notification preferences ─────────────────────────────
 export async function POST(request: Request) {
   try {
-    const session = await getSessionWithDBVerify();
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

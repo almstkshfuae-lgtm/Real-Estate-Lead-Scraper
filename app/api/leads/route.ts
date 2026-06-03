@@ -8,22 +8,22 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const session = await getSession();
-    
+
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    
+
     const pageParam = searchParams.get("page");
     const limitParam = searchParams.get("limit");
-    
+
     const parsedPage = pageParam ? parseInt(pageParam) : 1;
     const parsedLimit = limitParam ? parseInt(limitParam) : 50;
-    
+
     const page = isNaN(parsedPage) ? 1 : Math.max(1, parsedPage);
     const limit = isNaN(parsedLimit) ? 50 : Math.min(100, Math.max(1, parsedLimit));
-    
+
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
     const tier = searchParams.get("tier") || "";
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 
     const where: any = {};
     const conditions: any[] = [];
-    
+
     // Agents can only see their own leads, Admins see all
     // Use case-insensitive comparison for role
     if (session.role?.toUpperCase() !== 'ADMIN') {
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     if (status) {
       conditions.push({ status });
     }
-    
+
     if (tier) {
       const parsedTier = parseInt(tier);
       if (!isNaN(parsedTier)) {
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
       const south = parseFloat(southParam);
       const east = parseFloat(eastParam);
       const west = parseFloat(westParam);
-      
+
       if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
         conditions.push({
           latitude: {
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
             lte: north,
           }
         });
-        
+
         if (west <= east) {
           conditions.push({
             longitude: {
@@ -126,20 +126,21 @@ export async function GET(request: Request) {
     // Adjust limit dynamically based on payload size
     const finalLimit = minimal ? Math.min(500, limit) : Math.min(100, limit);
 
-    // ─── Single $transaction: findMany + count in one DB round-trip ─────────────
-    // Previously these were two sequential queries, each consuming a separate
-    // connection slot. Under concurrent load this doubled the connection pressure
-    // on Railway's proxy. A $transaction groups them into a single logical unit
-    // that the connection pool can serve with one held connection.
-    const [leads, total] = await prisma.$transaction([
-      (prisma as any).$raw.lead.findMany({
+    // ─── Parallel read queries ────────────────────────────────────────────────
+    // findMany + count run in parallel via Promise.all. For read-only queries
+    // this is the correct pattern — $transaction([...]) with an array of promises
+    // requires Interactive Transactions which carry higher connection overhead.
+    // Promise.all lets the connection pool serve both queries concurrently without
+    // holding a single connection open for the entire batch.
+    const [leads, total] = await Promise.all([
+      prisma.lead.findMany({
         where,
         select: selectFields,
         orderBy: { createdAt: "desc" },
         skip,
         take: finalLimit,
       }),
-      (prisma as any).$raw.lead.count({ where }),
+      prisma.lead.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -150,9 +151,9 @@ export async function GET(request: Request) {
     });
   } catch (error: any) {
     console.error("Leads fetch error:", error);
-    return NextResponse.json({ 
-      error: "Internal Server Error", 
-      details: process.env.NODE_ENV === 'development' ? error?.message : undefined 
+    return NextResponse.json({
+      error: "Internal Server Error",
+      details: process.env.NODE_ENV === 'development' ? error?.message : undefined
     }, { status: 500 });
   }
 }
