@@ -26,16 +26,20 @@ export async function GET(request: Request) {
     let totalLeadsFound = 0;
     const logs: any[] = [];
 
+    let asyncScraperTriggered = false;
     // 3. Trigger internal scraper service
     try {
       const scraperClient = await getScraperClient();
       logs.push({ step: "InternalScraper", status: "START", time: new Date().toISOString() });
+      const origin = new URL(request.url).origin;
+      const webhookUrl = `${origin}/api/scrape/webhook`;
       const response = await scraperClient.scrapeMultipleSources([
         "abudhabi-elites", 
         "abu-dhabi-business-directories", 
         "abu-dhabi-news-signals"
-      ]);
+      ], webhookUrl, scrapeRun.id);
       logs.push({ step: "InternalScraper", status: "TRIGGERED", response, time: new Date().toISOString() });
+      asyncScraperTriggered = true;
     } catch (err: any) {
       const maskedError = err.message ? err.message.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, '$1[REDACTED]:[REDACTED]@') : String(err);
       logs.push({ step: "InternalScraper", status: "FAILED", error: maskedError, time: new Date().toISOString() });
@@ -65,15 +69,27 @@ export async function GET(request: Request) {
       console.error("Failed to upload logs to Vercel Blob:", err);
     }
 
-    await prisma.scrapeRun.update({
-      where: { id: scrapeRun.id },
-      data: {
-        status: "COMPLETED",
-        leadsFound: totalLeadsFound,
-        logUrl: logUrl,
-        completedAt: new Date(),
-      } as any
-    });
+    if (asyncScraperTriggered) {
+      // If async scraper triggered, let the webhook update to COMPLETED/FAILED.
+      // Update the logUrl here.
+      await prisma.scrapeRun.update({
+        where: { id: scrapeRun.id },
+        data: {
+          logUrl: logUrl,
+        }
+      });
+    } else {
+      // If async scraper failed to trigger, complete it here with registry count
+      await prisma.scrapeRun.update({
+        where: { id: scrapeRun.id },
+        data: {
+          status: totalLeadsFound > 0 ? "COMPLETED" : "FAILED",
+          leadsFound: totalLeadsFound,
+          logUrl: logUrl,
+          completedAt: new Date(),
+        } as any
+      });
+    }
 
     return NextResponse.json({ success: true, leadsFound: totalLeadsFound });
   } catch (error: any) {

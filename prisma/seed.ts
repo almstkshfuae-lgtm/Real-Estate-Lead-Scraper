@@ -212,10 +212,11 @@ async function main() {
 
     await prisma.lead.upsert({
       where: {
-        name_company_source: {
+        name_company_source_agentId: {
           name: lead.name,
           company: lead.company,
           source: lead.source,
+          agentId: admin.id,
         },
       },
       update: leadPayload,

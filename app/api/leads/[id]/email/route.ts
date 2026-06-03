@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession, parsePreferences } from "@/lib/auth";
+import { getSessionWithDBVerify, parsePreferences } from "@/lib/auth";
 import { sendEmail } from "@/lib/mail";
 
 export async function POST(
@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getSession();
+    const session = await getSessionWithDBVerify();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

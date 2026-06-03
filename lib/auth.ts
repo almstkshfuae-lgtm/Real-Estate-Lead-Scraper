@@ -2,7 +2,13 @@ import jwt from 'jsonwebtoken';
 import { cookies, headers } from 'next/headers';
 import prisma from './prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only';
+let JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET || JWT_SECRET.trim() === '') {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error("FATAL: JWT_SECRET environment variable is missing in production!");
+  }
+  JWT_SECRET = 'dev-secret-key-change-in-production';
+}
 
 export type AuthUser = {
   id: string;
@@ -16,7 +22,7 @@ export async function createToken(user: AuthUser) {
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
-    return jwt.verify(token, JWT_SECRET) as AuthUser;
+    return jwt.verify(token, JWT_SECRET) as unknown as AuthUser;
   } catch (error) {
     // Log the verification error for debugging (do not log the token)
     try {

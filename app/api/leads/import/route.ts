@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSessionWithDBVerify } from "@/lib/auth";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 import { normalizeLocation, resolveCoords } from "@/lib/ai";
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
+    const session = await getSessionWithDBVerify();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -63,6 +63,7 @@ export async function POST(request: Request) {
             name,
             company,
             source: "Manual Import",
+            agentId: session.id,
           },
         });
 

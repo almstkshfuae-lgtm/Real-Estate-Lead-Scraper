@@ -176,33 +176,40 @@ model User {
 }
 
 model Lead {
-  id            String   @id @default(cuid())
-  name          String
-  nameAr        String?
-  company       String
-  companyAr     String?
-  role          String
-  roleAr        String?
-  source        String
-  tier          Int
-  phone         String?
-  email         String?
-  location      String
-  score         Int
-  signals       Json
-  propertyPref  Json
-  budgetMin     Float?
-  budgetMax     Float?
-  relocated     Boolean  @default(false)
-  rentalFlag    Boolean  @default(false)
-  status        String   @default("new")
-  notes         String?
-  agentId       String
-  scrapeRunId   String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  agent         User     @relation(fields:[agentId], references:[id])
-  scrapeRun     ScrapeRun @relation(fields:[scrapeRunId], references:[id])
+  id           String    @id @default(cuid())
+  name         String
+  nameAr       String?
+  company      String
+  companyAr    String?
+  role         String
+  roleAr       String?
+  source       String
+  sourceType   String?
+  tier         Int
+  phone        String?
+  email        String?
+  location     String
+  score        Int
+  signals      String    @db.Text
+  propertyPref String
+  budgetMin    Float?
+  budgetMax    Float?
+  latitude     Float?
+  longitude    Float?
+  relocated    Boolean   @default(false)
+  rentalFlag   Boolean   @default(false)
+  status       String    @default("new")
+  notes        String?   @db.Text
+  persona      String?   @db.Text
+  bitrix24Id   String?
+  agentId      String
+  scrapeRunId  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  agent        User      @relation(fields: [agentId], references: [id])
+  scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
+
+  @@unique([name, company, source, agentId])
 }
 
 model ScrapeRun {

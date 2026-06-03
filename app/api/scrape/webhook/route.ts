@@ -22,15 +22,20 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { deduplicateSignals } from "@/lib/ai";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
-import { getEnvVar } from "@/lib/env";
+import { getEnvVar, getRequiredEnvVar } from "@/lib/env";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { secret, runId, sourceKey, enrichedLeads, isCompletedSignal } = body;
 
-    // ── Auth ─────────────────────────────────────────────────────────────────
-    const systemSecret = getEnvVar("SCRAPER_SECRET") || "scraper_secret_alpha_bravo";
+    let systemSecret = process.env.SCRAPER_SECRET;
+    if (!systemSecret || systemSecret.trim() === '') {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error("FATAL: SCRAPER_SECRET environment variable is missing in production!");
+      }
+      systemSecret = '96c92e16c2bc5f40c5724ad3bceef2fa39909e4bb136656d4a8309984f828684';
+    }
     if (secret !== systemSecret) {
       console.warn("[Webhook] Unauthorized webhook call - secret mismatch");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -139,10 +144,11 @@ export async function POST(request: NextRequest) {
 
         await prisma.lead.upsert({
           where: {
-            name_company_source: {
+            name_company_source_agentId: {
               name: lead.name,
               company: lead.company,
-              source: lead.source || "HNWI Sources"
+              source: lead.source || "HNWI Sources",
+              agentId: agentId
             }
           },
           update: {

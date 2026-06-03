@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from "@/lib/auth";
+import { getSessionWithDBVerify } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getScraperClient } from "@/lib/scraper-client";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
+    const session = await getSessionWithDBVerify();
     
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

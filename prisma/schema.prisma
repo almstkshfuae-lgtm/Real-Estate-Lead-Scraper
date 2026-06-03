@@ -59,7 +59,7 @@ model Lead {
   agent        User      @relation(fields: [agentId], references: [id])
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id])
 
-  @@unique([name, company, source])
+  @@unique([name, company, source, agentId])
   @@index([agentId], map: "Lead_agentId_fkey")
   @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
 }

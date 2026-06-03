@@ -33,7 +33,14 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3002;
-const SECRET = process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
+let SECRET = process.env.SCRAPER_SECRET;
+if (!SECRET || SECRET.trim() === '') {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error("FATAL: SCRAPER_SECRET environment variable is missing in production!");
+  }
+  console.warn("WARNING: SCRAPER_SECRET is missing. Using development fallback secret.");
+  SECRET = '96c92e16c2bc5f40c5724ad3bceef2fa39909e4bb136656d4a8309984f828684';
+}
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || '';
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
 

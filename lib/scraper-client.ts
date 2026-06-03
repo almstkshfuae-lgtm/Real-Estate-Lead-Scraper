@@ -54,7 +54,14 @@ class ScraperClient {
 
   constructor(config: ScraperConfig) {
     this.baseUrl = config.baseUrl || 'http://localhost:3002';
-    this.secret = config.secret || 'scraper_secret_alpha_bravo';
+    let secret = config.secret;
+    if (!secret || secret.trim() === '') {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error("FATAL: Scraper secret configuration is missing in production!");
+      }
+      secret = '96c92e16c2bc5f40c5724ad3bceef2fa39909e4bb136656d4a8309984f828684';
+    }
+    this.secret = secret;
     this.proxyUrl = config.proxyUrl;
     this.proxyApiKey = config.proxyApiKey;
     // Legacy timeout field kept for backwards compat; internal callers use the static constants
@@ -207,7 +214,13 @@ let scraperClientPromise: Promise<ScraperClient> | null = null;
 async function createScraperClient(): Promise<ScraperClient> {
   const configuredBaseUrl = (await getSecret('scraperServiceUrl')) || process.env.SCRAPER_SERVICE_URL || 'http://localhost:3002';
   const defaultLocalUrl = 'http://localhost:3002';
-  const secret = (await getSecret('scraperSecret')) || process.env.SCRAPER_SECRET || 'scraper_secret_alpha_bravo';
+  let secret = (await getSecret('scraperSecret')) || process.env.SCRAPER_SECRET;
+  if (!secret || secret.trim() === '') {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error("FATAL: SCRAPER_SECRET environment variable is missing!");
+    }
+    secret = '96c92e16c2bc5f40c5724ad3bceef2fa39909e4bb136656d4a8309984f828684';
+  }
   const proxyUrl = (await getSecret('proxyServiceUrl')) || process.env.PROXY_SERVICE_URL || undefined;
   const proxyApiKey = (await getSecret('proxyApiKey')) || process.env.PROXY_API_KEY || undefined;
 

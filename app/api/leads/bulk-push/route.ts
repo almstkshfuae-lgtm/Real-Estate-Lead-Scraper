@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession, parsePreferences } from "@/lib/auth";
+import { getSessionWithDBVerify, parsePreferences } from "@/lib/auth";
 import { pushContact, testConnection } from "@/lib/bitrix24";
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
+    const session = await getSessionWithDBVerify();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
