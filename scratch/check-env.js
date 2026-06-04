@@ -1,0 +1,8 @@
+"use strict";
+var _a;
+console.log("GOOGLE_AI_API_KEY present:", Boolean(process.env.GOOGLE_AI_API_KEY));
+console.log("GOOGLE_AI_API_KEY value length:", (_a = process.env.GOOGLE_AI_API_KEY) === null || _a === void 0 ? void 0 : _a.length);
+console.log("GOOGLE_AI_API_KEY first/last chars:", process.env.GOOGLE_AI_API_KEY ? `${process.env.GOOGLE_AI_API_KEY[0]}...${process.env.GOOGLE_AI_API_KEY.slice(-1)}` : "none");
+console.log("GOOGLE_MODEL:", process.env.GOOGLE_MODEL);
+console.log("GOOGLE_AI_MODEL:", process.env.GOOGLE_AI_MODEL);
+console.log("GOOGLE_API_KEY:", process.env.GOOGLE_API_KEY);

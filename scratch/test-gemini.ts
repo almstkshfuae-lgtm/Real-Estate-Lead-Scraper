@@ -95,4 +95,4 @@ Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<i
 
 test()
   .catch(console.error)
-  .finally(() => prisma.$raw.$disconnect());
+  .finally(() => prisma.$disconnect());

@@ -3,6 +3,7 @@
     "target": "ES2019",
     "module": "ESNext",
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "lib": ["esnext", "dom"],
     "strict": true,
     "esModuleInterop": true,
