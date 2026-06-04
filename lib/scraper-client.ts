@@ -108,6 +108,7 @@ class ScraperClient {
 
   /**
    * Check scraper service connection and optional proxy access (fast 10s timeout)
+   * Falls back to GET /health if /test-connection returns 404 (old scraper deployment)
    */
   async testConnection(): Promise<boolean> {
     const controller = new AbortController();
@@ -123,6 +124,14 @@ class ScraperClient {
         }),
         signal: controller.signal
       });
+
+      // If route doesn't exist yet (old deployment), fall back to /health
+      if (response.status === 404) {
+        console.warn('[ScraperClient] /test-connection returned 404 — falling back to /health');
+        const healthRes = await fetch(`${this.baseUrl}/health`, { signal: controller.signal });
+        return healthRes.ok;
+      }
+
       return response.ok;
     } catch (error) {
       console.error('Scraper connection test failed:', error);

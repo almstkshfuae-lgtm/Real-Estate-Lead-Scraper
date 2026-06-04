@@ -6,6 +6,9 @@ import { testWhatsAppConnection } from "@/lib/whatsapp";
 import { getEnvVar } from "@/lib/env";
 import { ScraperClient } from "@/lib/scraper-client";
 
+// Allow up to 30s — Railway scraper may need a cold-start warm-up
+export const maxDuration = 30;
+
 export async function POST(request: Request) {
   try {
     const session = await getSession();

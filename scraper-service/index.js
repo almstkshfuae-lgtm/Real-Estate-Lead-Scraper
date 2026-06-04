@@ -698,6 +698,68 @@ async function seedDefaultSources() {
 // Source configs are loaded from Prisma at runtime.
 const HNWI_SOURCES = {};
 
+// ─── Health & Connection Test Endpoints ─────────────────────────────────────
+// Called by the Next.js ScraperClient.health() and ScraperClient.testConnection()
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'playwright-scraper',
+    uptime: process.uptime(),
+    queue: {
+      active: activeScrapeJobs,
+      pending: scrapeQueue.length
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/test-connection', async (req, res) => {
+  const { secret, proxyUrl } = req.body;
+
+  if (secret !== SECRET) {
+    return res.status(401).json({ success: false, error: 'Invalid scraper secret' });
+  }
+
+  const result = {
+    success: true,
+    service: 'playwright-scraper',
+    uptime: process.uptime(),
+    proxy: null,
+    timestamp: new Date().toISOString()
+  };
+
+  // Optional: verify proxy reachability
+  const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
+  if (resolvedProxyUrl) {
+    try {
+      const proxyCheck = await axios.get('https://api.ipify.org?format=json', {
+        proxy: false,
+        httpsAgent: undefined,
+        timeout: 8000,
+        ...(resolvedProxyUrl ? {
+          proxy: {
+            host: resolvedProxyUrl.replace(/https?:\/\//, '').split('@').pop()?.split(':')[0] || '',
+            port: parseInt(resolvedProxyUrl.split(':').pop() || '823', 10),
+            auth: resolvedProxyUrl.includes('@') ? {
+              username: resolvedProxyUrl.split('://')[1]?.split(':')[0] || '',
+              password: resolvedProxyUrl.split(':')[2]?.split('@')[0] || ''
+            } : undefined
+          }
+        } : {})
+      });
+      result.proxy = { reachable: true, ip: proxyCheck.data?.ip || 'unknown' };
+    } catch (err) {
+      result.proxy = { reachable: false, error: err.message };
+      // Don't fail the overall test — proxy issues are non-fatal for health check
+    }
+  }
+
+  res.json(result);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.post('/scrape', async (req, res) => {
   const { sources, secret, proxyUrl, proxyApiKey, webhookUrl, runId } = req.body;
 
