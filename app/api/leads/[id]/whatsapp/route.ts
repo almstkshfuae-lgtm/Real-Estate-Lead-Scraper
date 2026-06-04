@@ -29,6 +29,11 @@ export async function POST(
       return NextResponse.json({ error: "Lead or phone number not found" }, { status: 404 });
     }
 
+    // Cross-Tenant Access control: Only the owner (agentId) or an admin can access/action this lead
+    if (session.role.toUpperCase() !== "ADMIN" && lead.agentId !== session.id) {
+      return NextResponse.json({ error: "Unauthorized access to lead data" }, { status: 403 });
+    }
+
     // 2. Get WhatsApp settings from User preferences
     const user = await prisma.user.findUnique({
       where: { id: session.id },
