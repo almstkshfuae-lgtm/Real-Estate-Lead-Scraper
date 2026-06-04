@@ -50,7 +50,7 @@ STABILITY CONSTRAINTS:
 
 Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "reasoning": "<1-2 sentence justification>", "recommendations": ["<action 1>", "<action 2>"]}`;
 
-    const responseText = await generateGeminiText("", prompt, 256);
+    const responseText = await generateGeminiText("", prompt, 4096);
     const trimmedResponse = responseText?.trim() || "{}";
 
     let parsed: {

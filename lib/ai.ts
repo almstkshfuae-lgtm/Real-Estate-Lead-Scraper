@@ -1,4 +1,5 @@
 import { getSecret } from "./secrets";
+import { getEnvVar } from "./env";
 
 interface AIConfig {
   apiKey: string;
@@ -9,16 +10,16 @@ interface AIConfig {
 
 export async function getAIConfig(): Promise<AIConfig | null> {
   // First prioritize env variables directly (faster, doesn't query DB during builds)
-  const envGoogleKey = (process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY)?.trim();
-  const rawGoogleKey = (envGoogleKey && !envGoogleKey.startsWith('YOUR_')) 
+  const envGoogleKey = (getEnvVar('GOOGLE_AI_API_KEY') || getEnvVar('GOOGLE_API_KEY'))?.trim();
+  const rawGoogleKey = envGoogleKey 
     ? envGoogleKey 
     : (await getSecret("googleAiApiKey"))?.trim();
   const googleApiKey = rawGoogleKey && !rawGoogleKey.startsWith('YOUR_') ? rawGoogleKey : null;
   
-  const googleProjectId = (process.env.GOOGLE_AI_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT)?.trim();
-  const googleLocation = (process.env.GOOGLE_AI_LOCATION || "us-central1")?.trim();
+  const googleProjectId = (getEnvVar('GOOGLE_AI_PROJECT_ID') || getEnvVar('GOOGLE_PROJECT_ID') || getEnvVar('GOOGLE_CLOUD_PROJECT') || getEnvVar('GCLOUD_PROJECT'))?.trim();
+  const googleLocation = (getEnvVar('GOOGLE_AI_LOCATION') || "us-central1")?.trim();
   
-  let googleModel = (process.env.GOOGLE_AI_MODEL || process.env.GOOGLE_MODEL || "gemini-2.5-flash")?.trim();
+  let googleModel = (getEnvVar('GOOGLE_AI_MODEL') || getEnvVar('GOOGLE_MODEL') || "gemini-2.5-flash")?.trim();
   // Auto-upgrade legacy or invalid models to stable and fast gemini-2.5-flash
   if (
     !googleModel || 
@@ -781,7 +782,7 @@ ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an 
 Return a JSON array of at most 5 leads. Each lead MUST have: name, nameAr, company, companyAr, role, roleAr, location, tier, score, email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals, persona.
 Output ONLY the JSON array. No other text.`,
       `Page Title: ${scrapedData.title}\nSource: ${scrapedData.name}\nContent (truncated):\n${cleanedContent.substring(0, 6000)}`,
-      2048
+      4096
     );
     if (retryContent) {
       leads = safeParseJson(retryContent, []);
@@ -1016,7 +1017,7 @@ Return ONLY this JSON object with keys tier and score. No explanatory text.`,
       source: enrichedLead.source,
       signals: enrichedLead.signals
     }),
-    256
+    4096
   );
 
   if (!content) {
@@ -1055,7 +1056,7 @@ Focus on:
 Format the output as a concise, professional paragraph in the active language (English or Arabic).
 Do not use placeholders. Use the data provided.`,
     JSON.stringify(lead),
-    1024
+    4096
   );
 
   if (!content) {

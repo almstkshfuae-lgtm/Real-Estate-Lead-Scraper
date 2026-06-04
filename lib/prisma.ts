@@ -1,18 +1,23 @@
 import { PrismaClient } from '@prisma/client'
 
 const prismaClientSingleton = () => {
-  // Ensure that if process.env.DATABASE_URL is empty or whitespace, we delete it to allow proper fallback
-  const rawUrl = process.env.DATABASE_URL;
-  if (!rawUrl || rawUrl.trim() === '') {
+  // Ensure that if process.env.DATABASE_URL is empty, whitespace, or empty quotes, we delete it to allow proper fallback
+  let rawUrl = process.env.DATABASE_URL?.trim();
+  if (rawUrl) {
+    rawUrl = rawUrl.replace(/^['"]|['"]$/g, '').trim();
+  }
+  if (!rawUrl || rawUrl === '' || rawUrl === '""' || rawUrl === "''" || rawUrl.startsWith('YOUR_')) {
     delete process.env.DATABASE_URL;
   }
 
   let databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL || '';
   // Strip any surrounding double or single quotes
-  databaseUrl = databaseUrl.replace(/^['"]]|['"]$/g, '').trim();
+  if (databaseUrl) {
+    databaseUrl = databaseUrl.trim().replace(/^['"]|['"]$/g, '').trim();
+  }
 
   // Re-assign the correct fallback url to process.env.DATABASE_URL so that the schema/query engine reads it correctly.
-  if (databaseUrl) {
+  if (databaseUrl && databaseUrl !== '""' && databaseUrl !== "''") {
     process.env.DATABASE_URL = databaseUrl;
   }
 

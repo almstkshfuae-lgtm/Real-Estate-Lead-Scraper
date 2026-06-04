@@ -43,7 +43,7 @@ ${lang === "ar" ? "أجب باللغة العربية للملخص، لكن ال
 
 Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<intelligence summary>", "confidenceScore": <0-100>, "newsSnippets": ["<snippet 1>", "<snippet 2>"]}`;
 
-    const responseText = await generateGeminiText("", prompt, 384);
+    const responseText = await generateGeminiText("", prompt, 4096);
     const trimmedResponse = responseText?.trim() || "{}";
 
     let parsed: {

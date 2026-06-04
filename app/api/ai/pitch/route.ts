@@ -58,7 +58,7 @@ Tone: ${style === "formal" ? "Very formal and corporate" : style === "casual" ? 
 
 Write the pitch directly without any preamble:`;
 
-    const pitchText = await generateGeminiText(systemPrompt, userPrompt, 512);
+    const pitchText = await generateGeminiText(systemPrompt, userPrompt, 4096);
 
     return NextResponse.json({ pitch: pitchText || "", tokens: null });
   } catch (error: any) {

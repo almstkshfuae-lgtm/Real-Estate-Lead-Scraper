@@ -7,8 +7,13 @@ export function getEnvVar(key: string, fallback: string = ''): string {
     process.env[`NEXT_PUBLIC_VERCEL_${normalized}`]
   ];
   for (const value of candidates) {
-    if (value && value.trim() !== '' && !value.startsWith('YOUR_')) {
-      return value;
+    if (value) {
+      let cleaned = value.trim();
+      // Strip surrounding quotes
+      cleaned = cleaned.replace(/^['"]|['"]$/g, '').trim();
+      if (cleaned !== '' && cleaned !== '""' && cleaned !== "''" && !cleaned.startsWith('YOUR_')) {
+        return cleaned;
+      }
     }
   }
   return fallback;
