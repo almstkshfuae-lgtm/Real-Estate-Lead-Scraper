@@ -59,7 +59,7 @@ export default function LoginPage() {
   const isRtl = i18n.language === "ar";
 
   return (
-    <div 
+    <div
       className={`min-h-screen flex flex-col md:flex-row bg-[var(--color-bg-base)] transition-all duration-300 ${isRtl ? 'font-cairo' : 'font-inter'}`}
     >
       {/* Brand Section */}
@@ -67,7 +67,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         </div>
-        
+
         <div className="z-10 flex items-center gap-3">
           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
             <ShieldCheck className="text-[var(--color-primary)] w-6 h-6" />
@@ -85,7 +85,7 @@ export default function LoginPage() {
         </div>
 
         <div className="z-10 text-sm text-blue-200">
-          © 2026 Brilliance. All rights reserved.
+          © 2026 almstkshf.com. All rights reserved.
         </div>
       </div>
 
@@ -105,7 +105,7 @@ export default function LoginPage() {
               <h2 className="text-3xl font-bold text-[var(--color-text-primary)] mb-2">{t('auth.welcome')}</h2>
               <p className="text-[var(--color-text-secondary)]">{t('auth.desc')}</p>
             </div>
-            <button 
+            <button
               onClick={toggleLanguage}
               className="p-3 rounded-2xl bg-[var(--color-bg-surface)] hover:bg-[var(--color-border)] text-[var(--color-text-primary)] transition-all flex items-center gap-2 border border-[var(--color-border)] font-bold text-sm"
             >
@@ -170,10 +170,24 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-12 pt-8 border-t border-[var(--color-border)] text-center">
+          <div className="mt-12 pt-8 border-t border-[var(--color-border)] text-center space-y-2">
             <p className="text-[var(--color-text-secondary)] text-sm">
-              {t('auth.noAccount', "Don't have an account?")} <a href="#" className="text-[var(--color-primary)] font-bold hover:underline">{t('auth.contactAdmin', 'Contact Administrator')}</a>
+              {t('auth.noAccount', "Don't have an account?")} {t('auth.contactAdmin', 'Contact Administrator')}:
             </p>
+            <a
+              href="mailto:rased@almstkshf.com"
+              className="block text-[var(--color-primary)] font-bold hover:underline text-sm"
+            >
+              rased@almstkshf.com
+            </a>
+            <a
+              href="https://wa.me/971585952035"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-[var(--color-primary)] font-bold hover:underline text-sm"
+            >
+              +971 58 595 2035
+            </a>
           </div>
         </div>
       </div>
