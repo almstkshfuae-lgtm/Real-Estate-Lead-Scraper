@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateGeminiText } from "@/lib/ai";
+import { generateGeminiText, getAIConfig } from "@/lib/ai";
+
+// Allow up to 30s — Gemini API calls can take 10-15s on cold start
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
@@ -8,6 +11,15 @@ export async function POST(req: NextRequest) {
 
     if (!lead) {
       return NextResponse.json({ error: "Lead data is required" }, { status: 400 });
+    }
+
+    // Check API key before calling Gemini — return clear 503 instead of cryptic 500
+    const aiConfig = await getAIConfig();
+    if (!aiConfig) {
+      return NextResponse.json(
+        { error: "Gemini API key not configured. Go to Settings → Integrations and add your Google AI API key." },
+        { status: 503 }
+      );
     }
 
     const systemPrompt =

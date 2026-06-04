@@ -5,6 +5,9 @@ import { getSession } from "@/lib/auth";
 // Force dynamic rendering — leads must never be served from CDN cache
 export const dynamic = "force-dynamic";
 
+// Allow up to 30s — DB query + Railway connection can be slow on cold start
+export const maxDuration = 30;
+
 export async function GET(request: Request) {
   try {
     const session = await getSession();
