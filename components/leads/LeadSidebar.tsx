@@ -45,14 +45,45 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
   const [followUpTime, setFollowUpTime] = useState("");
   const [scheduling, setScheduling] = useState(false);
 
+  const [dynamicPersona, setDynamicPersona] = useState<string | null>(null);
+  const [personaLoading, setPersonaLoading] = useState(false);
+
   useEffect(() => {
+    let active = true;
     if (lead) {
       setNotes(lead.notes || "");
       setPitch("");
       setScoreResult(null);
       setSignals(null);
+      setDynamicPersona(null);
+
+      const fetchPersona = async () => {
+        setPersonaLoading(true);
+        try {
+          const res = await fetch(`/api/leads/${lead.id}/persona?lang=${lang}`);
+          if (!res.ok) throw new Error("Failed to fetch persona");
+          const data = await res.json();
+          if (active) {
+            setDynamicPersona(data.persona);
+          }
+        } catch (err) {
+          console.error("Error loading lead persona:", err);
+          if (active) {
+            setDynamicPersona(null);
+          }
+        } finally {
+          if (active) {
+            setPersonaLoading(false);
+          }
+        }
+      };
+
+      fetchPersona();
     }
-  }, [lead]);
+    return () => {
+      active = false;
+    };
+  }, [lead, lang]);
 
   if (!lead) return null;
 
@@ -275,10 +306,17 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
               <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 text-start">
                 <div className="flex gap-3">
                   <Clock className="w-4 h-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                    <strong>{t("leads.sidebar.recentActivity")}:</strong>{" "}
-                    {t("leads.sidebar.recentActivityText", { company: lead.company })}
-                  </p>
+                  <div className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed w-full">
+                    <strong className="block mb-1">{t("leads.sidebar.recentActivity")}:</strong>{" "}
+                    {personaLoading ? (
+                      <span className="flex items-center gap-1.5 text-amber-600/70 dark:text-amber-400/70 font-medium">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        {t("ai.generating", "Generating...")}
+                      </span>
+                    ) : (
+                      <span>{dynamicPersona || t("leads.sidebar.recentActivityText", { company: lead.company })}</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

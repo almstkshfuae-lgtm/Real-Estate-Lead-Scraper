@@ -29,6 +29,7 @@ export type Lead = {
   email?: string;
   bitrix24Id?: string | null;
   createdAt: string;
+  persona?: string | null;
 };
 
 interface LeadTableProps {

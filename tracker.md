@@ -209,6 +209,7 @@
 - [x] **Unlimited Result Extraction** — Removed "25 leads" hardcoded limit.
 + [x] **Gemini Persona Field** — Added `persona` column to Lead model in MySQL.
 + [x] **Deep Persona Analysis** — Integrated Gemini logic to analyze behavior and investor profiles.
++ [x] **Dynamic Investor Persona Sidebar** — Added endpoint `/api/leads/[id]/persona` to retrieve/generate personas, and integrated it into `LeadSidebar` to replace the static template text with lazy-loaded Gemini-generated personas in EN/AR.
 - [x] **Ingestion Failure Resilience** — Local/Railway scraper-service model ensures 100% data availability without paid API timeouts.
 - [x] **Hardened API & Scraper Ingestion** — Repaired direct env key loading, JSON database serialization for all 13 sources, and decoupled scraping with async webhooks. Stripped OpenAI configuration completely to ensure Google Gemini is the sole AI provider, anchored Lead Score Refinement to database score with strict stability constraints (+/-10 limits), upgraded Cheerio HTML text cleaner to preserve layout elements spacing/newlines and extract NEXT_DATA/JSON script tags, and implemented case-insensitive signal deduplication across ingestion and signals retrieval APIs.
 - [x] **Robust Selectors & DOM Change Detection** — Implemented robust semantic/bilingual selector resolving (pagination, expand buttons) and DOM change detection checks. If selectors break, flags source as `needs_review` and triggers warning notifications.

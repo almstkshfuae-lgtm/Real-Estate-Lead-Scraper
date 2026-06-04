@@ -1039,9 +1039,13 @@ Return ONLY this JSON object with keys tier and score. No explanatory text.`,
 /**
  * Generate buyer persona analysis for detailed lead understanding
  */
-export async function generatePersonaAnalysis(lead: any) {
+export async function generatePersonaAnalysis(lead: any, lang = "en") {
   if (lead.persona) {
-    return lead.persona;
+    const isArabicRequest = lang === "ar";
+    const hasArabicLetters = /[\u0600-\u06FF]/.test(lead.persona);
+    if ((isArabicRequest && hasArabicLetters) || (!isArabicRequest && !hasArabicLetters)) {
+      return lead.persona;
+    }
   }
 
   const content = await generateGeminiText(
@@ -1053,9 +1057,20 @@ Focus on:
 3. Lifestyle Alignment (What property suits them)
 4. Decision Signals (UHNW, Executive, Business Owner)
 
-Format the output as a concise, professional paragraph in the active language (English or Arabic).
+Format the output as a concise, professional paragraph in ${lang === 'ar' ? 'Arabic (العربية)' : 'English'}.
 Do not use placeholders. Use the data provided.`,
-    JSON.stringify(lead),
+    JSON.stringify({
+      name: lead.name,
+      company: lead.company,
+      role: lead.role,
+      location: lead.location,
+      score: lead.score,
+      tier: lead.tier,
+      signals: lead.signals,
+      budgetMin: lead.budgetMin,
+      budgetMax: lead.budgetMax,
+      notes: lead.notes
+    }),
     4096
   );
 
