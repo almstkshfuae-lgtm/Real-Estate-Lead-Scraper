@@ -85,7 +85,14 @@ export default function LoginPage() {
         </div>
 
         <div className="z-10 text-sm text-blue-200">
-          © 2026 almstkshf.com. All rights reserved.
+          <a
+            href="https://almstkshf.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-white transition-colors"
+          >
+            © 2026 almstkshf.com. All rights reserved.
+          </a>
         </div>
       </div>
 
