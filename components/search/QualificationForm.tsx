@@ -296,12 +296,8 @@ export default function QualificationForm({ initialData }: { initialData?: any }
               <h3 className="text-sm font-bold text-[var(--color-text-primary)]">{t('search.intelligenceTitle')}</h3>
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-[var(--color-text-secondary)]">{t('search.estLeads')}</span>
-                  <span className="font-bold text-[var(--color-success)]">~450</span>
-                </div>
-                <div className="flex justify-between text-xs">
                   <span className="text-[var(--color-text-secondary)]">{t('search.scrapeDepth')}</span>
-                  <span className="font-bold">{t('search.deepDepth')}</span>
+                  <span className="font-bold">{DEFAULT_SCRAPE_SOURCES.length} {t('search.activeSources', 'active sources')}</span>
                 </div>
               </div>
               <div className="pt-4 border-t border-[var(--color-border)]">

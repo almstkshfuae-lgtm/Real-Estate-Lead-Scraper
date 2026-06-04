@@ -583,8 +583,14 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
     const $ = cheerio.load(html);
     
     // Remove non-content elements
-    $('script, style, noscript, header, footer, nav, aside, form, svg, canvas, iframe, [role="navigation"]').remove();
+    $('script, style, noscript').remove();
     
+    // Replace br tags with newlines
+    $('br').replaceWith('\n');
+    $('p, div, li, h1, h2, h3, h4, h5, h6, tr, td, th, article, section, header, footer, nav, aside').each((i, el) => {
+      $(el).prepend(' ').append('\n');
+    });
+
     // Get body text
     let text = $('body').text();
     text = text
@@ -593,7 +599,7 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
       .trim()
       .substring(0, 5000); // Limit sample size
 
-    if (text.length > 100) {
+    if (text.length >= 50) {
       testResult.extractionTest.sampleObtained = true;
       testResult.extractionTest.sampleSize = text.length;
       testResult.sampleText = text.substring(0, 1000);

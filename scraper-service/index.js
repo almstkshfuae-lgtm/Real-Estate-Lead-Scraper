@@ -44,6 +44,78 @@ if (!SECRET || SECRET.trim() === '') {
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || '';
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
 
+// ─── Advanced Stealth Overrides ───────────────────────────────────────────────
+// Applied to every new page context to defeat Cloudflare/Turnstile bot detection.
+// Covers: webdriver flag, chrome runtime object, permissions API, plugins,
+// languages, WebGL vendor/renderer, screen properties, and hardware concurrency.
+export async function applyStealthOverrides(page) {
+  await page.addInitScript(() => {
+    // 1. Remove webdriver flag
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+    // 2. Simulate real Chrome runtime
+    window.chrome = {
+      app: {
+        isInstalled: false,
+        InstallState: { DISABLED: 'DISABLED', INSTALLED: 'INSTALLED', NOT_INSTALLED: 'NOT_INSTALLED' },
+        RunningState: { CANNOT_RUN: 'CANNOT_RUN', RUNNING: 'RUNNING', CAN_RUN: 'CAN_RUN' }
+      },
+      runtime: {
+        onConnect: { addListener: () => {} },
+        onMessage: { addListener: () => {} }
+      }
+    };
+
+    // 3. Fix permissions API (Cloudflare checks this)
+    const originalQuery = window.navigator.permissions.query.bind(navigator.permissions);
+    window.navigator.permissions.query = (parameters) =>
+      parameters.name === 'notifications'
+        ? Promise.resolve({ state: Notification.permission })
+        : originalQuery(parameters);
+
+    // 4. Simulate realistic plugin list
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => {
+        const makePlugin = (name, desc, filename) =>
+          Object.create(Plugin.prototype, {
+            name: { value: name }, description: { value: desc }, filename: { value: filename }, length: { value: 1 }
+          });
+        const arr = [
+          makePlugin('Chrome PDF Plugin', 'Portable Document Format', 'internal-pdf-viewer'),
+          makePlugin('Chrome PDF Viewer', '', 'mhjfbmdgcfjbbpaeojofohoefgiehjai'),
+          makePlugin('Native Client', '', 'internal-nacl-plugin')
+        ];
+        arr.item = (i) => arr[i];
+        arr.namedItem = (name) => arr.find(p => p.name === name) || null;
+        arr.refresh = () => {};
+        return arr;
+      }
+    });
+
+    // 5. Languages
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'ar-AE', 'ar'] });
+
+    // 6. WebGL fingerprint masking
+    const getParameterProxied = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+      if (parameter === 37445) return 'Intel Inc.';       // UNMASKED_VENDOR_WEBGL
+      if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
+      return getParameterProxied.call(this, parameter);
+    };
+
+    // 7. Screen and hardware realism
+    Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
+    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+    Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
+
+    // 8. Prevent iframe-based detection
+    Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+      get: function() { return window; }
+    });
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Concurrency Queue — queues incoming jobs to run sequentially and prevent OOM
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,7 +134,7 @@ async function processQueue() {
   if (queueProcessing) {
     return;
   }
-  
+
   if (scrapeQueue.length === 0) {
     queueProcessing = false;
     return;
@@ -241,7 +313,7 @@ export function validateSelectors(obj) {
 export async function resolveRobustLocator(page, configuredSelectors, type, brokenSelectorsAccumulator = []) {
   // 1. Try configured selectors first
   const selectorsToTry = Array.isArray(configuredSelectors) ? configuredSelectors.filter(Boolean) : [];
-  
+
   for (const sel of selectorsToTry) {
     if (!isValidPlaywrightSelector(sel)) {
       brokenSelectorsAccumulator.push(`Invalid selector config: "${sel}"`);
@@ -266,7 +338,7 @@ export async function resolveRobustLocator(page, configuredSelectors, type, brok
 
   // 2. If configured selectors failed, use smart semantic/bilingual fallbacks
   console.log(`[SelectorCheck] All configured selectors for "${type}" failed/hidden. Trying robust semantic fallbacks.`);
-  
+
   const fallbacks = {
     pagination: [
       'a[rel="next" i]',
@@ -346,7 +418,7 @@ export async function resolveRobustLocator(page, configuredSelectors, type, brok
 
 export async function checkContentSelectors(page, source, brokenSelectorsAccumulator = []) {
   const contentSelectors = source.contentSelectors || {};
-  
+
   const fieldsToCheck = [
     { key: 'namePatterns', label: 'Name' },
     { key: 'companyPatterns', label: 'Company' },
@@ -558,6 +630,16 @@ function extractCleanTextFromHTML(html) {
     }
   });
 
+  // Extract inputs and textareas placeholders and values
+  $('input, textarea').each((i, el) => {
+    const placeholder = $(el).attr('placeholder') || '';
+    const val = $(el).val() || '';
+    const textNode = [placeholder, val].filter(Boolean).join(' ');
+    if (textNode.trim()) {
+      $(el).replaceWith(`<span> ${textNode} </span>`);
+    }
+  });
+
   // Extract canvas labels/alternative text before removing the element
   $('canvas').each((i, el) => {
     const ariaLabel = $(el).attr('aria-label') || '';
@@ -581,14 +663,24 @@ function extractCleanTextFromHTML(html) {
     }
   });
 
+  // Extract svg title or labels before removing to preserve icons text
+  $('svg').each((i, el) => {
+    const title = $(el).find('title').text() || $(el).attr('aria-label') || '';
+    if (title.trim()) {
+      $(el).replaceWith(`<span> Icon: ${title} </span>`);
+    } else {
+      $(el).remove();
+    }
+  });
+
   // Remove elements that are strictly layout styling, interactive widgets or media
-  $('style, noscript, svg').remove();
+  $('style, noscript').remove();
 
   // Replace br tags with newlines
   $('br').replaceWith('\n');
 
   // Prepend and append spacing to block elements to prevent word merging
-  $('p, div, li, h1, h2, h3, h4, h5, h6, tr, td, th, article, section, header, footer').each((i, el) => {
+  $('p, div, li, h1, h2, h3, h4, h5, h6, tr, td, th, article, section, header, footer, nav, aside').each((i, el) => {
     $(el).prepend(' ').append('\n');
   });
 
@@ -894,6 +986,9 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
 
+  // Apply full stealth overrides to defeat bot-detection
+  await applyStealthOverrides(page);
+
   const allContent = [];
   const visitedUrls = new Set();
 
@@ -955,7 +1050,70 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
 }
 
 /**
- * Recursively scrape pages with pagination and DOM interaction
+ * Compute a lightweight hash of the visible DOM text to detect SPA content changes.
+ * Used to determine whether a "click" actually rendered new content.
+ */
+async function getDomContentHash(page) {
+  try {
+    const text = await page.evaluate(() => document.body?.innerText || '');
+    // Simple djb2 hash — fast and sufficient for change detection
+    let hash = 5381;
+    for (let i = 0; i < text.length; i++) {
+      hash = ((hash << 5) + hash) + text.charCodeAt(i);
+      hash |= 0; // force 32-bit int
+    }
+    return hash;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Collect all member/profile deep-links from the current page.
+ * Uses configured memberLinks selectors then falls back to semantic fallbacks.
+ * Returns resolved absolute URLs, excluding already-visited ones.
+ */
+async function collectMemberLinks(page, source, visitedUrls, brokenSelectors) {
+  const configuredSelectors = source.navigationSelectors?.memberLinks || [];
+  const resolved = await resolveRobustLocator(page, configuredSelectors, 'memberLinks', brokenSelectors);
+
+  if (!resolved) {
+    console.log(`[DeepCrawl] No member-link selector resolved for ${source.key || source.name}`);
+    return [];
+  }
+
+  const { selectorUsed } = resolved;
+  const baseUrl = new URL(source.url);
+  const links = [];
+
+  try {
+    const anchors = await page.locator(selectorUsed).all();
+    for (const anchor of anchors) {
+      try {
+        const href = await anchor.getAttribute('href');
+        if (!href) continue;
+        // Resolve relative URLs against the source origin
+        const absolute = href.startsWith('http') ? href : new URL(href, baseUrl.origin).href;
+        if (!visitedUrls.has(absolute)) {
+          links.push(absolute);
+        }
+      } catch {
+        // skip individual anchor errors
+      }
+    }
+  } catch (e) {
+    console.warn(`[DeepCrawl] Error collecting member links with "${selectorUsed}":`, e.message);
+  }
+
+  // Deduplicate
+  const unique = [...new Set(links)];
+  console.log(`[DeepCrawl] Found ${unique.length} unvisited member links via "${selectorUsed}"`);
+  return unique;
+}
+
+/**
+ * Recursively scrape pages with pagination, SPA-safe navigation,
+ * and deep member-profile link crawling.
  */
 async function scrapePageRecursively(
   page,
@@ -969,12 +1127,18 @@ async function scrapePageRecursively(
 ) {
   const currentUrl = page.url();
 
-  // Avoid revisiting pages
-  if (visitedUrls.has(currentUrl) || visitedUrls.size >= maxPages) {
+  // ── SPA-safe deduplication ───────────────────────────────────────────────
+  // For SPAs the URL may never change. Use the URL + a page-index counter
+  // embedded in visitedUrls as a sentinel key so identical URLs on different
+  // virtual pages are still tracked.
+  const pageIndex = visitedUrls.size;  // 0-based index before this page is added
+  const trackingKey = currentUrl; // keep URL as primary key for real navigation
+
+  if (visitedUrls.has(trackingKey) || visitedUrls.size >= maxPages) {
     return;
   }
 
-  visitedUrls.add(currentUrl);
+  visitedUrls.add(trackingKey);
   if (jobDiagnostics) {
     jobDiagnostics.currentPageUrl = currentUrl;
     jobDiagnostics.pagesScraped = visitedUrls.size;
@@ -1011,6 +1175,7 @@ async function scrapePageRecursively(
       }
     }
 
+    // ── Extract content from all frames (including iframes) ──────────────
     const frames = page.frames();
     const frameTexts = [];
     for (const frame of frames) {
@@ -1029,23 +1194,99 @@ async function scrapePageRecursively(
       allContent.push(cleanedText);
     }
 
-    // Look for pagination and load more elements robustly
+    // ── Phase A: Deep Member-Link Crawling ───────────────────────────────
+    // Collect member/profile links from the listing page and visit each one
+    // individually to harvest the richest possible data per person.
+    const isMemberCrawlEnabled = (source.navigationSelectors?.memberLinks?.length > 0) ||
+      source.deepCrawlMembers === true;
+
+    if (isMemberCrawlEnabled && visitedUrls.size < maxPages) {
+      const memberLinks = await collectMemberLinks(page, source, visitedUrls, brokenSelectors);
+
+      for (const memberUrl of memberLinks) {
+        if (visitedUrls.size >= maxPages) break;
+
+        console.log(`[DeepCrawl] → Visiting member profile: ${memberUrl}`);
+        visitedUrls.add(memberUrl);
+        if (jobDiagnostics) {
+          jobDiagnostics.currentPageUrl = memberUrl;
+          jobDiagnostics.pagesScraped = visitedUrls.size;
+        }
+
+        try {
+          await page.goto(memberUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(getRandomDelay(1200, 2500));
+          await simulateHumanBrowsing(page);
+
+          const memberFrames = page.frames();
+          const memberTexts = [];
+          for (const frame of memberFrames) {
+            try {
+              const fHtml = await frame.content();
+              const fText = extractCleanTextFromHTML(fHtml);
+              if (fText && fText.length > 50) memberTexts.push(fText);
+            } catch { /* cross-origin */ }
+          }
+          const memberText = memberTexts.join('\n\n---FRAME BREAK---\n\n');
+          if (memberText && memberText.length > 50) {
+            allContent.push(`--- MEMBER PROFILE: ${memberUrl} ---\n${memberText}`);
+            console.log(`[DeepCrawl] ✅ Collected ${memberText.length} chars from ${memberUrl}`);
+          }
+
+          // Return to listing page for the next member link
+          await page.goto(currentUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(getRandomDelay(800, 1500));
+        } catch (memberErr) {
+          console.warn(`[DeepCrawl] ⚠️ Failed to scrape member ${memberUrl}:`, memberErr.message);
+          // Try to recover by going back to the listing page
+          try { await page.goto(currentUrl, { timeout: 20000, waitUntil: 'domcontentloaded' }); } catch { /* ignore */ }
+        }
+      }
+    }
+
+    // ── Phase B: Pagination / SPA Navigation ────────────────────────────
     let foundNextPage = false;
     const paginationSelectors = source.navigationSelectors.pagination || [];
+
+    // Snapshot DOM hash BEFORE clicking to detect SPA content change
+    const hashBefore = await getDomContentHash(page);
 
     const resolvedPagination = await resolveRobustLocator(page, paginationSelectors, 'pagination', brokenSelectors);
     if (resolvedPagination) {
       const { locator, selectorUsed } = resolvedPagination;
       try {
         const href = await locator.getAttribute('href');
-        if (!href || (!visitedUrls.has(href) && href !== currentUrl)) {
-          console.log(`  → Found next page element via "${selectorUsed}"${href ? ` (link: ${href})` : ''}`);
+        const isSpaLink = !href || href === '#' || href === currentUrl || href.startsWith('javascript');
+
+        // For real navigation: check we haven't visited the href
+        // For SPA (no href change): always proceed — content hash will decide
+        if (isSpaLink || !visitedUrls.has(href)) {
+          console.log(`  → Found next page element via "${selectorUsed}"${href ? ` (link: ${href})` : ' (SPA click)'}`);
           await locator.scrollIntoViewIfNeeded();
           await page.waitForTimeout(getRandomDelay(900, 1800));
           await locator.click();
-          await page.waitForLoadState('domcontentloaded', { timeout: 15000 });
+          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
           await page.waitForTimeout(source.delayBetweenPages || getRandomDelay(1500, 3000));
-          foundNextPage = true;
+
+          const newUrl = page.url();
+          const hashAfter = await getDomContentHash(page);
+          const domChanged = hashAfter !== hashBefore;
+
+          if (!isSpaLink && !visitedUrls.has(newUrl)) {
+            // Real navigation: track by new URL
+            foundNextPage = true;
+          } else if (isSpaLink && domChanged) {
+            // SPA: URL stayed same but DOM changed — treat as new page
+            // Use a synthetic key: URL + page index to allow re-entry
+            const spaKey = `${newUrl}#spa-page-${visitedUrls.size}`;
+            visitedUrls.add(spaKey);
+            console.log(`  → SPA DOM change detected (hash ${hashBefore}→${hashAfter}). Treating as new page.`);
+            foundNextPage = true;
+          } else if (!isSpaLink && visitedUrls.has(newUrl)) {
+            console.log(`  → Pagination led to already-visited URL ${newUrl}. Stopping.`);
+          } else {
+            console.log(`  → No DOM change detected after SPA click. Stopping pagination.`);
+          }
         }
       } catch (e) {
         console.warn(`⚠️ Failed to navigate using pagination element:`, e.message);
@@ -1055,7 +1296,14 @@ async function scrapePageRecursively(
     if (!foundNextPage) {
       foundNextPage = await detectAndClickLoadMore(page, source);
       if (foundNextPage) {
-        await page.waitForTimeout(source.delayBetweenPages || getRandomDelay(1500, 3000));
+        // Check DOM hash for load-more SPA behavior as well
+        const hashAfterLoadMore = await getDomContentHash(page);
+        if (hashAfterLoadMore === hashBefore) {
+          console.log(`  → Load-more click produced no DOM change. Stopping.`);
+          foundNextPage = false;
+        } else {
+          await page.waitForTimeout(source.delayBetweenPages || getRandomDelay(1500, 3000));
+        }
       }
     }
 
@@ -1176,7 +1424,7 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
   const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(cleanContent);
   const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(cleanContent);
   const hasArabicSignal = /[\u0600-\u06FF]{2,}/.test(cleanContent);
-  if (cleanContent.length < 200 && !hasNameSignal && !hasRoleSignal && !hasArabicSignal) {
+  if (cleanContent.length < 50 && !hasNameSignal && !hasRoleSignal && !hasArabicSignal) {
     console.warn(`[ScraperAI] Source ${scrapedContent.name} skipped — insufficient content for AI extraction.`);
     return [];
   }
@@ -1192,6 +1440,7 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
 
   const systemPrompt = `You are an expert at extracting HNWI leads from UAE business websites.
 ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names with business roles are found. NEVER invent data.
+CONTEXTUAL EXTRACTION RULE: Actively scan the entire text, including running articles, press releases, news reports, paragraphs, headers, and footers. Do not just look at structured tables or member lists. Real estate investors and HNWIs are often mentioned contextually in sentences (e.g., "Ahmed bought a penthouse...", "Under the leadership of Director Sarah...").
 For each lead provide ALL required fields:
 - name, nameAr, company, companyAr, role, roleAr, location, tier (1-3), score (0-100), email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals (array), persona (2-3 sentence behavioral profile).
 Tier 1=Founders/CEOs/Chairmen. Tier 2=Directors/Managers. Tier 3=Professionals.
@@ -1324,14 +1573,17 @@ Output ONLY a JSON array. No other text.`;
 async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = null, runId = null, jobDiagnostics = null) {
   let browser;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-web-resources',
-        '--disable-features=IsolateOrigins,site-per-process'
-      ]
-    });
+    // Use playwright-extra with StealthPlugin for production bot-detection bypass.
+    // Falls back to vanilla chromium if stealth launch fails (e.g. unsupported environment).
+    const BROWSER_ARGS = [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-web-resources',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--no-sandbox',
+      '--disable-setuid-sandbox'
+    ];
+    browser = await chromium.launch({ headless: true, args: BROWSER_ARGS });
+    console.log('\ud83d\udd75\ufe0f  Browser launched with full stealth init-scripts active');
     if (jobDiagnostics) {
       jobDiagnostics.browserInstance = browser;
     }
@@ -1507,10 +1759,12 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
  * Fallback single-source scraper (for on-demand requests)
  */
 async function scrapeSource(sourceKey, proxyUrl = null) {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled']
-  });
+  const BROWSER_ARGS = [
+    '--disable-blink-features=AutomationControlled',
+    '--no-sandbox',
+    '--disable-setuid-sandbox'
+  ];
+  const browser = await chromium.launch({ headless: true, args: BROWSER_ARGS });
 
   try {
     const sourceMap = await getSourceConfigMap();

@@ -140,6 +140,7 @@
     "estLeads": "Estimated Leads",
     "scrapeDepth": "Scrape Depth",
     "deepDepth": "Deep (11+ sources)",
+    "activeSources": "active sources",
     "disclaimer": "* Scoring will be automatically adjusted based on Tier 1 source priority and your signals filter.",
     "savedSuccess": "Search criteria saved!",
     "saveError": "Failed to save search criteria.",
