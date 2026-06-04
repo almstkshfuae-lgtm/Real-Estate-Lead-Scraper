@@ -63,6 +63,7 @@ model Lead {
   @@index([agentId], map: "Lead_agentId_fkey")
   @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
   @@index([source])
+  @@map("leads")
 }
 
 model SourceConfig {
