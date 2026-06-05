@@ -21,6 +21,7 @@ interface LeadPipelineProps {
     statusFilter: string;
     tierFilter: number | "";
     scrapeRunId?: string;
+    refreshTrigger?: number;
   };
 }
 

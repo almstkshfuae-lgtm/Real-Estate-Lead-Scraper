@@ -11,12 +11,17 @@ import {
   List, 
   Search, 
   Filter, 
-  RotateCcw 
+  RotateCcw,
+  Loader2,
+  RefreshCw,
+  Thermometer,
+  AlertCircle
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import CsvUpload from "@/components/leads/CsvUpload";
+import { useScrapeRunStatus } from "@/hooks/useScrapeRunStatus";
 
 export default function LeadsPage() {
   const { t } = useTranslation('common');
@@ -31,6 +36,15 @@ export default function LeadsPage() {
   const [tierFilter, setTierFilter] = useState<number | "">("");
   const [scrapeRunIdFilter, setScrapeRunIdFilter] = useState(searchParams?.get("scrapeRunId") || "");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const { status: runStatus, leadsFound, isPolling } = useScrapeRunStatus(scrapeRunIdFilter || null);
+
+  // Auto-refresh table periodically when polling
+  useEffect(() => {
+    if (isPolling) {
+      handleRefresh();
+    }
+  }, [leadsFound, isPolling]);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -171,17 +185,73 @@ export default function LeadsPage() {
         </div>
       </div>
 
+      {/* Active Scrape Progress Banner */}
+      {scrapeRunIdFilter && (isPolling || runStatus === "COMPLETED" || runStatus === "FAILED") && (
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-primary)] rounded-2xl p-4 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center gap-4">
+          <div className="absolute top-0 start-0 w-1 bg-[var(--color-primary)] h-full" />
+          {isPolling ? (
+            <div className="w-10 h-10 rounded-full bg-[var(--color-primary-subtle)] flex items-center justify-center flex-shrink-0">
+              <RefreshCw className="w-5 h-5 text-[var(--color-primary)] animate-spin" />
+            </div>
+          ) : runStatus === "COMPLETED" ? (
+            <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+              <Thermometer className="w-5 h-5 text-green-500" />
+            </div>
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-5 h-5 text-red-500" />
+            </div>
+          )}
+
+          <div className="flex-1 text-center md:text-start">
+            <h3 className="font-bold text-[var(--color-text-primary)]">
+              {isPolling
+                ? t("search.scrapeInProgress", "Scraping in progress...")
+                : runStatus === "COMPLETED"
+                ? t("search.scrapeComplete", "Scraping complete!")
+                : t("search.scrapeFailed", "Scraping failed")}
+            </h3>
+            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+              {isPolling
+                ? t("search.scrapeWait", "Please wait while we extract data. Leads will appear automatically.")
+                : runStatus === "COMPLETED"
+                ? t("search.scrapeFound", "We found {{count}} leads.", { count: leadsFound })
+                : t("search.scrapeErrorDesc", "An error occurred during the scrape job.")}
+            </p>
+          </div>
+
+          <div className="text-center">
+            <div className="text-3xl font-black text-[var(--color-primary)] leading-none">{leadsFound}</div>
+            <div className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mt-1">
+              {t("search.leadsFound", "Leads Found")}
+            </div>
+          </div>
+          
+          {!isPolling && (
+            <button
+              onClick={() => {
+                // Clear filter so banner goes away and all leads are shown
+                setScrapeRunIdFilter("");
+              }}
+              className="px-4 py-2 bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] rounded-xl text-sm font-bold border border-[var(--color-border)] hover:bg-[var(--color-bg-card)] transition-colors ms-4"
+            >
+              {t("common.clear", "Clear Filter")}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Main View Area */}
-      <div key={refreshKey}>
+      <div>
         {view === 'list' ? (
           <LeadTable 
             onSelectLead={(lead) => setSelectedLead(lead)} 
-            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter }}
+            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter, refreshTrigger: refreshKey }}
           />
         ) : (
           <LeadPipeline 
             onSelectLead={(lead) => setSelectedLead(lead)} 
-            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter }}
+            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter, refreshTrigger: refreshKey }}
           />
         )}
       </div>

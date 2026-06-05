@@ -17,6 +17,7 @@ import {
   Loader2,
   TrendingUp,
   ZapOff,
+  AlertCircle
 } from "lucide-react";
 import { useScrapeRunStatus } from "@/hooks/useScrapeRunStatus";
 import { toast } from "sonner";
@@ -56,6 +57,9 @@ export default function MapPage() {
   const [geofenceBounds, setGeofenceBounds] = useState<{
     north: number; south: number; east: number; west: number;
   } | null>(null);
+
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const { status: runStatus, leadsFound, isPolling } = useScrapeRunStatus(activeRunId);
 
   // Filters
   const [tierFilter, setTierFilter] = useState<number | "">("");
@@ -139,6 +143,7 @@ export default function MapPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sources: ['alforsan', 'rotary', 'adec'], // defaults
           criteria: {
             propertyTypes: ["apartment", "villa"],
             emirates: ["Dubai"],
@@ -152,8 +157,13 @@ export default function MapPage() {
 
       if (!res.ok) throw new Error("Scrape trigger failed");
       const data = await safeJson(res);
+      
+      if (data.runId) {
+        setActiveRunId(data.runId);
+      }
+      
       const { toast } = await import("sonner");
-      toast.success(t("search.scrapeStarted", "Scrape job started successfully"));
+      toast.success(t("search.scrapeStarted", "Scrape job started successfully. Tracking progress..."));
     } catch (err) {
       console.error(err);
       const { toast } = await import("sonner");
@@ -325,10 +335,10 @@ export default function MapPage() {
             </span>
             <button
               onClick={handleTargetedScrape}
-              disabled={loading}
+              disabled={loading || isPolling}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1D9E75] text-white text-xs font-bold hover:bg-[#188562] transition-colors shadow-sm disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {(loading || isPolling) ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
               {t("map.targetScrape", "Targeted Scrape for this Zone")}
             </button>
           </div>
@@ -339,6 +349,63 @@ export default function MapPage() {
             <X className="w-3 h-3" />
             {t("map.clearZone", "Clear Zone")}
           </button>
+        </div>
+      )}
+
+      {/* Active Scrape Progress Banner */}
+      {activeRunId && (
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-primary)] rounded-2xl p-4 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center gap-4">
+          <div className="absolute top-0 start-0 w-1 bg-[var(--color-primary)] h-full" />
+          {isPolling ? (
+            <div className="w-10 h-10 rounded-full bg-[var(--color-primary-subtle)] flex items-center justify-center flex-shrink-0">
+              <RefreshCw className="w-5 h-5 text-[var(--color-primary)] animate-spin" />
+            </div>
+          ) : runStatus === "COMPLETED" ? (
+            <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+              <Thermometer className="w-5 h-5 text-green-500" />
+            </div>
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-5 h-5 text-red-500" />
+            </div>
+          )}
+
+          <div className="flex-1 text-center md:text-start">
+            <h3 className="font-bold text-[var(--color-text-primary)]">
+              {isPolling
+                ? t("search.scrapeInProgress", "Scraping in progress...")
+                : runStatus === "COMPLETED"
+                ? t("search.scrapeComplete", "Scraping complete!")
+                : t("search.scrapeFailed", "Scraping failed")}
+            </h3>
+            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+              {isPolling
+                ? t("search.scrapeWait", "Please wait while we extract data from the targeted zone. It may take a few minutes.")
+                : runStatus === "COMPLETED"
+                ? t("search.scrapeFound", "We found {{count}} leads.", { count: leadsFound })
+                : t("search.scrapeErrorDesc", "An error occurred during the scrape job.")}
+            </p>
+          </div>
+
+          {isPolling ? (
+            <div className="text-center">
+              <div className="text-3xl font-black text-[var(--color-primary)] leading-none">{leadsFound}</div>
+              <div className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mt-1">
+                {t("search.leadsFound", "Leads Found")}
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setActiveRunId(null);
+                if (geofenceBounds) handleGeofenceDrawn(geofenceBounds); // refresh area
+                else fetchLeads(); // refresh all
+              }}
+              className="px-4 py-2 bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] rounded-xl text-sm font-bold border border-[var(--color-border)] hover:bg-[var(--color-bg-card)] transition-colors"
+            >
+              {t("search.viewResults", "View Results")}
+            </button>
+          )}
         </div>
       )}
 

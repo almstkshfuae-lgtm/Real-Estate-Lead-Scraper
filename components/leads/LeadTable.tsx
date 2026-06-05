@@ -40,6 +40,7 @@ interface LeadTableProps {
     statusFilter: string;
     tierFilter: number | "";
     scrapeRunId?: string;
+    refreshTrigger?: number;
   };
 }
 
