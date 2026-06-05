@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn, Loader2, ShieldCheck, Globe } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { safeJson } from "@/lib/safe-fetch";
 
 export default function LoginPage() {
   const { t, i18n } = useTranslation('common');
@@ -26,18 +27,10 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const text = await res.text();
-      let data: any = {};
-
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch (parseError) {
-        console.error('Login response was not valid JSON:', text);
-        data = {
-          error: 'Unexpected server response',
-          details: text,
-        };
-      }
+      const data = await safeJson(res).catch(e => ({
+        error: 'Unexpected server response',
+        details: e.message
+      }));
 
       if (res.ok) {
         router.push("/leads");

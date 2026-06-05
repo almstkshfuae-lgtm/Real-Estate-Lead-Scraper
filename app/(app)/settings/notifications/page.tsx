@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Bell, Mail, Smartphone, Zap, FileSpreadsheet, MessageSquare, Save, Globe, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { safeJson } from "@/lib/safe-fetch";
 
 type NotificationPrefs = {
   emailAlerts: boolean;
@@ -79,7 +80,7 @@ export default function NotificationsSettingsPage() {
     fetch("/api/settings/notifications")
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
+        return safeJson(res);
       })
       .then((data) => {
         if (!cancelled && data.preferences) {
@@ -141,7 +142,7 @@ export default function NotificationsSettingsPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const data = await safeJson(res).catch(() => ({}));
         throw new Error(data.error || "Failed to save");
       }
 

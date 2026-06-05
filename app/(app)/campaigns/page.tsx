@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Megaphone, Users, RefreshCw, Send, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { safeJson } from "@/lib/safe-fetch";
 
 export default function CampaignsPage() {
   const { t, i18n } = useTranslation("common");
@@ -56,7 +57,7 @@ export default function CampaignsPage() {
       
       if (!res.ok) throw new Error("Push failed");
       
-      const json = await res.json();
+      const json = await safeJson(res).catch(() => ({} as any));
       toast.success(t("common.bulkPushed", "Successfully pushed leads to Bitrix24").replace("{{count}}", json.successCount));
     } catch (e: any) {
       toast.error(t("common.notAvailable", "Failed to push group"));

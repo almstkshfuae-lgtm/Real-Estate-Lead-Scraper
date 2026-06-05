@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import QualificationForm from "@/components/search/QualificationForm";
 import { Clock, History, ChevronRight, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -26,6 +26,28 @@ export default function SearchPage() {
   useEffect(() => {
     fetchRecent();
   }, []);
+
+  // Auto-refresh sidebar when any run is active (PROCESSING or PENDING)
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    const hasActiveRun = recentSearches.some(
+      (run) => run.status === 'PROCESSING' || run.status === 'PENDING'
+    );
+
+    if (hasActiveRun && !refreshIntervalRef.current) {
+      refreshIntervalRef.current = setInterval(fetchRecent, 10000);
+    } else if (!hasActiveRun && refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+  }, [recentSearches]);
 
   return (
     <div className="space-y-12 pb-20">
@@ -68,10 +90,16 @@ export default function SearchPage() {
                         <Clock className="w-3 h-3" />
                         {new Date(run.startedAt).toLocaleDateString()}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${run.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1.5 ${run.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                           run.status === 'PROCESSING' || run.status === 'PENDING' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
                             'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                         }`}>
+                        {(run.status === 'PROCESSING' || run.status === 'PENDING') && (
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                          </span>
+                        )}
                         {run.status}
                       </span>
                     </div>

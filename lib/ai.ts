@@ -195,8 +195,8 @@ function extractTextFromAIResponse(response: any): string {
  */
 async function withRetry<T>(
   fn: () => Promise<T>,
-  maxAttempts = 3,
-  baseDelayMs = 1000
+  maxAttempts = 6,
+  baseDelayMs = 2000
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -471,7 +471,7 @@ export function cleanScrapedText(text: string): string {
 
   // 5. Configurable truncation limit (default 100,000 characters) to avoid context saturation
   const envMax = process.env.AI_MAX_INPUT_CHARS || process.env.NEXT_PUBLIC_AI_MAX_INPUT_CHARS;
-  const maxChars = envMax ? parseInt(envMax, 10) : 100000;
+  const maxChars = envMax ? parseInt(envMax, 10) : 50000;
   if (cleaned.length > maxChars) {
     cleaned = cleaned.substring(0, maxChars) + "... [Truncated due to context window limits]";
   }
@@ -661,7 +661,7 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
 
     const data = await response.json();
     return extractTextFromAIResponse(data) || "";
-  }, 3, 1000);
+  }, 6, 2000);
 }
 
 /**
@@ -680,12 +680,27 @@ export async function extractHNWILeads(scrapedData: {
   const criteriaPrompt = formatCriteriaPrompt(criteria);
   const cleanedContent = cleanScrapedText(scrapedData.content);
 
+  const isDirectorySource = scrapedData.type === 'Business Directory' || 
+                            scrapedData.type === 'Google Maps Business Directory' ||
+                            (scrapedData.name || '').toLowerCase().includes('maps') || 
+                            (scrapedData.name || '').toLowerCase().includes('yellow');
+
+  const absoluteRule = isDirectorySource
+    ? `0. ABSOLUTE RULE: Since this content is from a business directory (no individual human names are expected), you are permitted to extract the business/company itself as a lead if no specific human name is present.
+For each business:
+- For "name" and "nameAr", use a generic placeholder like "Representative of [Company Name]" or "ممثل [اسم الشركة]".
+- Use the actual business/company name for "company" and "companyAr".
+- Set "role" to "Corporate Contact" and "roleAr" to "جهة اتصال الشركة".
+- Capture their telephone as "phone", website/email if present, and location.
+NEVER invent or hallucinate contact numbers or locations; only extract what is explicitly written.`
+    : `0. ABSOLUTE RULE: You MUST extract ONLY real data explicitly present in the provided text. If you cannot find an explicit name of a real estate client, investor, or HNWI with financial solvency indicators, return an EMPTY ARRAY [] immediately. It is STRICTLY FORBIDDEN to invent names, guess companies, or generate random data based on general context. Absence of real data = return []. No exceptions.
+1. Extract ONLY real people with verified business context from the page.`;
+
   const content = await generateGeminiText(
     `You are an expert at extracting high-net-worth individual (HNWI) leads from UAE business websites, club directories, news articles, and event listings.
 
 CRITICAL INSTRUCTIONS:
-0. ABSOLUTE RULE: You MUST extract ONLY real data explicitly present in the provided text. If you cannot find an explicit name of a real estate client, investor, or HNWI with financial solvency indicators, return an EMPTY ARRAY [] immediately. It is STRICTLY FORBIDDEN to invent names, guess companies, or generate random data based on general context. Absence of real data = return []. No exceptions.
-1. Extract ONLY real people with verified business context from the page.
+${absoluteRule}
 2. If the page text is purely generic marketing copy, facility catalogs, sports package descriptions, pricing tables, or promotional articles with NO list of specific members, committee lists, board members, corporate leaders, or elite horse owners, DO NOT extract anything. You MUST return an empty array [] immediately.
 3. NEVER extract general staff, copywriters, or random nouns. Only extract HNWIs (owners, directors, members).
 4. For each person, provide BOTH English AND Arabic names/companies/roles.
@@ -778,7 +793,7 @@ Output ONLY the JSON array. No other text.`,
     console.warn('[AI] Truncated response detected — retrying Gemini call with reduced token budget (max 5 leads)...');
     const retryContent = await generateGeminiText(
       `You are an expert at extracting HNWI leads from UAE business content.
-ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names are found.
+${isDirectorySource ? `ABSOLUTE RULE: Since this content is from a business directory (no individual human names are expected), you are permitted to extract the business/company itself as a lead if no specific human name is present. Use a placeholder like "Representative of [Company Name]" for the name, use the company name for company, and "Corporate Contact" for role.` : `ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names are found.`}
 Return a JSON array of at most 5 leads. Each lead MUST have: name, nameAr, company, companyAr, role, roleAr, location, tier, score, email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals, persona.
 Output ONLY the JSON array. No other text.`,
       `Page Title: ${scrapedData.title}\nSource: ${scrapedData.name}\nContent (truncated):\n${cleanedContent.substring(0, 6000)}`,
@@ -800,7 +815,7 @@ Output ONLY the JSON array. No other text.`,
         .filter((lead: any) =>
           lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
           && filterLeadByCriteria(lead, criteria)
-          && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent)
+          && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent, lead.company, lead.companyAr)
         )
         .map((lead: any) => ({
           ...lead,
@@ -813,8 +828,66 @@ Output ONLY the JSON array. No other text.`,
  * Verify that the lead's name actually appears in the original source text.
  * Prevents AI hallucinations from entering the database.
  */
-function verifyLeadInSource(name: string, nameAr: string | null | undefined, sourceText: string): boolean {
+function verifyLeadInSource(
+  name: string,
+  nameAr: string | null | undefined,
+  sourceText: string,
+  company?: string | null,
+  companyAr?: string | null
+): boolean {
   if (!name || !sourceText) return false;
+
+  const isPlaceholder = name.toLowerCase().startsWith('representative of') || 
+                        (nameAr && nameAr.startsWith('ممثل'));
+
+  if (isPlaceholder && (company || companyAr)) {
+    const normalizedSource = sourceText.toLowerCase();
+    
+    // Check English Company Match
+    if (company) {
+      const coLower = company.toLowerCase().trim();
+      if (normalizedSource.includes(coLower)) {
+        return true;
+      }
+      
+      const stopWords = new Set([
+        'al', 'el', 'bin', 'ibn', 'the', 'of', 'and', 'ltd', 'limited', 'llc', 'inc', 'co', 'company', 'group'
+      ]);
+      const coKeyWords = coLower
+        .replace(/[\d().,\-_]/g, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 2 && !stopWords.has(word));
+      if (coKeyWords.length > 0) {
+        const matches = coKeyWords.filter(word => normalizedSource.includes(word));
+        const matchThreshold = Math.min(2, coKeyWords.length);
+        if (matches.length >= matchThreshold) {
+          return true;
+        }
+      }
+    }
+
+    // Check Arabic Company Match
+    if (companyAr) {
+      const normalizeArabic = (str: string) => {
+        return str
+          .replace(/[\u064B-\u0652]/g, "") // Remove Arabic diacritics
+          .replace(/[أإآ]/g, "ا")          // Normalize Alef shapes
+          .replace(/ة/g, "ه")             // Normalize Teh Marbouta
+          .replace(/ى/g, "ي")             // Normalize Alef Maksoura
+          .toLowerCase()
+          .trim();
+      };
+
+      const normSourceAr = normalizeArabic(sourceText);
+      const normCoAr = normalizeArabic(companyAr);
+      if (normSourceAr.includes(normCoAr)) {
+        return true;
+      }
+    }
+
+    console.warn(`[AI] Directory entity "${company || ''}" (Arabic: "${companyAr || ''}") not found in source text — discarding lead`);
+    return false;
+  }
   
   const normalizedSource = sourceText.toLowerCase();
 
@@ -944,7 +1017,7 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
     ? leads
         .filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
           && filterLeadByCriteria(lead, criteria)
-          && verifyLeadInSource(lead.name, lead.nameAr, cleanedText)
+          && verifyLeadInSource(lead.name, lead.nameAr, cleanedText, lead.company, lead.companyAr)
         )
         .map((lead: any) => ({
           ...lead,

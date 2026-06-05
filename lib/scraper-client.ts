@@ -54,7 +54,7 @@ class ScraperClient {
    * if source verification checks are slow.
    */
   private static readonly DEFAULT_HANDSHAKE_TIMEOUT_MS = 10_000;  // 10s — health checks
-  private static readonly DEFAULT_SCRAPE_TRIGGER_TIMEOUT_MS = 120_000; // 120s — scrape ack
+  private static readonly DEFAULT_SCRAPE_TRIGGER_TIMEOUT_MS = 15_000; // 15s — scraper responds immediately with queued ack
 
   constructor(config: ScraperConfig) {
     this.baseUrl = config.baseUrl || 'http://localhost:3002';
@@ -161,7 +161,7 @@ class ScraperClient {
    * Returns immediately — scraping happens in background on Railway.
    * Uses 120s timeout to cover slow source verification checks.
    */
-  async scrapeMultipleSources(sourceKeys: string[], webhookUrl?: string, runId?: string): Promise<ScraperResponse> {
+  async scrapeMultipleSources(sourceKeys: string[], webhookUrl?: string, runId?: string, criteria?: any): Promise<ScraperResponse> {
     if (!sourceKeys || sourceKeys.length === 0) {
       throw new Error('At least one source key required');
     }
@@ -178,7 +178,8 @@ class ScraperClient {
           proxyUrl: this.proxyUrl,
           proxyApiKey: this.proxyApiKey,
           webhookUrl,
-          runId
+          runId,
+          criteria
         }),
         signal: controller.signal
       });

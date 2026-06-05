@@ -18,6 +18,9 @@ import {
   TrendingUp,
   ZapOff,
 } from "lucide-react";
+import { useScrapeRunStatus } from "@/hooks/useScrapeRunStatus";
+import { toast } from "sonner";
+import { safeJson } from "@/lib/safe-fetch";
 import MapStats from "@/components/map/MapStats";
 import MapLeadPanel from "@/components/map/MapLeadPanel";
 import LeadSidebar from "@/components/leads/LeadSidebar";
@@ -76,7 +79,7 @@ export default function MapPage() {
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("Fetch failed");
-      const data = await res.json();
+      const data = await safeJson(res);
       setLeads(data.leads || []);
     } catch (e) {
       console.error(e);
@@ -104,7 +107,7 @@ export default function MapPage() {
 
         const res = await fetch(url);
         if (!res.ok) throw new Error("Zone fetch failed");
-        const data = await res.json();
+        const data = await safeJson(res);
         setGeofencedLeads(data.leads || []);
       } catch (err) {
         console.error("Geofence query failed:", err);
@@ -148,7 +151,7 @@ export default function MapPage() {
       });
 
       if (!res.ok) throw new Error("Scrape trigger failed");
-      const data = await res.json();
+      const data = await safeJson(res);
       const { toast } = await import("sonner");
       toast.success(t("search.scrapeStarted", "Scrape job started successfully"));
     } catch (err) {

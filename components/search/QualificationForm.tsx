@@ -11,10 +11,16 @@ import {
   Save,
   Info,
   CheckCircle2,
-  Trash2
+  Trash2,
+  Loader2,
+  AlertCircle,
+  ExternalLink,
+  RefreshCw
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { safeJson } from "@/lib/safe-fetch";
+import { useScrapeRunStatus } from "@/hooks/useScrapeRunStatus";
 
 import { useRouter } from "next/navigation";
 
@@ -70,6 +76,8 @@ export default function QualificationForm({ initialData }: { initialData?: any }
 
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const { status: runStatus, leadsFound, isPolling } = useScrapeRunStatus(activeRunId);
 
   const handleSave = async (isScrape = false) => {
     setLoading(true);
@@ -105,7 +113,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sources: DEFAULT_SCRAPE_SOURCES, criteria }),
         });
-        const scrapeData = await scrapeRes.json();
+        const scrapeData = await safeJson(scrapeRes);
 
         if (scrapeData.warning) {
           // Scraper service is offline — job queued
@@ -113,12 +121,14 @@ export default function QualificationForm({ initialData }: { initialData?: any }
             t('search.scrapeOffline', 'Scraper service offline. Job queued — it will run when the service comes back online.'),
             { id: toastId, duration: 6000 }
           );
+          if (scrapeData.runId) setActiveRunId(scrapeData.runId);
         } else if (scrapeRes.ok) {
           toast.success(
-            t('search.scrapeStarted', 'Scrape job started! Leads will appear shortly.'),
+            t('search.scrapeStarted', 'Scrape job started! Tracking progress below.'),
             { id: toastId, duration: 5000 }
           );
-          setTimeout(() => router.push('/leads'), 1500);
+          // Capture runId for live polling — do NOT navigate immediately
+          if (scrapeData.runId) setActiveRunId(scrapeData.runId);
         } else {
           toast.error(
             scrapeData.error || t('search.scrapeError', 'Failed to start scrape job.'),
@@ -309,9 +319,91 @@ export default function QualificationForm({ initialData }: { initialData?: any }
           </div>
         </div>
 
-        <div className="mt-12 flex gap-4">
+        {/* ── Live Progress Banner ── */}
+        {activeRunId && (
+          <div className="mt-8 rounded-2xl border overflow-hidden animate-in fade-in-0 slide-in-from-top-2 duration-300">
+            {runStatus === 'COMPLETED' ? (
+              <div className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  <div>
+                    <p className="text-sm font-bold text-green-800 dark:text-green-300">
+                      {t('search.scrapeComplete', 'Scrape complete')}
+                    </p>
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      {leadsFound} {t('search.leadsFound', 'leads found')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => router.push(`/leads?scrapeRunId=${activeRunId}`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 transition-colors shadow-md"
+                >
+                  {t('search.viewLeads', 'View Leads')} <ExternalLink className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : runStatus === 'FAILED' ? (
+              <div className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  <div>
+                    <p className="text-sm font-bold text-red-800 dark:text-red-300">
+                      {t('search.scrapeFailed', 'Scrape failed')}
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      {leadsFound > 0
+                        ? `${leadsFound} ${t('search.leadsFoundPartial', 'leads found before failure')}`
+                        : t('search.noLeadsFound', 'No leads were extracted')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setActiveRunId(null); handleSave(true); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 transition-colors shadow-md"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> {t('search.retry', 'Retry')}
+                </button>
+              </div>
+            ) : (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
+                    <div>
+                      <p className="text-sm font-bold text-blue-800 dark:text-blue-300">
+                        {runStatus === 'PENDING'
+                          ? t('search.scrapeQueued', 'Scrape queued — waiting for slot...')
+                          : t('search.scrapeProcessing', 'Scraping sources...')}
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        {leadsFound > 0
+                          ? `${leadsFound} ${t('search.leadsFoundSoFar', 'leads found so far')}`
+                          : t('search.extractingData', 'Extracting data from websites...')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="w-2 h-2 rounded-full bg-blue-500 dark:bg-blue-400 animate-pulse"
+                        style={{ animationDelay: `${i * 300}ms` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {/* Progress bar simulation */}
+                <div className="mt-3 h-1.5 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 dark:bg-blue-400 rounded-full animate-progress-indeterminate" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-8 flex gap-4">
           <button 
-            disabled={loading}
+            disabled={loading || isPolling}
             onClick={() => handleSave(true)}
             className="flex-1 py-4 bg-[var(--color-primary)] text-white font-bold rounded-2xl hover:bg-[var(--color-primary-hover)] transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-50"
           >
@@ -320,7 +412,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
             ) : (
               <Play className="w-5 h-5 fill-current" />
             )}
-            {loading ? t('search.scrapeInitializing') : t('search.startScrape')}
+            {loading ? t('search.scrapeInitializing') : isPolling ? t('search.scrapeInProgress', 'Scrape in progress...') : t('search.startScrape')}
           </button>
           <button 
             disabled={loading}

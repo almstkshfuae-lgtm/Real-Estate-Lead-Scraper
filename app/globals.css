@@ -24,3 +24,25 @@
     }
   }
 }
+
+/* Indeterminate progress bar animation for scrape status banner */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+    width: 40%;
+  }
+
+  50% {
+    transform: translateX(60%);
+    width: 60%;
+  }
+
+  100% {
+    transform: translateX(200%);
+    width: 40%;
+  }
+}
+
+.animate-progress-indeterminate {
+  animation: progress-indeterminate 2s ease-in-out infinite;
+}

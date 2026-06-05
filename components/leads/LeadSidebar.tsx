@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 import { Lead } from "./LeadTable";
+import { safeJson } from "@/lib/safe-fetch";
 
 export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onClose: () => void }) {
   const { t, i18n } = useTranslation("common");
@@ -62,7 +63,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         try {
           const res = await fetch(`/api/leads/${lead.id}/persona?lang=${lang}`);
           if (!res.ok) throw new Error("Failed to fetch persona");
-          const data = await res.json();
+          const data = await safeJson(res);
           if (active) {
             setDynamicPersona(data.persona);
           }
@@ -131,7 +132,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         body: JSON.stringify({ lead, lang, style: pitchStyle }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await safeJson(res);
       setPitch(data.pitch);
     } catch (err: any) {
       toast.error(t("ai.pitchError", "Failed to generate pitch"));
@@ -188,7 +189,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
       });
       
       if (!res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res).catch(() => ({} as any));
         throw new Error(data.error || "Failed to delete lead");
       }
       
@@ -383,7 +384,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ text: formattedPitch })
                         });
-                        const data = await res.json();
+                        const data = await safeJson(res);
                         if (!res.ok) throw new Error(data.error || "Failed to send");
                         toast.success(t("common.whatsappSent", "WhatsApp message sent"), { id: toastId });
                       } catch (err: any) {
@@ -604,7 +605,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                         }),
                       });
                       
-                      const data = await res.json();
+                      const data = await safeJson(res);
                       if (!res.ok) throw new Error(data.error || "Failed to schedule");
                       
                       toast.success(t("leads.sidebar.followup.success", "Follow-up scheduled in Bitrix24"));
@@ -645,7 +646,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
             setPushing(true);
             try {
               const res = await fetch(`/api/leads/${lead.id}/push`, { method: "POST" });
-              const data = await res.json();
+              const data = await safeJson(res);
               
               if (!res.ok) throw new Error(data.error || "Failed to push");
               

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { safeJson } from "@/lib/safe-fetch";
 import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 
 export type Lead = {
@@ -122,7 +123,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: selectedIds })
       });
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) throw new Error(data.error || "Bulk push failed");
 
@@ -157,7 +158,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         throw new Error(data.error || "Failed to delete leads");
       }
 

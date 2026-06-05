@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Bell, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { safeJson } from "@/lib/safe-fetch";
 
 type NotificationItem = {
   id: string;
@@ -30,7 +31,7 @@ export default function NotificationsPage() {
         throw new Error(`HTTP ${res.status}`);
       }
 
-      const data = await res.json();
+      const data = await safeJson(res);
       setNotifications(data.notifications || []);
     } catch (error) {
       console.error("Failed to fetch notifications:", error);

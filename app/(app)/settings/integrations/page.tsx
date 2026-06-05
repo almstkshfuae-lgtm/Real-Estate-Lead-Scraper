@@ -1,11 +1,11 @@
 "use client";
 
 import React from "react";
-
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Link2, MessageCircle, Mail, Key, ShieldCheck, Database, Save, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ShieldCheck, Database, Link2, MessageSquare, Mail, KeyRound, Globe, Save, Loader2, PlayCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { safeJson } from "@/lib/safe-fetch";
 
 export default function IntegrationsSettingsPage() {
   const { t } = useTranslation('common');
@@ -112,7 +112,7 @@ export default function IntegrationsSettingsPage() {
         })
       });
       
-      const data = await res.json();
+      const data = await safeJson(res).catch(() => ({} as any));
       
       if (data.success) {
         setTestStatus(prev => ({ ...prev, [system]: 'success' }));

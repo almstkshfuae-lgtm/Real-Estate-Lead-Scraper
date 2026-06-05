@@ -61,8 +61,8 @@ export async function applyStealthOverrides(page) {
         RunningState: { CANNOT_RUN: 'CANNOT_RUN', RUNNING: 'RUNNING', CAN_RUN: 'CAN_RUN' }
       },
       runtime: {
-        onConnect: { addListener: () => {} },
-        onMessage: { addListener: () => {} }
+        onConnect: { addListener: () => { } },
+        onMessage: { addListener: () => { } }
       }
     };
 
@@ -87,7 +87,7 @@ export async function applyStealthOverrides(page) {
         ];
         arr.item = (i) => arr[i];
         arr.namedItem = (name) => arr.find(p => p.name === name) || null;
-        arr.refresh = () => {};
+        arr.refresh = () => { };
         return arr;
       }
     });
@@ -97,7 +97,7 @@ export async function applyStealthOverrides(page) {
 
     // 6. WebGL fingerprint masking
     const getParameterProxied = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+    WebGLRenderingContext.prototype.getParameter = function (parameter) {
       if (parameter === 37445) return 'Intel Inc.';       // UNMASKED_VENDOR_WEBGL
       if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
       return getParameterProxied.call(this, parameter);
@@ -111,7 +111,7 @@ export async function applyStealthOverrides(page) {
 
     // 8. Prevent iframe-based detection
     Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
-      get: function() { return window; }
+      get: function () { return window; }
     });
   });
 }
@@ -224,7 +224,8 @@ async function processQueue() {
       currentJob.proxyUrl,
       currentJob.webhookUrl,
       currentJob.runId,
-      currentJob.jobDiagnostics
+      currentJob.jobDiagnostics,
+      currentJob.criteria
     );
   } catch (error) {
     console.error(`[Queue] Error running job ${currentJob.runId}:`, error);
@@ -398,6 +399,14 @@ export async function resolveRobustLocator(page, configuredSelectors, type, brok
       for (let i = 0; i < count; i++) {
         const el = locator.nth(i);
         if (await el.isVisible()) {
+          try {
+            const tagName = await el.evaluate(node => node.tagName.toLowerCase());
+            if (type === 'expandButtons' && (tagName === 'nav' || tagName === 'header' || tagName === 'footer')) {
+              continue;
+            }
+          } catch (evaluateErr) {
+            // ignore evaluate errors
+          }
           console.log(`[SelectorCheck] Robust fallback succeeded! Used selector: "${sel}"`);
           if (selectorsToTry.length > 0) {
             brokenSelectorsAccumulator.push(`Configured selectors [${selectorsToTry.join(', ')}] were not visible/found. Resolved via fallback selector: "${sel}"`);
@@ -762,28 +771,34 @@ async function getSourceConfigMap() {
 
 async function seedDefaultSources() {
   for (const source of DEFAULT_SCRAPER_SOURCES) {
-    const existing = await prisma.sourceConfig.findUnique({
-      where: { key: source.key }
+    await prisma.sourceConfig.upsert({
+      where: { key: source.key },
+      update: {
+        url: source.url,
+        name: source.name,
+        type: source.type,
+        signals: source.signals,
+        navigationSelectors: source.navigationSelectors,
+        contentSelectors: source.contentSelectors,
+        crawlDepth: source.crawlDepth,
+        maxPages: source.maxPages,
+        delayBetweenPages: source.delayBetweenPages
+      },
+      create: {
+        key: source.key,
+        url: source.url,
+        name: source.name,
+        type: source.type,
+        signals: source.signals,
+        navigationSelectors: source.navigationSelectors,
+        contentSelectors: source.contentSelectors,
+        crawlDepth: source.crawlDepth,
+        maxPages: source.maxPages,
+        delayBetweenPages: source.delayBetweenPages,
+        active: true
+      }
     });
-
-    if (!existing) {
-      await prisma.sourceConfig.create({
-        data: {
-          key: source.key,
-          url: source.url,
-          name: source.name,
-          type: source.type,
-          signals: source.signals,
-          navigationSelectors: source.navigationSelectors,
-          contentSelectors: source.contentSelectors,
-          crawlDepth: source.crawlDepth,
-          maxPages: source.maxPages,
-          delayBetweenPages: source.delayBetweenPages,
-          active: true
-        }
-      });
-      console.log(`Seeded default source: ${source.key}`);
-    }
+    console.log(`Seeded/Synced default source: ${source.key}`);
   }
 }
 
@@ -853,7 +868,7 @@ app.post('/test-connection', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.post('/scrape', async (req, res) => {
-  const { sources, secret, proxyUrl, proxyApiKey, webhookUrl, runId } = req.body;
+  const { sources, secret, proxyUrl, proxyApiKey, webhookUrl, runId, criteria } = req.body;
 
   if (secret !== SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -877,6 +892,7 @@ app.post('/scrape', async (req, res) => {
     sources,
     proxyUrl,
     webhookUrl,
+    criteria,
     jobDiagnostics
   };
 
@@ -944,7 +960,273 @@ app.post('/scrape-source', async (req, res) => {
  * Supports multi-page traversal and content extraction
  * If USE_MOCK_DATA is enabled, returns simulated lead data instead
  */
-async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = null, jobDiagnostics = null, brokenSelectors = []) {
+async function performInteractiveSearch(page, sourceKey, criteria = {}) {
+  const location = criteria.emirates && criteria.emirates.length > 0 ? criteria.emirates[0] : 'Abu Dhabi';
+  const query = criteria.signals && criteria.signals.length > 0 ? criteria.signals[0] : 'investment';
+
+  if (sourceKey === 'adgm') {
+    console.log('[Scraper] Interacting with ADGM Search Registry...');
+    try {
+      const searchInputSelector = 'input[placeholder*="Search" i], input[type="text"]';
+      await page.waitForSelector(searchInputSelector, { timeout: 5000 }).catch(() => { });
+      if (await page.locator(searchInputSelector).first().isVisible()) {
+        await page.locator(searchInputSelector).first().fill(query);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(3000);
+      } else {
+        console.log('[Scraper] ADGM search input not visible. Proceeding directly.');
+      }
+    } catch (err) {
+      console.warn('[Scraper] ADGM interaction failed:', err.message);
+    }
+  } else if (sourceKey === 'difc') {
+    console.log('[Scraper] Interacting with DIFC Search Registry...');
+    try {
+      const searchInputSelector = 'input[placeholder*="Search" i], input[type="search" i], .search-input';
+      await page.waitForSelector(searchInputSelector, { timeout: 5000 }).catch(() => { });
+      if (await page.locator(searchInputSelector).first().isVisible()) {
+        await page.locator(searchInputSelector).first().fill(query);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(3000);
+      } else {
+        console.log('[Scraper] DIFC search input not visible. Proceeding directly.');
+      }
+    } catch (err) {
+      console.warn('[Scraper] DIFC interaction failed:', err.message);
+    }
+  } else if (sourceKey === 'google-maps') {
+    console.log('[Scraper] Loading Google Maps results feed...');
+    try {
+      const containerSelector = 'div[role="feed"]';
+      // Wait for the results panel to appear
+      await page.waitForSelector(containerSelector, { timeout: 15000 }).catch(() => { });
+
+      const container = page.locator(containerSelector).first();
+      if (await container.isVisible()) {
+        console.log('[Scraper] Scrolling Google Maps results feed to load all listings...');
+        // Scroll several times to lazy-load all results
+        for (let i = 0; i < 8; i++) {
+          await page.evaluate((sel) => {
+            const feed = document.querySelector(sel);
+            if (feed) {
+              feed.scrollTop = feed.scrollHeight;
+            }
+          }, containerSelector);
+          await page.waitForTimeout(1800);
+        }
+        // Scroll back to top to ensure all items are in DOM
+        await page.evaluate((sel) => {
+          const feed = document.querySelector(sel);
+          if (feed) feed.scrollTop = 0;
+        }, containerSelector);
+        await page.waitForTimeout(1000);
+
+        // Extract listing data directly from the panel
+        const listingData = await page.evaluate(() => {
+          const results = [];
+          // Each listing item in Google Maps has role="article" or is an <a> with data-value
+          const items = document.querySelectorAll('div[role="feed"] > div');
+          items.forEach(item => {
+            const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [jsan*="fontHeadlineSmall"]');
+            const phoneEl = item.querySelector('[data-item-id*="phone:tel:"], [aria-label*="Phone"]');
+            const websiteEl = item.querySelector('[data-item-id="authority"], [aria-label*="Website"]');
+            const categoryEl = item.querySelector('.W4Efsd:not(.W4Efsd span)');
+            const ratingEl = item.querySelector('.MW4etd');
+            const reviewsEl = item.querySelector('.UY7F9');
+            const linkEl = item.querySelector('a.hfpxzc, a[href*="/maps/place/"]');
+
+            const name = nameEl?.textContent?.trim();
+            if (name && name.length > 1) {
+              results.push({
+                name,
+                phone: phoneEl?.getAttribute('aria-label')?.replace('Phone:', '').trim() || phoneEl?.textContent?.trim() || '',
+                website: websiteEl?.getAttribute('aria-label')?.replace('Website:', '').trim() || '',
+                category: categoryEl?.textContent?.trim() || '',
+                rating: ratingEl?.textContent?.trim() || '',
+                reviews: reviewsEl?.textContent?.trim() || '',
+                profileUrl: linkEl?.href || ''
+              });
+            }
+          });
+          return results;
+        });
+
+        if (listingData.length > 0) {
+          console.log(`[Scraper] Google Maps: extracted ${listingData.length} listings from results panel.`);
+          // Inject into page as a script data block so extractCleanTextFromHTML can parse it
+          await page.evaluate((data) => {
+            const script = document.createElement('script');
+            script.type = 'application/json';
+            script.id = '__GM_LISTINGS__';
+            script.textContent = JSON.stringify(data);
+            document.body.appendChild(script);
+          }, listingData);
+        } else {
+          console.warn('[Scraper] Google Maps: no listings extracted from feed panel. Selectors may have changed.');
+        }
+      } else {
+        console.warn('[Scraper] Google Maps results feed not visible.');
+      }
+    } catch (err) {
+      console.warn('[Scraper] Google Maps interaction failed:', err.message);
+    }
+
+  } else if (sourceKey === 'yellow-pages') {
+    console.log('[Scraper] Interacting with Yellow Pages listings...');
+    try {
+      await page.waitForSelector('.listing-title, .listing-item', { timeout: 8000 }).catch(() => { });
+    } catch (err) {
+      console.warn('[Scraper] Yellow Pages load wait timed out');
+    }
+  }
+}
+
+/**
+ * Dismiss Yellow Pages push notification overlay that blocks pagination.
+ * The overlay has a CDK backdrop + dialog with an 'OK' button.
+ */
+async function dismissYellowPagesPushOverlay(page) {
+  const overlaySelectors = [
+    'div.cdk-overlay-container button:has-text("OK")',
+    'div.cdk-overlay-container button:has-text("No thanks")',
+    'div.cdk-overlay-container button:has-text("Cancel")',
+    'div.cdk-overlay-container button:has-text("Dismiss")',
+    'div.notification-dialog button',
+    '[class*="notification"] button',
+    'button[aria-label*="close" i]',
+    '.cdk-overlay-backdrop ~ * button'
+  ];
+
+  // Check if overlay is actually present
+  const backdropVisible = await page.locator('.cdk-overlay-backdrop').isVisible().catch(() => false);
+  if (!backdropVisible) return false;
+
+  console.log('[YP] Push notification overlay detected. Attempting dismissal...');
+
+  for (const sel of overlaySelectors) {
+    try {
+      const btn = page.locator(sel).first();
+      if (await btn.isVisible({ timeout: 1000 })) {
+        console.log(`[YP] Clicking overlay dismiss button: "${sel}"`);
+        await btn.click({ timeout: 5000, force: true });
+        await page.waitForTimeout(1000);
+        // Verify overlay is gone
+        const stillVisible = await page.locator('.cdk-overlay-backdrop').isVisible().catch(() => false);
+        if (!stillVisible) {
+          console.log('[YP] Push overlay dismissed successfully.');
+          return true;
+        }
+      }
+    } catch (err) {
+      // continue
+    }
+  }
+
+  // Last resort: press Escape
+  try {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    console.log('[YP] Pressed Escape to dismiss overlay.');
+  } catch (e) { /* ignore */ }
+
+  return false;
+}
+
+/**
+ * For Google Maps SPA: scroll the results feed to load more listings,
+ * then count new synthetic scroll pages.
+ */
+async function scrollGoogleMapsFeed(page, visitedUrls, maxPages) {
+  const feedSelector = 'div[role="feed"]';
+  try {
+    const feed = page.locator(feedSelector).first();
+    if (!(await feed.isVisible().catch(() => false))) {
+      console.log('[GoogleMaps] Results feed not found — cannot scroll.');
+      return false;
+    }
+
+    // Count listings before scrolling
+    const listingSelector = 'a.hfpxzc, a[href*="/maps/place/"]';
+    const beforeCount = await page.locator(listingSelector).count();
+
+    // Scroll the feed 5 times to trigger lazy-loading
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate((sel) => {
+        const feed = document.querySelector(sel);
+        if (feed) feed.scrollTop = feed.scrollHeight;
+      }, feedSelector);
+      await page.waitForTimeout(1500);
+    }
+    await page.waitForTimeout(1000);
+
+    const afterCount = await page.locator(listingSelector).count();
+    console.log(`[GoogleMaps] Feed scroll: ${beforeCount} → ${afterCount} listings loaded.`);
+
+    if (afterCount > beforeCount && visitedUrls.size < maxPages) {
+      const spaKey = `${page.url()}#scroll-${visitedUrls.size}`;
+      visitedUrls.add(spaKey);
+      return true;
+    }
+  } catch (err) {
+    console.warn('[GoogleMaps] Feed scroll failed:', err.message);
+  }
+  return false;
+}
+
+async function dismissGoogleConsent(page) {
+  const url = page.url();
+  if (url.includes('consent.google.') || url.includes('google.com/consent') || url.includes('consent.youtube.')) {
+    console.log('[Stealth] Google Consent redirect page detected. Attempting automatic dismissal...');
+    const selectors = [
+      'button[aria-label*="Accept all" i]',
+      'button[aria-label*="Agree" i]',
+      'button:has-text("Accept all")',
+      'button:has-text("Agree")',
+      'button:has-text("I agree")',
+      'button:has-text("قبول الكل")',
+      'button:has-text("أوافق")',
+      'form button'
+    ];
+    for (const sel of selectors) {
+      try {
+        const btn = page.locator(sel).first();
+        if (await btn.isVisible()) {
+          console.log(`[Stealth] Clicking Google consent button: "${sel}"`);
+          await btn.click({ timeout: 5000 });
+          await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => { });
+          await page.waitForTimeout(2000);
+          return true;
+        }
+      } catch (err) {
+        // continue
+      }
+    }
+  }
+
+  try {
+    const modalSelectors = [
+      'button:has-text("Accept all")',
+      'button:has-text("Agree")',
+      'button:has-text("I agree")',
+      'button:has-text("قبول الكل")',
+      'button:has-text("أوافق")'
+    ];
+    for (const sel of modalSelectors) {
+      const btn = page.locator(sel).first();
+      if (await btn.isVisible()) {
+        console.log(`[Stealth] Clicking in-page Google consent button: "${sel}"`);
+        await btn.click({ timeout: 5000 });
+        await page.waitForTimeout(2000);
+        return true;
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+  return false;
+}
+
+async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = null, jobDiagnostics = null, brokenSelectors = [], criteria = {}) {
   // Return mock data if enabled for testing
   if (USE_MOCK_DATA) {
     console.log(`🎭 Mock Mode: Returning simulated data for ${sourceKey || source.key}`);
@@ -986,6 +1268,18 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
 
+  // Block heavy assets (images, media, fonts) for all crawls to save bandwidth and speed up loading.
+  await page.route('**/*', (route) => {
+    const type = route.request().resourceType();
+    const blockedTypes = ['image', 'font', 'media'];
+
+    if (blockedTypes.includes(type)) {
+      route.abort();
+    } else {
+      route.continue();
+    }
+  });
+
   // Apply full stealth overrides to defeat bot-detection
   await applyStealthOverrides(page);
 
@@ -993,10 +1287,25 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
   const visitedUrls = new Set();
 
   try {
-    if (jobDiagnostics) {
-      jobDiagnostics.currentPageUrl = source.url;
+    let startUrl = source.url;
+    if (sourceKey === 'google-maps') {
+      const location = criteria.emirates && criteria.emirates.length > 0 ? criteria.emirates[0] : 'Abu Dhabi';
+      const searchTerms = criteria.signals && criteria.signals.length > 0 ? criteria.signals.join(' ') : 'real estate investor';
+      const query = encodeURIComponent(`${searchTerms} in ${location}`);
+      startUrl = `https://www.google.com/maps/search/${query}`;
+      console.log(`[DynamicURL] Google Maps search query constructed: ${startUrl}`);
+    } else if (sourceKey === 'yellow-pages') {
+      const searchTerms = criteria.signals && criteria.signals.length > 0 ? criteria.signals[0] : 'real estate';
+      const normalizedQuery = searchTerms.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      startUrl = `https://www.yellowpages.ae/search/${normalizedQuery}?field=bkeyword`;
+      console.log(`[DynamicURL] Yellow Pages search query constructed: ${startUrl}`);
     }
-    await page.goto(source.url, { timeout: 45000, waitUntil: 'domcontentloaded' });
+
+    if (jobDiagnostics) {
+      jobDiagnostics.currentPageUrl = startUrl;
+    }
+    await page.goto(startUrl, { timeout: 45000, waitUntil: 'domcontentloaded' });
+    await dismissGoogleConsent(page);
 
     // Force lazy-loaded content: scroll to bottom then back to top
     await page.evaluate(async () => {
@@ -1016,7 +1325,38 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
     });
     await page.waitForTimeout(1000);
 
+    // Perform interactive searches if applicable
+    await performInteractiveSearch(page, sourceKey, criteria);
+
+    // ── Google Maps: read the structured listing data injected by performInteractiveSearch
+    // and add it as formatted plaintext directly into allContent before recursive scraping.
+    if (sourceKey === 'google-maps') {
+      try {
+        const gmListings = await page.evaluate(() => {
+          const el = document.getElementById('__GM_LISTINGS__');
+          if (!el) return null;
+          try { return JSON.parse(el.textContent || '[]'); } catch { return null; }
+        });
+        if (gmListings && gmListings.length > 0) {
+          const formattedText = gmListings.map((item, i) =>
+            `Business ${i + 1}:\n` +
+            `  Name: ${item.name || ''}\n` +
+            `  Category: ${item.category || ''}\n` +
+            `  Phone: ${item.phone || ''}\n` +
+            `  Website: ${item.website || ''}\n` +
+            `  Rating: ${item.rating || ''} (${item.reviews || ''})\n` +
+            `  Profile URL: ${item.profileUrl || ''}`
+          ).join('\n\n');
+          allContent.unshift(`=== Google Maps Listings (${gmListings.length} results) ===\n\n${formattedText}`);
+          console.log(`[Scraper] Google Maps: added ${gmListings.length} formatted listings to content.`);
+        }
+      } catch (gmErr) {
+        console.warn('[Scraper] Google Maps: failed to read injected listing data:', gmErr.message);
+      }
+    }
+
     await simulateHumanBrowsing(page);
+
     await scrapePageRecursively(page, source, sourceKey, allContent, visitedUrls, source.maxPages || 5, jobDiagnostics, brokenSelectors);
 
     // Combine all scraped content
@@ -1094,8 +1434,36 @@ async function collectMemberLinks(page, source, visitedUrls, brokenSelectors) {
         if (!href) continue;
         // Resolve relative URLs against the source origin
         const absolute = href.startsWith('http') ? href : new URL(href, baseUrl.origin).href;
-        if (!visitedUrls.has(absolute)) {
-          links.push(absolute);
+
+        // Filter out social networks, search engines, and generic tracking links
+        try {
+          const urlObj = new URL(absolute);
+          const host = urlObj.hostname.toLowerCase();
+          const path = urlObj.pathname.toLowerCase();
+
+          // For Google Maps, only allow /maps/place/ profile links
+          const isGoogleMapsProfile = host.includes('google.com') && path.includes('/maps/place/');
+          const isGoogleNonMaps = host.includes('google.com') && !isGoogleMapsProfile;
+
+          const isSocialOrExternal =
+            host.includes('linkedin.com') ||
+            host.includes('facebook.com') ||
+            host.includes('twitter.com') ||
+            host.includes('x.com') ||
+            host.includes('instagram.com') ||
+            host.includes('youtube.com') ||
+            host.includes('pinterest.com') ||
+            host.includes('tiktok.com') ||
+            host.includes('snapchat.com') ||
+            host.includes('google.com') ||
+            host.includes('whatsapp.com') ||
+            host.includes('t.me');
+
+          if (!isSocialOrExternal && !visitedUrls.has(absolute)) {
+            links.push(absolute);
+          }
+        } catch (urlErr) {
+          // ignore invalid URLs
         }
       } catch {
         // skip individual anchor errors
@@ -1164,10 +1532,19 @@ async function scrapePageRecursively(
         console.log(`[SelectorCheck] Clicking all ${allButtons.length} expand buttons found with "${selectorUsed}"`);
         for (const button of allButtons) {
           if (await button.isVisible()) {
-            await button.scrollIntoViewIfNeeded();
-            await page.waitForTimeout(getRandomDelay(300, 800));
-            await button.click();
-            await page.waitForTimeout(getRandomDelay(300, 800));
+            try {
+              const tagName = await button.evaluate(node => node.tagName.toLowerCase());
+              if (tagName === 'nav' || tagName === 'header' || tagName === 'footer') {
+                continue;
+              }
+              await button.scrollIntoViewIfNeeded();
+              await page.waitForTimeout(getRandomDelay(300, 800));
+              // Use a short 8s timeout on click to avoid getting hung by overlays/backdrops
+              await button.click({ timeout: 8000 });
+              await page.waitForTimeout(getRandomDelay(300, 800));
+            } catch (clickErr) {
+              console.warn(`[SelectorCheck] Skipped clicking button: ${clickErr.message}`);
+            }
           }
         }
       } catch (e) {
@@ -1248,48 +1625,64 @@ async function scrapePageRecursively(
     let foundNextPage = false;
     const paginationSelectors = source.navigationSelectors.pagination || [];
 
-    // Snapshot DOM hash BEFORE clicking to detect SPA content change
+    // Snapshot DOM hash BEFORE pagination (needed for load-more check too)
     const hashBefore = await getDomContentHash(page);
 
-    const resolvedPagination = await resolveRobustLocator(page, paginationSelectors, 'pagination', brokenSelectors);
-    if (resolvedPagination) {
-      const { locator, selectorUsed } = resolvedPagination;
-      try {
-        const href = await locator.getAttribute('href');
-        const isSpaLink = !href || href === '#' || href === currentUrl || href.startsWith('javascript');
+    // ── Yellow Pages: dismiss push-notification overlay before paginating ──
+    if (sourceKey === 'yellow-pages') {
+      await dismissYellowPagesPushOverlay(page);
+    }
 
-        // For real navigation: check we haven't visited the href
-        // For SPA (no href change): always proceed — content hash will decide
-        if (isSpaLink || !visitedUrls.has(href)) {
-          console.log(`  → Found next page element via "${selectorUsed}"${href ? ` (link: ${href})` : ' (SPA click)'}`);
-          await locator.scrollIntoViewIfNeeded();
-          await page.waitForTimeout(getRandomDelay(900, 1800));
-          await locator.click();
-          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-          await page.waitForTimeout(source.delayBetweenPages || getRandomDelay(1500, 3000));
+    // ── Google Maps: for SPA listing pages, scroll the feed instead of pagination ──
+    if (sourceKey === 'google-maps') {
+      const scrolledNew = await scrollGoogleMapsFeed(page, visitedUrls, maxPages);
+      if (scrolledNew) {
+        foundNextPage = true;
+      }
+      // Skip normal pagination for google-maps
+    } else {
+      // Use hashBefore (already computed above) for SPA content change detection
+      const resolvedPagination = await resolveRobustLocator(page, paginationSelectors, 'pagination', brokenSelectors);
+      if (resolvedPagination) {
+        const { locator, selectorUsed } = resolvedPagination;
+        try {
+          const href = await locator.getAttribute('href');
+          const isSpaLink = !href || href === '#' || href === currentUrl || href.startsWith('javascript');
 
-          const newUrl = page.url();
-          const hashAfter = await getDomContentHash(page);
-          const domChanged = hashAfter !== hashBefore;
+          // For real navigation: check we haven't visited the href
+          // For SPA (no href change): always proceed — content hash will decide
+          if (isSpaLink || !visitedUrls.has(href)) {
+            console.log(`  → Found next page element via "${selectorUsed}"${href ? ` (link: ${href})` : ' (SPA click)'}`);
+            // Use JS scroll instead of scrollIntoViewIfNeeded — more reliable for Angular SPA elements
+            await locator.evaluate(el => el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' }));
+            await page.waitForTimeout(getRandomDelay(900, 1800));
+            // Use force:true to bypass Angular CDK overlay intercept issues
+            await locator.click({ force: true, timeout: 15000 });
+            await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => { });
+            await page.waitForTimeout(source.delayBetweenPages || getRandomDelay(1500, 3000));
 
-          if (!isSpaLink && !visitedUrls.has(newUrl)) {
-            // Real navigation: track by new URL
-            foundNextPage = true;
-          } else if (isSpaLink && domChanged) {
-            // SPA: URL stayed same but DOM changed — treat as new page
-            // Use a synthetic key: URL + page index to allow re-entry
-            const spaKey = `${newUrl}#spa-page-${visitedUrls.size}`;
-            visitedUrls.add(spaKey);
-            console.log(`  → SPA DOM change detected (hash ${hashBefore}→${hashAfter}). Treating as new page.`);
-            foundNextPage = true;
-          } else if (!isSpaLink && visitedUrls.has(newUrl)) {
-            console.log(`  → Pagination led to already-visited URL ${newUrl}. Stopping.`);
-          } else {
-            console.log(`  → No DOM change detected after SPA click. Stopping pagination.`);
+            const newUrl = page.url();
+            const hashAfter = await getDomContentHash(page);
+            const domChanged = hashAfter !== hashBefore;
+
+            if (!isSpaLink && !visitedUrls.has(newUrl)) {
+              // Real navigation: track by new URL
+              foundNextPage = true;
+            } else if (isSpaLink && domChanged) {
+              // SPA: URL stayed same but DOM changed — treat as new page
+              const spaKey = `${newUrl}#spa-page-${visitedUrls.size}`;
+              visitedUrls.add(spaKey);
+              console.log(`  → SPA DOM change detected (hash ${hashBefore}→${hashAfter}). Treating as new page.`);
+              foundNextPage = true;
+            } else if (!isSpaLink && visitedUrls.has(newUrl)) {
+              console.log(`  → Pagination led to already-visited URL ${newUrl}. Stopping.`);
+            } else {
+              console.log(`  → No DOM change detected after SPA click. Stopping pagination.`);
+            }
           }
+        } catch (e) {
+          console.warn(`⚠️ Failed to navigate using pagination element:`, e.message);
         }
-      } catch (e) {
-        console.warn(`⚠️ Failed to navigate using pagination element:`, e.message);
       }
     }
 
@@ -1329,7 +1722,7 @@ async function scrapePageRecursively(
  * @param {number} maxAttempts
  * @param {number} baseDelayMs
  */
-async function withRetryJS(fn, maxAttempts = 3, baseDelayMs = 1000) {
+async function withRetryJS(fn, maxAttempts = 6, baseDelayMs = 2000) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
@@ -1401,6 +1794,30 @@ function safeParseJsonJS(text, fallback = []) {
   }
 }
 
+async function getGoogleAiApiKey() {
+  const envKey = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (envKey && envKey.trim() !== '' && !envKey.startsWith('YOUR_')) {
+    return envKey;
+  }
+  try {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'admin' }
+    });
+    if (admin && admin.preferences) {
+      const prefs = typeof admin.preferences === 'string'
+        ? JSON.parse(admin.preferences)
+        : admin.preferences;
+      const val = prefs.integrations?.googleAiApiKey;
+      if (val && val.trim() !== '' && !val.includes('****')) {
+        return val;
+      }
+    }
+  } catch (err) {
+    console.error('Error reading googleAiApiKey from database in scraper-service:', err.message);
+  }
+  return '';
+}
+
 /**
  * Call Gemini API from Node.js to extract and enrich leads from scraped content.
  * Runs on Railway — no serverless timeout risk.
@@ -1411,13 +1828,14 @@ function safeParseJsonJS(text, fallback = []) {
  * @returns {Promise<Array>} enrichedLeads
  */
 async function callGeminiForLeads(scrapedContent, criteria = {}) {
-  if (!GOOGLE_AI_API_KEY || GOOGLE_AI_API_KEY.startsWith('YOUR_')) {
+  const apiKey = await getGoogleAiApiKey();
+  if (!apiKey || apiKey.startsWith('YOUR_')) {
     console.warn('[ScraperAI] GOOGLE_AI_API_KEY not configured — skipping AI enrichment.');
     return [];
   }
 
   // Truncate content to configurable length (default 100,000 characters)
-  const maxInputChars = process.env.SCRAPER_MAX_INPUT_CHARS ? parseInt(process.env.SCRAPER_MAX_INPUT_CHARS, 10) : 100000;
+  const maxInputChars = process.env.SCRAPER_MAX_INPUT_CHARS ? parseInt(process.env.SCRAPER_MAX_INPUT_CHARS, 10) : 50000;
   const cleanContent = (scrapedContent.content || '').substring(0, maxInputChars);
 
   // DOM vital check — skip pages with no extractable lead signals
@@ -1438,8 +1856,23 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
     ? 'Use these as strict filters — discard any profile that does not match:\n' + criteriaLines.join('\n')
     : '';
 
+  const isDirectorySource = scrapedContent.type === 'Business Directory' ||
+    scrapedContent.type === 'Google Maps Business Directory' ||
+    (scrapedContent.name || '').toLowerCase().includes('maps') ||
+    (scrapedContent.name || '').toLowerCase().includes('yellow');
+
+  const absoluteRule = isDirectorySource
+    ? `ABSOLUTE RULE: Since this content is from a business directory (no individual human names are expected), you are permitted to extract the business/company itself as a lead if no specific human name is present.
+For each business:
+- For "name" and "nameAr", use a generic placeholder like "Representative of [Company Name]" or "ممثل [اسم الشركة]".
+- Use the actual business/company name for "company" and "companyAr".
+- Set "role" to "Corporate Contact" and "roleAr" to "جهة اتصال الشركة".
+- Capture their telephone as "phone", website/email if present, and location.
+NEVER invent or hallucinate contact numbers or locations; only extract what is explicitly written.`
+    : `ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names with business roles are found. NEVER invent data.`;
+
   const systemPrompt = `You are an expert at extracting HNWI leads from UAE business websites.
-ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names with business roles are found. NEVER invent data.
+${absoluteRule}
 CONTEXTUAL EXTRACTION RULE: Actively scan the entire text, including running articles, press releases, news reports, paragraphs, headers, and footers. Do not just look at structured tables or member lists. Real estate investors and HNWIs are often mentioned contextually in sentences (e.g., "Ahmed bought a penthouse...", "Under the leadership of Director Sarah...").
 For each lead provide ALL required fields:
 - name, nameAr, company, companyAr, role, roleAr, location, tier (1-3), score (0-100), email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals (array), persona (2-3 sentence behavioral profile).
@@ -1455,7 +1888,7 @@ Output ONLY a JSON array. No other text.`;
     generationConfig: { temperature: 0.0, maxOutputTokens: 4096, topP: 0.95, topK: 40 }
   };
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${encodeURIComponent(GOOGLE_AI_API_KEY)}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   let rawText = '';
   try {
@@ -1468,7 +1901,7 @@ Output ONLY a JSON array. No other text.`;
       const candidate = data?.candidates?.[0];
       const parts = candidate?.content?.parts || [];
       return parts.map(p => p.text || '').join('');
-    }, 3, 1000);
+    }, 6, 2000);
   } catch (err) {
     console.error(`[ScraperAI] Gemini call failed for source ${scrapedContent.name}:`, err.message);
     return [];
@@ -1484,14 +1917,14 @@ Output ONLY a JSON array. No other text.`;
     const retryTokens = process.env.SCRAPER_RETRY_TOKENS ? parseInt(process.env.SCRAPER_RETRY_TOKENS, 10) : 2048;
     console.warn(`[ScraperAI] Truncation detected for ${scrapedContent.name} — retrying with ${retryTokens} token budget and first ${retryMaxInputChars} characters...`);
     const retryBody = {
-      contents: [{ parts: [{ text: `Extract max 10 HNWI leads from this UAE business content. Return JSON array only.\n\n${cleanContent.substring(0, retryMaxInputChars)}` }] }],
+      contents: [{ parts: [{ text: `${systemPrompt}\n\nExtract max 10 HNWI leads from this UAE business content. Return JSON array only.\n\n${cleanContent.substring(0, retryMaxInputChars)}` }] }],
       generationConfig: { temperature: 0.0, maxOutputTokens: retryTokens, topP: 0.95, topK: 40 }
     };
     try {
       const retryResp = await withRetryJS(() => axios.post(endpoint, retryBody, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 30000
-      }), 2, 1000);
+      }), 4, 2000);
       const retryText = (retryResp.data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
       leads = safeParseJsonJS(retryText, []);
       console.info(`[ScraperAI] Truncation retry: ${Array.isArray(leads) ? leads.length : 0} leads from ${scrapedContent.name}`);
@@ -1570,7 +2003,7 @@ Output ONLY a JSON array. No other text.`;
 /**
  * Scrape multiple HNWI sources in parallel with proxy rotation
  */
-async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = null, runId = null, jobDiagnostics = null) {
+async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = null, runId = null, jobDiagnostics = null, criteria = {}) {
   let browser;
   try {
     // Use playwright-extra with StealthPlugin for production bot-detection bypass.
@@ -1630,7 +2063,7 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
       const sourceBrokenSelectors = [];
       try {
         console.log(`\n🎯 Scraping ${sourceKey}...`);
-        const content = await scrapeSourceWithBrowser(browser, sourceMap[sourceKey], sourceKey, proxyUrl, jobDiagnostics, sourceBrokenSelectors);
+        const content = await scrapeSourceWithBrowser(browser, sourceMap[sourceKey], sourceKey, proxyUrl, jobDiagnostics, sourceBrokenSelectors, criteria);
         results.push({
           source: sourceKey,
           content: content,
@@ -1680,7 +2113,7 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
         // ── AI enrichment happens HERE on Railway ──
         let enrichedLeads = [];
         try {
-          enrichedLeads = await callGeminiForLeads(content, {});
+          enrichedLeads = await callGeminiForLeads(content, criteria || {});
           console.info(`[ScraperAI] ${sourceKey}: ${enrichedLeads.length} leads enriched locally.`);
         } catch (aiErr) {
           console.error(`[ScraperAI] Enrichment failed for ${sourceKey}:`, aiErr.message);

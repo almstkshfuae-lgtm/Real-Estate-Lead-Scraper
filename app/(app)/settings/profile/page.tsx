@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Shield, Mail, Globe, Lock, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { safeJson } from "@/lib/safe-fetch";
 
 type ProfileFormState = {
   name: string;
@@ -87,7 +88,7 @@ export default function ProfileSettingsPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response).catch(() => ({} as any));
       if (!response.ok) {
         toast.error(data?.error || t('settings.profile.saveError', 'Failed to save profile.'));
         setForm((prev) => ({ ...prev, currentPassword: '', newPassword: '' })); // Clear passwords on error

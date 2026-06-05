@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Scraper] Dispatching async scrape run ${scrapeRun.id} to microservice. Webhook: ${webhookUrl}`);
     
     // Trigger the microservice scraper asynchronously to prevent serverless execution timeout (15s limit)
-    await scraperClient.scrapeMultipleSources(requestedSources, webhookUrl, scrapeRun.id);
+    await scraperClient.scrapeMultipleSources(requestedSources, webhookUrl, scrapeRun.id, criteria);
 
     return NextResponse.json({ 
       message: 'HNWI lead scraping started', 

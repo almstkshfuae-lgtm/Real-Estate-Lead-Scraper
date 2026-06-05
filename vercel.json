@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/scrape",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/scrape-runs/cleanup",
+      "schedule": "0 6,18 * * *"
     }
   ]
 }

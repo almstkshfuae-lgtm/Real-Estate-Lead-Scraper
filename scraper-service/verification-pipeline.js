@@ -2,6 +2,57 @@ import { chromium } from 'playwright';
 import * as cheerio from 'cheerio';
 import { maskProxyUrl } from './proxy-validator.js';
 
+async function dismissGoogleConsent(page) {
+  const url = page.url();
+  if (url.includes('consent.google.') || url.includes('google.com/consent') || url.includes('consent.youtube.')) {
+    console.log('[Stealth] Google Consent redirect page detected during verification. Dismissing...');
+    const selectors = [
+      'button[aria-label*="Accept all" i]',
+      'button[aria-label*="Agree" i]',
+      'button:has-text("Accept all")',
+      'button:has-text("Agree")',
+      'button:has-text("I agree")',
+      'button:has-text("قبول الكل")',
+      'button:has-text("أوافق")',
+      'form button'
+    ];
+    for (const sel of selectors) {
+      try {
+        const btn = page.locator(sel).first();
+        if (await btn.isVisible()) {
+          await btn.click({ timeout: 5000 });
+          await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+          await page.waitForTimeout(2000);
+          return true;
+        }
+      } catch (err) {
+        // continue
+      }
+    }
+  }
+  
+  try {
+    const modalSelectors = [
+      'button:has-text("Accept all")',
+      'button:has-text("Agree")',
+      'button:has-text("I agree")',
+      'button:has-text("قبول الكل")',
+      'button:has-text("أوافق")'
+    ];
+    for (const sel of modalSelectors) {
+      const btn = page.locator(sel).first();
+      if (await btn.isVisible()) {
+        await btn.click({ timeout: 5000 });
+        await page.waitForTimeout(2000);
+        return true;
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+  return false;
+}
+
 function getPlaywrightProxyOptions(proxyUrl) {
   if (!proxyUrl) return null;
   
@@ -124,6 +175,17 @@ async function technicalAccessTest(url, proxyUrl = null) {
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
+    // Block heavy assets to prevent timeouts
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      const blockedTypes = ['image', 'font', 'media'];
+      if (blockedTypes.includes(type)) {
+        route.abort();
+      } else {
+        route.continue();
+      }
+    });
+
     // Set request/response interception for diagnostics
     let finalStatusCode = 200;
     page.on('response', (response) => {
@@ -135,6 +197,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
+      await dismissGoogleConsent(page);
       testResult.checks.accessible = true;
     } catch (navError) {
       if (navError.message.includes('403')) {
@@ -243,7 +306,19 @@ async function domDataVerification(url, proxyUrl = null) {
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
+    // Block heavy assets to prevent timeouts
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      const blockedTypes = ['image', 'font', 'media'];
+      if (blockedTypes.includes(type)) {
+        route.abort();
+      } else {
+        route.continue();
+      }
+    });
+
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await dismissGoogleConsent(page);
 
     // Wait for potential dynamic content
     await page.waitForTimeout(2000);
@@ -411,7 +486,19 @@ async function interactionMapping(url, proxyUrl = null) {
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
+    // Block heavy assets to prevent timeouts
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      const blockedTypes = ['image', 'font', 'media'];
+      if (blockedTypes.includes(type)) {
+        route.abort();
+      } else {
+        route.continue();
+      }
+    });
+
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await dismissGoogleConsent(page);
 
     const html = await page.content();
     const $ = cheerio.load(html);
@@ -575,7 +662,19 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
+    // Block heavy assets to prevent timeouts
+    await page.route('**/*', (route) => {
+      const type = route.request().resourceType();
+      const blockedTypes = ['image', 'font', 'media'];
+      if (blockedTypes.includes(type)) {
+        route.abort();
+      } else {
+        route.continue();
+      }
+    });
+
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await dismissGoogleConsent(page);
     await page.waitForTimeout(2000);
 
     // Extract clean text from DOM

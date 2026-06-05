@@ -162,7 +162,7 @@ export const DEFAULT_SCRAPER_SOURCES = [
   },
   {
     key: 'adgm',
-    url: 'https://www.adgm.com',
+    url: 'https://www.adgm.com/public-registers',
     name: 'ADGM Registered Entities',
     type: 'Company Registry',
     signals: ['Family Office', 'Fund Manager', 'Wealth Management', 'UHNW'],
@@ -185,7 +185,7 @@ export const DEFAULT_SCRAPER_SOURCES = [
   },
   {
     key: 'difc',
-    url: 'https://www.difc.ae',
+    url: 'https://www.difc.com/business/public-register',
     name: 'DIFC Public Register',
     type: 'Company Registry',
     signals: ['Investment Firm', 'Private Equity', 'CEO', 'HNWI'],
@@ -294,6 +294,52 @@ export const DEFAULT_SCRAPER_SOURCES = [
       rolePatterns: ['.manager', '.director', '.position'],
       phonePatterns: ['href*="tel:"', '.phone'],
       emailPatterns: ['href*="mailto:"', '.email']
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'google-maps',
+    url: 'https://www.google.com/maps',
+    name: 'Google Maps Search',
+    type: 'Google Maps Business Directory',
+    signals: ['Local Business', 'Verified Lead', 'Directory Ingestion'],
+    crawlDepth: 1,
+    navigationSelectors: {
+      memberDirectory: [],
+      pagination: [],
+      expandButtons: [],
+      memberLinks: ['.hfpxzc', 'a[href*="/maps/place/"]']
+    },
+    contentSelectors: {
+      namePatterns: ['h1.DUwDvf', 'span[class*="header-title"]'],
+      companyPatterns: ['button[data-item-id="authority"]', 'button[data-tooltip*="Website"]'],
+      rolePatterns: [],
+      phonePatterns: ['button[data-tooltip*="Phone"]', 'button[data-item-id*="phone:tel:"]'],
+      emailPatterns: []
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'yellow-pages',
+    url: 'https://www.yellowpages.ae',
+    name: 'Yellow Pages UAE',
+    type: 'Business Directory',
+    signals: ['Local Business', 'Verified Lead', 'B2B Lead'],
+    crawlDepth: 2,
+    navigationSelectors: {
+      memberDirectory: ['a[href*="/search"]'],
+      pagination: ['.pagination a', 'a[class*="page-link"]', 'a:has-text("Next")'],
+      expandButtons: [],
+      memberLinks: ['a[href*="/profile/"]', '.listing-title a']
+    },
+    contentSelectors: {
+      namePatterns: ['h1', '.profile-name', '.company-name'],
+      companyPatterns: ['.company-info', '.category'],
+      rolePatterns: [],
+      phonePatterns: ['.phone-number', 'a[href*="tel:"]', '[class*="phone"]'],
+      emailPatterns: ['a[href*="mailto:"]', '[class*="email"]']
     },
     maxPages: 10,
     delayBetweenPages: 2000
