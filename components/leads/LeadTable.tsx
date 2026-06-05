@@ -8,7 +8,8 @@ import {
   X,
   ExternalLink,
   Trash2,
-  Search
+  Search,
+  Info
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -63,11 +64,12 @@ interface LeadTableProps {
 
 export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
   const router = useRouter();
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [isMatchedFallback, setIsMatchedFallback] = useState(false);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25); // Use 25 leads per page as a stateful limit
@@ -122,6 +124,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       setLeads(sanitizedLeads);
       setTotalPages(data.totalPages || 1);
       setTotalLeads(data.total || 0);
+      setIsMatchedFallback(data.isMatchedFallback || false);
     } catch (err: any) {
       toast.error("Error fetching leads");
     } finally {
@@ -278,6 +281,17 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
         {loading && (
           <div className="absolute inset-0 bg-[var(--color-bg-card)]/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
             <Loader2 className="w-8 h-8 text-[var(--color-primary)] animate-spin" />
+          </div>
+        )}
+
+        {isMatchedFallback && !loading && (
+          <div className="p-3 bg-blue-50 border-b border-blue-100 text-blue-800 text-xs flex items-center gap-2 font-medium">
+            <Info className="w-4 h-4 flex-shrink-0 text-blue-600 animate-pulse" />
+            <span>
+              {i18n.language === "ar" 
+                ? "لم يتم العثور على مطابقات مباشرة للبحث. نعرض لك 10 عملاء مقترحين يتطابقون مع معايير بحثك المحفوظة." 
+                : "No direct search matches found. Showing 10 recommended leads matching your saved search criteria."}
+            </span>
           </div>
         )}
 

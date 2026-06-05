@@ -163,6 +163,82 @@ export async function GET(request: Request) {
       total = isNonAdmin ? Math.min(10, realTotal) : realTotal;
     }
 
+    let isMatchedFallback = false;
+    if (leads.length === 0 && search) {
+      const latestSearch = await prisma.search.findFirst({
+        where: { agentId: session.id },
+        orderBy: { createdAt: "desc" }
+      });
+
+      if (latestSearch) {
+        let criteria: any = null;
+        try {
+          criteria = typeof latestSearch.criteria === 'string' ? JSON.parse(latestSearch.criteria) : latestSearch.criteria;
+        } catch (e) {}
+
+        if (criteria) {
+          const matchConditions: any[] = [];
+          if (session.role?.toUpperCase() !== 'ADMIN') {
+            matchConditions.push({ agentId: session.id });
+          }
+
+          if (criteria.emirates && Array.isArray(criteria.emirates) && criteria.emirates.length > 0) {
+            matchConditions.push({
+              OR: criteria.emirates.map((em: string) => ({
+                location: { contains: em }
+              }))
+            });
+          }
+
+          const candidates = await prisma.lead.findMany({
+            where: { AND: matchConditions },
+            select: selectFields,
+            orderBy: { score: "desc" },
+            take: 100
+          });
+
+          const scoredCandidates = candidates.map(lead => {
+            let matchScore = 0;
+
+            if (criteria.propertyTypes && Array.isArray(criteria.propertyTypes) && criteria.propertyTypes.length > 0) {
+              try {
+                const pref = typeof lead.propertyPref === 'string' ? JSON.parse(lead.propertyPref) : lead.propertyPref;
+                if (pref && pref.type && criteria.propertyTypes.includes(pref.type)) {
+                  matchScore += 30;
+                }
+              } catch (e) {}
+            }
+
+            const bMin = lead.budgetMin || 0;
+            const bMax = lead.budgetMax || Infinity;
+            const critMin = criteria.budgetMin || 0;
+            const critMax = criteria.budgetMax || Infinity;
+            if (bMin <= critMax && bMax >= critMin) {
+              matchScore += 20;
+            }
+
+            if (criteria.relocated !== undefined && lead.relocated === criteria.relocated) {
+              matchScore += 10;
+            }
+
+            if (criteria.keywords) {
+              const kwList = criteria.keywords.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+              const leadText = `${lead.name} ${lead.company} ${lead.role} ${lead.location} ${JSON.stringify(lead.signals || [])}`.toLowerCase();
+              const matchedCount = kwList.filter((kw: string) => leadText.includes(kw)).length;
+              matchScore += matchedCount * 15;
+            }
+
+            return { lead, matchScore };
+          });
+
+          scoredCandidates.sort((a, b) => b.matchScore - a.matchScore);
+          leads = scoredCandidates.slice(0, 10).map(c => c.lead);
+          total = leads.length;
+          isMatchedFallback = true;
+        }
+      }
+    }
+
     const parsedLeads = leads.map((lead: any) => {
       let parsedSignals: any[] = [];
       try {
@@ -202,6 +278,7 @@ export async function GET(request: Request) {
       total,
       page,
       totalPages: Math.ceil(total / limit),
+      isMatchedFallback: isMatchedFallback || false
     });
   } catch (error: any) {
     console.error("Leads fetch error:", error);

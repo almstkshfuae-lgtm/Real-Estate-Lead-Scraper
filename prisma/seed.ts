@@ -9,6 +9,13 @@ async function main() {
     return;
   }
 
+  // Double protection: skip if the database already has leads
+  const existingCount = await prisma.lead.count();
+  if (existingCount > 0) {
+    console.log(`Database already contains ${existingCount} leads. Skipping mock data seeding.`);
+    return;
+  }
+
   // 1. Admin User
   const adminEmail = 'admin@brilliance-lead.uk';
   const hashedPassword = await bcrypt.hash('almstkshf@2030', 10);
