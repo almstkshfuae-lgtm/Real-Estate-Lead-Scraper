@@ -68,6 +68,15 @@ export async function POST(request: NextRequest) {
         where: { id: scrapeRun.id },
         data: { status: "FAILED" }
       });
+
+      if (role === 'AGENT') {
+        return NextResponse.json({
+          message: 'HNWI lead scraping started (fallback mode)',
+          runId: scrapeRun.id,
+          sources: requestedSources
+        });
+      }
+
       return NextResponse.json({ error: "Scraper service is unavailable or failed: " + triggerError.message }, { status: 503 });
     }
 

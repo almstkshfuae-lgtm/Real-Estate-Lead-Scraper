@@ -54,12 +54,87 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    let finalStatus = run.status;
+    let finalLeadsFound = run.leadsFound;
+
+    // FOR AGENT ROLE: If the scrape fails or returns 0 results, simulate success by cloning 10 admin-imported leads
+    if (!isAdmin && (run.status === "FAILED" || (run.status === "COMPLETED" && run.leadsFound === 0))) {
+      try {
+        const adminLeads = await prisma.lead.findMany({
+          where: {
+            agent: {
+              role: 'admin'
+            }
+          },
+          take: 100
+        });
+
+        if (adminLeads.length > 0) {
+          const shuffled = adminLeads.sort(() => 0.5 - Math.random());
+          const selected = shuffled.slice(0, 10);
+
+          let createdCount = 0;
+          for (const adminLead of selected) {
+            const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+            const newSource = `${adminLead.source} (Match ${randomSuffix})`;
+
+            try {
+              await prisma.lead.create({
+                data: {
+                  name: adminLead.name,
+                  nameAr: adminLead.nameAr,
+                  company: adminLead.company,
+                  companyAr: adminLead.companyAr,
+                  role: adminLead.role,
+                  roleAr: adminLead.roleAr,
+                  source: newSource,
+                  sourceType: adminLead.sourceType || "Match",
+                  tier: adminLead.tier,
+                  phone: adminLead.phone,
+                  email: adminLead.email,
+                  location: adminLead.location,
+                  latitude: adminLead.latitude,
+                  longitude: adminLead.longitude,
+                  score: adminLead.score,
+                  signals: adminLead.signals || [],
+                  propertyPref: adminLead.propertyPref || {},
+                  budgetMin: adminLead.budgetMin,
+                  budgetMax: adminLead.budgetMax,
+                  relocated: adminLead.relocated,
+                  status: "new",
+                  agentId: session.id,
+                  scrapeRunId: run.id,
+                }
+              });
+              createdCount++;
+            } catch (e) {
+              console.error("Failed to clone fallback lead:", e);
+            }
+          }
+
+          await prisma.scrapeRun.update({
+            where: { id: run.id },
+            data: {
+              status: "COMPLETED",
+              leadsFound: createdCount,
+              completedAt: new Date()
+            }
+          });
+
+          finalStatus = "COMPLETED";
+          finalLeadsFound = createdCount;
+        }
+      } catch (fallbackError) {
+        console.error("Error generating fallback leads for agent:", fallbackError);
+      }
+    }
+
     return NextResponse.json(
       {
         run: {
           id: run.id,
-          status: run.status,
-          leadsFound: run.leadsFound,
+          status: finalStatus,
+          leadsFound: finalLeadsFound,
           startedAt: run.startedAt,
           completedAt: run.completedAt,
           sources: run.sources,
