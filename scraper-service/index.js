@@ -1853,10 +1853,7 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
   const cleanContent = (scrapedContent.content || '').substring(0, maxInputChars);
 
   // DOM vital check — skip pages with no extractable lead signals
-  const hasNameSignal = /[A-Z][a-z]+\s+[A-Z][a-z]+/.test(cleanContent);
-  const hasRoleSignal = /\b(CEO|Director|Founder|Chairman|Manager|President|Partner|Owner|Executive|Member|Head|Managing)\b/i.test(cleanContent);
-  const hasArabicSignal = /[\u0600-\u06FF]{2,}/.test(cleanContent);
-  if (cleanContent.length < 50 && !hasNameSignal && !hasRoleSignal && !hasArabicSignal) {
+  if (cleanContent.length < 20) {
     console.warn(`[ScraperAI] Source ${scrapedContent.name} skipped — insufficient content for AI extraction.`);
     return [];
   }
@@ -1870,7 +1867,7 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
   if (criteria.recentlyRelocated === true) criteriaLines.push(`Must be recently relocated`);
   if (criteria.bounds) criteriaLines.push(`Geofencing bounds (focus on this area): ${JSON.stringify(criteria.bounds)}`);
   const criteriaPrompt = criteriaLines.length > 0
-    ? 'Use these as strict filters — discard any profile that does not match:\n' + criteriaLines.join('\n')
+    ? 'Use these purely as optional, preferred investor profiling targets to classify the extracted leads. You MUST extract ALL valid leads/profiles/individuals/companies found in the text regardless of whether they match these criteria. Assign their location, budget, and tier based on what is in the text, and do NOT filter out or discard any profile if it does not match these criteria. Treat them all as valuable leads:\n' + criteriaLines.join('\n')
     : '';
 
   const isDirectorySource = scrapedContent.type === 'Business Directory' ||
@@ -1885,16 +1882,17 @@ For each business:
 - Use the actual business/company name for "company" and "companyAr".
 - Set "role" to "Corporate Contact" and "roleAr" to "جهة اتصال الشركة".
 - Capture their telephone as "phone", website/email if present, and location.
-NEVER invent or hallucinate contact numbers or locations; only extract what is explicitly written.`
-    : `ABSOLUTE RULE: Extract ONLY real people explicitly named in the text. Return an EMPTY ARRAY [] if no real names with business roles are found. NEVER invent data.`;
+- NEVER invent or hallucinate contact numbers or locations; only extract what is explicitly written.`
+    : `ABSOLUTE RULE: Extract any real people or professionals (such as doctors, executives, etc.) explicitly named in the text. Return an EMPTY ARRAY [] if no names are found. NEVER invent data.`;
 
-  const systemPrompt = `You are an expert at extracting HNWI leads from UAE business websites.
+  const systemPrompt = `You are an expert at extracting high-quality leads from web content.
 ${absoluteRule}
-CONTEXTUAL EXTRACTION RULE: Actively scan the entire text, including running articles, press releases, news reports, paragraphs, headers, and footers. Do not just look at structured tables or member lists. Real estate investors and HNWIs are often mentioned contextually in sentences (e.g., "Ahmed bought a penthouse...", "Under the leadership of Director Sarah...").
+CONTEXTUAL EXTRACTION RULE: Actively scan the entire text, including directories, listings, tables, running articles, press releases, news reports, paragraphs, headers, and footers. Do not just look at structured tables. Extract any person, doctor, professional, specialist, executive, or representative mentioned.
 For each lead provide ALL required fields:
 - name, nameAr, company, companyAr, role, roleAr, location, tier (1-3), score (0-100), email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals (array), persona (2-3 sentence behavioral profile).
-Tier 1=Founders/CEOs/Chairmen. Tier 2=Directors/Managers. Tier 3=Professionals.
-Score 90-100: UHNWI. 80-89: Elite HNWI. 70-79: HNWI. 60-69: Premium. 50-59: Standard.
+- Tier mapping: Tier 1 = Founders/CEOs/Chairmen/Senior Doctors/Chiefs. Tier 2 = Directors/Managers/Physicians/Specialists. Tier 3 = Professionals/Representative/Others.
+- Score: Assign a relative high score (70-100) based on their professional standing.
+- Treat all extracted individuals or entities as potential leads. Do NOT discard any leads based on strict real estate or geographic criteria. Accept all valid data from the source content.
 ${criteriaPrompt}
 Output ONLY a JSON array. No other text.`;
 

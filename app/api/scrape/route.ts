@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { sources, criteria } = await request.json();
+    const finalCriteria = role === 'AGENT' ? {} : (criteria || {});
 
     const DEFAULT_SCRAPE_SOURCES = [
       'alforsan',
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
       'abudhabichamber',
       'canadian-doctors',
       'cpsa',
+      'ahus-canada',
     ];
 
     const requestedSources = Array.isArray(sources) && sources.length > 0 ? sources : DEFAULT_SCRAPE_SOURCES;
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
       data: {
         triggeredBy: session.id,
         sources: JSON.stringify(requestedSources),
-        criteria: JSON.stringify(criteria || {}),
+        criteria: JSON.stringify(finalCriteria),
         status: "PENDING",
       }
     });
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // Trigger the microservice scraper asynchronously to prevent serverless execution timeout (15s limit)
-      await scraperClient.scrapeMultipleSources(requestedSources, webhookUrl, scrapeRun.id, criteria);
+      await scraperClient.scrapeMultipleSources(requestedSources, webhookUrl, scrapeRun.id, finalCriteria);
     } catch (triggerError: any) {
       console.error("Failed to trigger scraper service, marking run as FAILED:", triggerError.message);
       await prisma.scrapeRun.update({

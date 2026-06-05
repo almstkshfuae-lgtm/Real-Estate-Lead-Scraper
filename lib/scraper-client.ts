@@ -254,7 +254,10 @@ async function createScraperClient(): Promise<ScraperClient> {
 
 export function getScraperClient(): Promise<ScraperClient> {
   if (!scraperClientPromise) {
-    scraperClientPromise = createScraperClient();
+    scraperClientPromise = createScraperClient().catch(err => {
+      scraperClientPromise = null;
+      throw err;
+    });
   }
   return scraperClientPromise;
 }

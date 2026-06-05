@@ -395,5 +395,28 @@ export const DEFAULT_SCRAPER_SOURCES = [
     },
     maxPages: 10,
     delayBetweenPages: 2000
+  },
+  {
+    key: 'ahus-canada',
+    url: 'https://www.ahuscanada.org/links-resources/list-of-canadian-ahus-doctors/',
+    name: 'aHUS Canada Doctors List',
+    type: 'Business Directory',
+    signals: ['Business Owner', 'Executive', 'High Net Worth'],
+    crawlDepth: 1,
+    navigationSelectors: {
+      memberDirectory: [],
+      pagination: [],
+      expandButtons: [],
+      memberLinks: []
+    },
+    contentSelectors: {
+      namePatterns: ['p', 'div'],
+      companyPatterns: ['p', 'div'],
+      rolePatterns: ['p', 'div'],
+      phonePatterns: ['p', 'div'],
+      emailPatterns: ['a[href*="mailto:"]']
+    },
+    maxPages: 1,
+    delayBetweenPages: 1000
   }
 ];
