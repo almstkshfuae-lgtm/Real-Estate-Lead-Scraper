@@ -81,3 +81,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getSessionWithDBVerify();
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const scraperClient = await getScraperClient();
+    const sources = await scraperClient.getAvailableSources();
+
+    return NextResponse.json({ sources });
+  } catch (error: any) {
+    console.error("Get sources error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

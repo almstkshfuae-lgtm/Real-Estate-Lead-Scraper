@@ -78,6 +78,20 @@ export default function QualificationForm({ initialData }: { initialData?: any }
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const { status: runStatus, leadsFound, isPolling } = useScrapeRunStatus(activeRunId);
+  const [activeSources, setActiveSources] = useState<string[]>(DEFAULT_SCRAPE_SOURCES);
+
+  useEffect(() => {
+    fetch("/api/scrape")
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && Array.isArray(data.sources) && data.sources.length > 0) {
+          // Use key field from source config objects if it's an array of objects
+          const sourceKeys = data.sources.map((src: any) => typeof src === 'string' ? src : src.key);
+          setActiveSources(sourceKeys);
+        }
+      })
+      .catch(err => console.error("Error loading active sources:", err));
+  }, []);
 
   const handleSave = async (isScrape = false) => {
     setLoading(true);
@@ -113,7 +127,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
         scrapeRes = await fetch("/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sources: DEFAULT_SCRAPE_SOURCES, criteria }),
+          body: JSON.stringify({ sources: activeSources, criteria }),
         });
         const scrapeData = await safeJson(scrapeRes);
 
@@ -309,7 +323,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-[var(--color-text-secondary)]">{t('search.scrapeDepth')}</span>
-                  <span className="font-bold">{DEFAULT_SCRAPE_SOURCES.length} {t('search.activeSources', 'active sources')}</span>
+                  <span className="font-bold">{activeSources.length} {t('search.activeSources', 'active sources')}</span>
                 </div>
               </div>
               <div className="pt-4 border-t border-[var(--color-border)]">

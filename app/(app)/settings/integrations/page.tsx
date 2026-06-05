@@ -57,7 +57,10 @@ export default function IntegrationsSettingsPage() {
           }
         }
       })
-      .catch(err => console.error("Failed to fetch integrations:", err))
+      .catch(err => {
+        console.error("Failed to fetch integrations:", err);
+        window.location.href = "/leads";
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

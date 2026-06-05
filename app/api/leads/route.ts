@@ -47,7 +47,12 @@ export async function GET(request: Request) {
       conditions.push({
         OR: [
           { name: { contains: search } },
+          { nameAr: { contains: search } },
           { company: { contains: search } },
+          { companyAr: { contains: search } },
+          { phone: { contains: search } },
+          { email: { contains: search } },
+          { location: { contains: search } },
         ]
       });
     }
@@ -127,20 +132,36 @@ export async function GET(request: Request) {
       signals: true, persona: true, notes: true
     } : undefined;
 
+    const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
+
     // Adjust limit dynamically based on payload size
-    const finalLimit = minimal ? Math.min(500, limit) : Math.min(100, limit);
+    let finalLimit = minimal ? Math.min(500, limit) : Math.min(100, limit);
+    if (isNonAdmin) {
+      finalLimit = Math.min(10, finalLimit);
+    }
 
     // ─── Sequential read queries ──────────────────────────────────────────────
     // Running queries sequentially allows the first query to warm up the database 
     // connection pool, preventing concurrent handshake conflicts and connection pool timeouts (P2024).
-    const leads = await prisma.lead.findMany({
-      where,
-      select: selectFields,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: finalLimit,
-    });
-    const total = await prisma.lead.count({ where });
+    let leads: any[] = [];
+    let total = 0;
+
+    if (isNonAdmin && skip >= 10) {
+      leads = [];
+      const realTotal = await prisma.lead.count({ where });
+      total = Math.min(10, realTotal);
+    } else {
+      const takeLimit = isNonAdmin ? Math.min(10 - skip, finalLimit) : finalLimit;
+      leads = await prisma.lead.findMany({
+        where,
+        select: selectFields,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: takeLimit,
+      });
+      const realTotal = await prisma.lead.count({ where });
+      total = isNonAdmin ? Math.min(10, realTotal) : realTotal;
+    }
 
     const parsedLeads = leads.map((lead: any) => {
       let parsedSignals: any[] = [];

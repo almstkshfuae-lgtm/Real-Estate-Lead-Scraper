@@ -12,7 +12,7 @@ import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 import { Lead } from "./LeadTable";
 import { safeJson } from "@/lib/safe-fetch";
 
-export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onClose: () => void }) {
+export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | null; userRole?: string; onClose: () => void }) {
   const { t, i18n } = useTranslation("common");
   const lang = i18n.language === "ar" ? "ar" : "en";
   const [copied, setCopied] = useState<string | null>(null);
@@ -87,7 +87,25 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
       if (lead.persona) {
         setDynamicPersona(lead.persona);
       } else {
-        setDynamicPersona(null);
+        setPersonaLoading(true);
+        fetch(`/api/leads/${lead.id}/persona?lang=${lang}`)
+          .then((res) => {
+            if (!res.ok) throw new Error();
+            return res.json();
+          })
+          .then((data) => {
+            if (active && data && data.persona) {
+              setDynamicPersona(data.persona);
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to load persona:", err);
+          })
+          .finally(() => {
+            if (active) {
+              setPersonaLoading(false);
+            }
+          });
       }
     }
     return () => {
@@ -296,12 +314,14 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
               <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)]">{t("leads.sidebar.contact")}</h3>
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className="text-xs font-bold text-[var(--color-primary)] hover:underline"
-              >
-                {isEditing ? t("common.cancel", "Cancel") : t("common.edit", "Edit")}
-              </button>
+              {userRole?.toLowerCase() === 'admin' && (
+                <button
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="text-xs font-bold text-[var(--color-primary)] hover:underline"
+                >
+                  {isEditing ? t("common.cancel", "Cancel") : t("common.edit", "Edit")}
+                </button>
+              )}
             </div>
 
             {isEditing ? (

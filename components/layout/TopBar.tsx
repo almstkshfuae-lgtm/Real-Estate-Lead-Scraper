@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Moon, Sun, Globe, Bell, User, Menu } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -10,6 +10,46 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const { t, i18n } = useTranslation('common');
   const [theme, setTheme] = useState("light");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [userData, setUserData] = useState<{ name: string; nameAr: string; role: string } | null>(null);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const notificationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // Fetch user details
+    fetch("/api/auth/me")
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.user) {
+          setUserData({
+            name: data.user.name || "Agent",
+            nameAr: data.user.nameAr || data.user.name || "وكيل",
+            role: data.user.role || "agent"
+          });
+        }
+      })
+      .catch(err => console.error("Error loading user in TopBar:", err));
+
+    // Fetch unread notifications
+    const checkNotifications = () => {
+      fetch("/api/notifications")
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && typeof data.count === "number") {
+            setHasUnreadNotifications(data.count > 0);
+          }
+        })
+        .catch(err => console.error("Error loading notifications in TopBar:", err));
+    };
+
+    checkNotifications();
+    notificationPollRef.current = setInterval(checkNotifications, 30000);
+
+    return () => {
+      if (notificationPollRef.current) {
+        clearInterval(notificationPollRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "light";
@@ -81,7 +121,9 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
           aria-label={t('nav.notifications')}
         >
           <Bell className="w-5 h-5" />
-          <span className="absolute top-2 inset-inline-end-2 w-2 h-2 bg-[var(--color-danger)] rounded-full border-2 border-[var(--color-bg-card)]"></span>
+          {hasUnreadNotifications && (
+            <span className="absolute top-2 inset-inline-end-2 w-2 h-2 bg-[var(--color-danger)] rounded-full border-2 border-[var(--color-bg-card)]"></span>
+          )}
         </button>
 
         <div className="h-8 w-px bg-[var(--color-border)] mx-2"></div>
@@ -92,8 +134,12 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
             className={`flex items-center gap-3 p-1.5 ps-3 rounded-full transition-all ${showDropdown ? 'bg-[var(--color-bg-surface)]' : 'hover:bg-[var(--color-bg-surface)]'}`}
           >
             <div className="text-end hidden sm:block">
-              <p className="text-sm font-bold text-[var(--color-text-primary)] leading-tight">Agent Smith</p>
-              <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-wider">Premium Agent</p>
+              <p className="text-sm font-bold text-[var(--color-text-primary)] leading-tight">
+                {userData ? (isRtl ? userData.nameAr : userData.name) : "Agent"}
+              </p>
+              <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-wider">
+                {userData ? userData.role : "agent"}
+              </p>
             </div>
             <div className="w-8 h-8 rounded-full bg-[var(--color-primary-subtle)] flex items-center justify-center text-[var(--color-primary)] font-bold">
               <User className="w-5 h-5" />
@@ -102,7 +148,13 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
 
           {showDropdown && (
             <div className={`absolute top-full mt-2 inset-inline-end-0 w-48 bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-100 ${isRtl ? 'text-right' : 'text-left'}`}>
-              <button className="w-full flex items-center gap-2 p-3 rounded-xl text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface)] transition-all">
+              <button 
+                onClick={() => {
+                  setShowDropdown(false);
+                  router.push('/settings/profile');
+                }}
+                className="w-full flex items-center gap-2 p-3 rounded-xl text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface)] transition-all"
+              >
                 <User className="w-4 h-4" />
                 {t('nav.settings')}
               </button>

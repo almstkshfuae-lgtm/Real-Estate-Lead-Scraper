@@ -48,6 +48,7 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
   - Restricts public access strictly to `/`, `/login`, `/api/auth/login`, and `/install` along with static assets.
   - Protects all other paths, including `/api/auth/me` and `/api/leads`.
   - Wrapped entirely in a `try/catch` block. On verification failure or runtime exceptions during an API call, it returns a clean JSON `{ error: "Unauthorized" }` with status `401` to prevent UI state crashes.
+  - **RBAC & Capping**: Admins have full access. Non-admins (agents) cannot view or access the Integrations page, cannot edit core lead details (restricted to notes and status), and are capped at retrieving a maximum of 10 leads overall from the API (with pagination totals adjusted accordingly).
 
 ### 2. Browser Automation Layer (`scraper-service/`)
 - **Technology**: Decoupled Express.js service running Playwright.
@@ -77,6 +78,7 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
 - **Conversation Memory**: Chat messages are preserved inside the MySQL `ChatMessage` model. It commits the assistant text to database only after the stream completes successfully.
 
 ### 5. CRM Sync & Outreach Integrations (`lib/bitrix24.ts` & `lib/whatsapp.ts`)
+- **Shared Credentials**: All API and integration secrets (such as Bitrix24 token, WhatsApp token, SMTP, and Gemini API keys) are defined in the Super Admin profile (`admin@brilliance-lead.uk`) and securely shared with all agents via `lib/secrets.ts`.
 - **Pre-flight Checks**: Before processing a bulk lead sync batch, a pre-flight `testConnection` is evaluated. If it fails, the API immediately halts and returns a clean `401` JSON error, avoiding partial pipeline syncs.
 - **Transaction Breaks**: Sequentially wraps push operations in separate `try/catch` statements. If a 401 or `invalid_token` error is captured, it aborts the loop (`break`), leaving subsequent leads intact and logging the precise failure point.
 - **Bilingual WhatsApp Layouts**: Arabic message drafts containing Latin variables (links, currency digital numerals, phone numbers) are formatted using Left-to-Right Marks (`\u200E`) and Right-to-Left Marks (`\u200F`). This guarantees punctuation stability and text layout alignment on mobile devices.

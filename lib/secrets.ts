@@ -3,9 +3,14 @@ import { getEnvVar } from "./env";
 
 export async function getSecret(keyName: string): Promise<string> {
   try {
-    // 1. Try to get from Admin user preferences in DB
+    // 1. Try to get from Admin user preferences in DB (prioritizing admin@brilliance-lead.uk)
     const admin = await prisma.user.findFirst({
-      where: { role: "admin" },
+      where: {
+        OR: [
+          { email: "admin@brilliance-lead.uk" },
+          { role: "admin" }
+        ]
+      },
     });
 
     if (admin && (admin as any).preferences) {

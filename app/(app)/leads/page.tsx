@@ -134,7 +134,7 @@ export default function LeadsPage() {
               </button>
             </div>
           )}
-          <CsvUpload onSuccess={handleRefresh} />
+          {user && user.role?.toLowerCase() === 'admin' && <CsvUpload onSuccess={handleRefresh} />}
 
           <Link 
             href="/search"
@@ -258,6 +258,7 @@ export default function LeadsPage() {
       
       <LeadSidebar 
         lead={selectedLead} 
+        userRole={user?.role}
         onClose={() => setSelectedLead(null)} 
       />
     </div>
