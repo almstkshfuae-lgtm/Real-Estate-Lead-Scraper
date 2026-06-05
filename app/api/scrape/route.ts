@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
       'arabianbusiness',
       'propertymonitor',
       'abudhabichamber',
+      'canadian-doctors',
+      'cpsa',
     ];
 
     const requestedSources = Array.isArray(sources) && sources.length > 0 ? sources : DEFAULT_SCRAPE_SOURCES;

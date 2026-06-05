@@ -1078,6 +1078,20 @@ async function performInteractiveSearch(page, sourceKey, criteria = {}) {
     } catch (err) {
       console.warn('[Scraper] Yellow Pages load wait timed out');
     }
+  } else if (sourceKey === 'cpsa') {
+    console.log('[Scraper] Interacting with CPSA Directory search...');
+    try {
+      const cityInput = 'input[id*="txtCity"]';
+      await page.waitForSelector(cityInput, { timeout: 10000 });
+      const city = criteria.emirates && criteria.emirates.length > 0 ? criteria.emirates[0] : 'Calgary';
+      await page.locator(cityInput).fill(city);
+      await page.waitForTimeout(1000);
+      const searchBtn = 'input[id*="btnSearch"]';
+      await page.locator(searchBtn).click();
+      await page.waitForTimeout(4000);
+    } catch (err) {
+      console.warn('[Scraper] CPSA interaction failed:', err.message);
+    }
   }
 }
 

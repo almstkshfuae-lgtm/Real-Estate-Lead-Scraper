@@ -343,5 +343,57 @@ export const DEFAULT_SCRAPER_SOURCES = [
     },
     maxPages: 10,
     delayBetweenPages: 2000
+  },
+  {
+    key: 'canadian-doctors',
+    url: 'https://www.canadiandoctorsdirectory.com',
+    name: 'Canadian Doctors Directory',
+    type: 'Business Directory',
+    signals: ['Business Owner', 'Executive', 'High Net Worth'],
+    crawlDepth: 2,
+    navigationSelectors: {
+      memberDirectory: [
+        'a[href*="/ontario/"]',
+        'a[href*="/quebec/"]',
+        'a[href*="/alberta/"]',
+        'a[href*="/british-columbia/"]',
+        'a[href*="/doctors-listing-directory/"]'
+      ],
+      pagination: ['.wp-pagenavi a', 'a[class*="page-link"]', 'a:has-text("Next")'],
+      expandButtons: [],
+      memberLinks: ['.agileinfo-ads-display ul.list > a', 'ul.list > a']
+    },
+    contentSelectors: {
+      namePatterns: ['h1', '.product-view h1'],
+      companyPatterns: ['.product-details'],
+      rolePatterns: ['.product-details'],
+      phonePatterns: ['.product-details'],
+      emailPatterns: []
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'cpsa',
+    url: 'https://search.cpsa.ca',
+    name: 'Physician Directory - CPSA',
+    type: 'Business Directory',
+    signals: ['Business Owner', 'Executive', 'High Net Worth'],
+    crawlDepth: 2,
+    navigationSelectors: {
+      memberDirectory: [],
+      pagination: ['.wp-pagenavi a', 'a[href*="Page$"]', 'a:has-text("Next")'],
+      expandButtons: [],
+      memberLinks: ['a[href*="PhysicianProfile"]']
+    },
+    contentSelectors: {
+      namePatterns: ['h2', 'span.copyName'],
+      companyPatterns: ['.addressFormat'],
+      rolePatterns: ['.tabContent'],
+      phonePatterns: ['a[href*="tel:"]'],
+      emailPatterns: ['a[href*="mailto:"]']
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
   }
 ];
