@@ -78,9 +78,9 @@ self.addEventListener("fetch", (event) => {
               });
             });
           }
-          // For non-navigation requests with no cache, bubble up the original error
-          // to let the browser/Next.js handle it (e.g. aborted prefetch requests).
-          throw err || new TypeError("Failed to fetch");
+          // For non-navigation requests with no cache, return a generic network error
+          // to let the browser/Next.js handle it (e.g. aborted prefetch requests) without SW exceptions.
+          return Response.error();
         });
       })
   );
