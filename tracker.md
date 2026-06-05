@@ -45,6 +45,7 @@
 - [x] Custom lead notes persistence (MySQL Sync).
 - [x] **Hardened**: Bulk action bar fully translated (leadsSelected, markContacted, pushBitrix, delete keys).
 - [x] **Hardened**: Pagination buttons (Previous/Next) fully translated EN/AR.
+- [x] **Hardened**: Dynamic pagination controls (leads per page dropdown, page number jumps) in LeadTable, expanded Kanban fetch limit.
 - [x] **Hardened**: Lead detail "role at company" row uses i18n roleAt key (EN/AR).
 - [x] **Hardened**: AI Pitch template fixed — was rendering literal `{t(...)}` string; now correctly interpolates lead name & company.
 - [x] **Hardened**: AI Pitch "Copy Pitch" button functional — copies generated pitch text to clipboard with ✓ feedback.

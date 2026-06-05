@@ -1293,4 +1293,131 @@ export async function generateGeminiStream(
   });
 }
 
+export async function generateGeminiChatStream(
+  systemPrompt: string,
+  messages: { role: "user" | "assistant"; content: string }[],
+  maxTokens = 2048,
+  signal?: AbortSignal
+): Promise<ReadableStream<string>> {
+  const config = await getAIConfig();
+  if (!config) {
+    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY.");
+  }
+
+  const isProjectBased = Boolean(config.projectId);
+
+  // Map messages to Gemini API format. Gemini expects "user" and "model" roles (not "assistant").
+  const contents = messages.map(m => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }]
+  }));
+
+  const body = {
+    contents,
+    systemInstruction: {
+      parts: [{ text: systemPrompt }]
+    },
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: maxTokens,
+      topP: 0.95,
+      topK: 40
+    }
+  };
+
+  const endpoint = isProjectBased
+    ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini streaming API error ${response.status}: ${errorText}`);
+  }
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+
+  return new ReadableStream({
+    async pull(controller) {
+      if (!reader) {
+        controller.close();
+        return;
+      }
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+
+        const chunkText = decoder.decode(value, { stream: true });
+
+        let text = "";
+        let cleanChunk = chunkText.trim();
+        let shouldClose = false;
+
+        if (cleanChunk.endsWith(']')) {
+          shouldClose = true;
+          cleanChunk = cleanChunk.substring(0, cleanChunk.length - 1).trim();
+          if (cleanChunk.endsWith(',')) {
+            cleanChunk = cleanChunk.substring(0, cleanChunk.length - 1).trim();
+          }
+        }
+
+        if (cleanChunk.startsWith(',')) cleanChunk = cleanChunk.substring(1).trim();
+        if (cleanChunk.startsWith('[')) cleanChunk = cleanChunk.substring(1).trim();
+
+        if (cleanChunk) {
+          try {
+            const obj = JSON.parse(cleanChunk);
+            const candidate = obj?.predictions?.[0] || obj?.candidates?.[0];
+            const contents = candidate?.content || candidate;
+            const parts = contents?.parts || contents;
+            if (Array.isArray(parts)) {
+              text = parts.map((p: any) => p.text || "").join("");
+            } else if (typeof parts === "string") {
+              text = parts;
+            } else if (parts?.text) {
+              text = parts.text;
+            }
+          } catch (e) {
+            const textRegex = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+            let match;
+            const matches = [];
+            while ((match = textRegex.exec(chunkText)) !== null) {
+              try {
+                matches.push(JSON.parse(`"${match[1]}"`));
+              } catch {
+                matches.push(match[1]);
+              }
+            }
+            text = matches.join("");
+          }
+        }
+
+        if (text) {
+          controller.enqueue(text);
+        }
+        if (shouldClose) {
+          controller.close();
+        }
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel(reason) {
+      if (reader) {
+        reader.cancel(reason).catch(() => { });
+      }
+    }
+  });
+}
+
 export { generateGeminiText };

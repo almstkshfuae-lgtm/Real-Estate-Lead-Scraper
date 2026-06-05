@@ -24,17 +24,21 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt =
       lang === "ar"
-        ? `أنت مساعد مبيعات عقارات متخصص في الإمارات العربية المتحدة. تكتب عروض مبيعات احترافية ومخصصة باللغة العربية. أسلوبك: موجز، مقنع، ومناسب لكبار المستثمرين والعملاء من ذوي الثروات العالية. لا تذكر أسعاراً محددة إلا إذا أُعطيت. لا تستخدم تعبيرات مبالغ فيها.`
-        : `You are an elite UAE real estate sales assistant specializing in high-net-worth client engagement. Write highly personalized, professional property pitch emails. Style: concise, data-driven, luxury-focused. Never include specific prices unless given. Avoid generic phrases. Output only the pitch text, no subject line, no labels.`;
+        ? `أنت مساعد مبيعات عقارات متخصص في الإمارات العربية المتحدة. تكتب عروض مبيعات احترافية ومخصصة باللغة العربية فقط. أسلوبك: موجز، مقنع، ومناسب لكبار المستثمرين والعملاء من ذوي الثروات العالية. لا تذكر أسعاراً محددة إلا إذا أُعطيت. لا تستخدم تعبيرات مبالغ فيها. يجب أن تكون جميع الردود باللغة العربية الفصحى فقط.`
+        : `You are an elite UAE real estate sales assistant specializing in high-net-worth client engagement. Write highly personalized, professional property pitch emails in English. Style: concise, data-driven, luxury-focused. Never include specific prices unless given. Avoid generic phrases. Output only the pitch text in English, no subject line, no labels.`;
 
     const signals = Array.isArray(lead.signals) ? lead.signals.join(", ") : lead.signals || "N/A";
 
+    const nameVal = lang === "ar" ? (lead.nameAr || lead.name) : lead.name;
+    const companyVal = lang === "ar" ? (lead.companyAr || lead.company) : lead.company;
+    const roleVal = lang === "ar" ? (lead.roleAr || lead.role) : lead.role;
+
     const userPrompt =
       lang === "ar"
-        ? `اكتب عرض مبيعات قصير ومخصص (3-4 جمل) لـ:
-الاسم: ${lead.name}
-الشركة: ${lead.company}
-المنصب: ${lead.role}
+        ? `اكتب عرض مبيعات قصير ومخصص (3-4 جمل) باللغة العربية حصراً لـ:
+الاسم: ${nameVal}
+الشركة: ${companyVal}
+المنصب: ${roleVal}
 درجة الاستثمار: ${lead.score}/100
 الفئة: ${lead.tier === 1 ? "نخبة (T1)" : lead.tier === 2 ? "مميز (T2)" : "قياسي (T3)"}
 إشارات الاستثمار: ${signals}
@@ -43,11 +47,11 @@ export async function POST(req: NextRequest) {
 
 الأسلوب: ${style === "formal" ? "رسمي جداً" : style === "casual" ? "ودي ومريح" : "احترافي ومتزن"}
 
-اكتب العرض مباشرة بدون مقدمات:`
-        : `Write a short personalized pitch (3-4 sentences) for:
-Name: ${lead.name}
-Company: ${lead.company}
-Role: ${lead.role}
+اكتب العرض باللغة العربية مباشرة بدون مقدمات أو هوامش إضافية:`
+        : `Write a short personalized pitch (3-4 sentences) in English for:
+Name: ${nameVal}
+Company: ${companyVal}
+Role: ${roleVal}
 Investment Score: ${lead.score}/100
 Tier: ${lead.tier === 1 ? "Elite (T1)" : lead.tier === 2 ? "Premium (T2)" : "Standard (T3)"}
 Investment Signals: ${signals}
@@ -56,7 +60,7 @@ Preferred Area: ${lead.location || "UAE"}
 
 Tone: ${style === "formal" ? "Very formal and corporate" : style === "casual" ? "Friendly and warm" : "Professional and balanced"}
 
-Write the pitch directly without any preamble:`;
+Write the pitch in English directly without any preamble or extra labels:`;
 
     const pitchText = await generateGeminiText(systemPrompt, userPrompt, 4096);
 

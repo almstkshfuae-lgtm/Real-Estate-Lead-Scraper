@@ -13,7 +13,20 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const { status, notes } = await request.json();
+    const body = await request.json();
+    const {
+      name,
+      email,
+      phone,
+      company,
+      role,
+      location,
+      score,
+      budgetMin,
+      budgetMax,
+      status,
+      notes
+    } = body;
 
     const lead = await prisma.lead.findUnique({
       where: { id },
@@ -28,10 +41,59 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    // Deduplication check on update
+    const targetName = name !== undefined ? name.trim() : lead.name;
+    const targetCompany = company !== undefined ? company.trim() : lead.company;
+
+    if ((name !== undefined || company !== undefined) && targetName && targetCompany) {
+      const existingByUnique = await prisma.lead.findFirst({
+        where: {
+          id: { not: id },
+          name: targetName,
+          company: targetCompany,
+          agentId: lead.agentId,
+        },
+      });
+
+      if (existingByUnique) {
+        return NextResponse.json(
+          { error: `A lead with name "${targetName}" and company "${targetCompany}" already exists.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (email !== undefined && email) {
+      const targetEmail = email.trim().toLowerCase();
+      const existingByEmail = await prisma.lead.findFirst({
+        where: {
+          id: { not: id },
+          email: targetEmail,
+          agentId: lead.agentId,
+        },
+      });
+
+      if (existingByEmail) {
+        return NextResponse.json(
+          { error: `A lead with email "${targetEmail}" already exists.` },
+          { status: 400 }
+        );
+      }
+    }
+
     const updatedLead = await prisma.lead.update({
       where: { id },
       data: {
-        ...(status && { status }),
+        ...(name !== undefined && { name: name.trim() }),
+        ...(email !== undefined && { email: email ? email.trim().toLowerCase() : null }),
+        ...(phone !== undefined && { phone: phone ? phone.trim() : null }),
+        ...(company !== undefined && { company: company.trim() }),
+        ...(role !== undefined && { role: role.trim() }),
+        ...(location !== undefined && { location: location.trim() }),
+        ...(score !== undefined && { score: parseInt(score, 10) || 50 }),
+        ...(budgetMin !== undefined && { budgetMin: budgetMin !== "" && budgetMin !== null ? parseFloat(budgetMin) : null }),
+        ...(budgetMax !== undefined && { budgetMax: budgetMax !== "" && budgetMax !== null ? parseFloat(budgetMax) : null }),
+        ...(status !== undefined && { status }),
         ...(notes !== undefined && { notes }),
       },
     });

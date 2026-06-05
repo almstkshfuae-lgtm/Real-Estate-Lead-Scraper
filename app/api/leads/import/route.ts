@@ -218,6 +218,15 @@ export async function POST(request: Request) {
         const location = normalizeLocation(locationRaw);
         const coords = resolveCoords(location);
 
+        // Extract extra/metadata fields
+        const standardKeys = ["name", "email", "phone", "company", "role", "location"];
+        const metadata: Record<string, any> = {};
+        for (const [key, val] of Object.entries(row)) {
+          if (!standardKeys.includes(key)) {
+            metadata[key] = val;
+          }
+        }
+
         // ── 3. Minimum viability check ──────────────────────────────────────
         // Accept a row if it has ANY of: name (not unknown), email, phone, or company.
         // Only skip truly empty rows (all default fallback values and no contact info).
@@ -249,7 +258,8 @@ export async function POST(request: Request) {
           // Update if we have richer contact info than what's stored
           const shouldUpdate =
             (email && !existingByUnique.email) ||
-            (phone && !existingByUnique.phone);
+            (phone && !existingByUnique.phone) ||
+            Object.keys(metadata).length > 0;
 
           if (shouldUpdate) {
             await prisma.lead.update({
@@ -261,6 +271,10 @@ export async function POST(request: Request) {
                 location,
                 latitude: coords.lat,
                 longitude: coords.lng,
+                metadata: Object.keys(metadata).length > 0 ? {
+                  ...(existingByUnique.metadata as Record<string, any> || {}),
+                  ...metadata
+                } : (existingByUnique.metadata || undefined),
                 updatedAt: new Date(),
               },
             });
@@ -305,6 +319,7 @@ export async function POST(request: Request) {
             status: "new",
             agentId: session.id,
             scrapeRunId: importRun.id,
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
           },
         });
         savedCount++;

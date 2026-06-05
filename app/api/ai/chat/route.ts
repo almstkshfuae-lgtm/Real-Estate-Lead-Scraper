@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { generateGeminiText, getAIConfig, generateGeminiStream } from "@/lib/ai";
+import { generateGeminiText, getAIConfig, generateGeminiStream, generateGeminiChatStream } from "@/lib/ai";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -123,13 +123,13 @@ export async function POST(req: NextRequest) {
     });
 
     const systemPrompt = buildSystemPrompt(lang, context, user);
-    const conversationText = `Chat messages:\n${messages
-      .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
-      .join("\n")}`;
+    
+    // Apply sliding window of last 15 messages to manage context length
+    const maxHistory = 15;
+    const recentMessages = messages.slice(-maxHistory);
 
-    // Get the live stream from Gemini, passing the incoming request signal!
-    // This propagates browser cancellations all the way to Google's servers.
-    const rawStream = await generateGeminiStream(systemPrompt, conversationText, 2048, req.signal);
+    // Get the live stream from Gemini using the native chat format and system instruction
+    const rawStream = await generateGeminiChatStream(systemPrompt, recentMessages, 4096, req.signal);
     const reader = rawStream.getReader();
     const encoder = new TextEncoder();
 

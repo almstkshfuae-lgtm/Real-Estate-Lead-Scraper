@@ -56,6 +56,7 @@ model Lead {
   sourceType   String?
   latitude     Float?
   longitude    Float?
+  metadata     Json?
   agent        User      @relation(fields: [agentId], references: [id])
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
 

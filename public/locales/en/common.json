@@ -29,7 +29,8 @@
       "signals": "Signals",
       "status": "Status",
       "empty": "No leads found matching your search.",
-      "pagination": "Showing {{count}} of {{total}} leads"
+      "pagination": "Showing {{count}} of {{total}} leads",
+      "limit": "Leads per page"
     },
     "tiers": {
       "all": "All Tiers",

@@ -45,6 +45,7 @@ export type Lead = {
   createdAt: string;
   updatedAt: string;
   persona?: string | null;
+  metadata?: any | null;
 };
 
 interface LeadTableProps {
@@ -65,11 +66,16 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkUpdating, setBulkUpdating] = useState(false);
 
-  const fetchLeads = async () => {
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25); // Use 25 leads per page as a stateful limit
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalLeads, setTotalLeads] = useState(0);
+
+  const fetchLeads = async (targetPage = page) => {
     try {
       setLoading(true);
       const { searchTerm, statusFilter, tierFilter, scrapeRunId } = filters;
-      let url = `/api/leads?search=${encodeURIComponent(searchTerm)}`;
+      let url = `/api/leads?search=${encodeURIComponent(searchTerm)}&page=${targetPage}&limit=${limit}`;
       if (statusFilter) url += `&status=${statusFilter}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (scrapeRunId) url += `&scrapeRunId=${scrapeRunId}`;
@@ -111,6 +117,8 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       }));
 
       setLeads(sanitizedLeads);
+      setTotalPages(data.totalPages || 1);
+      setTotalLeads(data.total || 0);
     } catch (err: any) {
       toast.error("Error fetching leads");
     } finally {
@@ -119,8 +127,15 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
   };
 
   useEffect(() => {
-    fetchLeads();
-  }, [filters]);
+    setPage(1);
+    fetchLeads(1);
+  }, [filters, limit]);
+
+  useEffect(() => {
+    if (page !== 1) {
+      fetchLeads(page);
+    }
+  }, [page]);
 
   const toggleSelectAll = () => {
     if (selectedIds.length === leads.length) {
@@ -360,13 +375,60 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
         </div>
       )}
 
-      <div className="p-4 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]/20 flex items-center justify-between">
-        <p className="text-xs text-[var(--color-text-secondary)]">
-          {t('leads.table.pagination', { count: leads.length, total: leads.length })}
-        </p>
-        <div className="flex gap-2">
-          <button className="px-3 py-1 rounded-lg border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-bg-surface)] disabled:opacity-50" disabled>{t('common.previous')}</button>
-          <button className="px-3 py-1 rounded-lg border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-bg-surface)] disabled:opacity-50" disabled>{t('common.next')}</button>
+      <div className="p-4 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)]/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-[var(--color-text-secondary)]">
+          <p>
+            {t('leads.table.pagination', { count: leads.length, total: totalLeads, defaultValue: `Showing ${leads.length} of ${totalLeads} leads` })}
+            {` • ${t('common.page', 'Page')} ${page} / ${totalPages}`}
+          </p>
+          <div className="flex items-center gap-2">
+            <span>{t('leads.table.limit', 'Leads per page')}:</span>
+            <select
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="px-2 py-1 rounded border border-[var(--color-border)] bg-[var(--color-bg-surface)] outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-xs"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap justify-center">
+          <button
+            onClick={() => setPage(prev => Math.max(1, prev - 1))}
+            disabled={page === 1}
+            className="px-3 py-1 rounded-lg border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-bg-surface)] disabled:opacity-50 transition-colors"
+          >
+            {t('common.previous')}
+          </button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+            .map((p, idx, arr) => (
+              <span key={p} className="flex items-center">
+                {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-xs text-[var(--color-text-secondary)]">...</span>}
+                <button
+                  onClick={() => setPage(p)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    page === p
+                      ? "bg-[var(--color-primary)] text-white"
+                      : "border border-[var(--color-border)] hover:bg-[var(--color-bg-surface)]"
+                  }`}
+                >
+                  {p}
+                </button>
+              </span>
+            ))}
+
+          <button
+            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1 rounded-lg border border-[var(--color-border)] text-xs font-medium hover:bg-[var(--color-bg-surface)] disabled:opacity-50 transition-colors"
+          >
+            {t('common.next')}
+          </button>
         </div>
       </div>
     </div>

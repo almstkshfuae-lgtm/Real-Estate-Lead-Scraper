@@ -15,7 +15,6 @@ import { safeJson } from "@/lib/safe-fetch";
 export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onClose: () => void }) {
   const { t, i18n } = useTranslation("common");
   const lang = i18n.language === "ar" ? "ar" : "en";
-
   const [copied, setCopied] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "ai" | "notes" | "followup">("details");
   const [notes, setNotes] = useState(lead?.notes || "");
@@ -49,6 +48,20 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
   const [dynamicPersona, setDynamicPersona] = useState<string | null>(null);
   const [personaLoading, setPersonaLoading] = useState(false);
 
+  // Lead Editing State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    company: "",
+    role: "",
+    location: "",
+    score: 50,
+    budgetMin: "",
+    budgetMax: "",
+  });
+
   useEffect(() => {
     let active = true;
     if (lead) {
@@ -57,6 +70,19 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
       setScoreResult(null);
       setSignals(null);
       setDynamicPersona(null);
+
+      setEditForm({
+        name: lead.name || "",
+        email: lead.email || "",
+        phone: lead.phone || "",
+        company: lead.company || "",
+        role: lead.role || "",
+        location: lead.location || "",
+        score: lead.score ?? 50,
+        budgetMin: lead.budgetMin?.toString() || "",
+        budgetMax: lead.budgetMax?.toString() || "",
+      });
+      setIsEditing(false);
 
       if (lead.persona) {
         setDynamicPersona(lead.persona);
@@ -68,6 +94,32 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
       active = false;
     };
   }, [lead, lang]);
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!res.ok) {
+        const data = await safeJson(res);
+        throw new Error(data.error || "Failed to update lead");
+      }
+
+      toast.success(t("common.saved", "Lead updated successfully"));
+      setIsEditing(false);
+      window.location.reload();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!lead) return null;
 
@@ -242,67 +294,210 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         {/* DETAILS TAB */}
         {activeTab === "details" && (
           <div className="space-y-6">
-            {/* Contact Info */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.contact")}</h3>
-              {[
-                { icon: Phone, value: lead.phone, label: "phone", bg: "bg-blue-50 text-[var(--color-primary)]" },
-                { icon: Mail, value: lead.email, label: "email", bg: "bg-purple-50 text-purple-600" },
-              ].map(({ icon: Icon, value, label, bg }) => (
-                <div key={label} className="flex items-center justify-between p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/30">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center`}><Icon className="w-4 h-4" /></div>
-                    <span className="text-sm font-medium text-[var(--color-text-primary)]">{value || t("common.notAvailable")}</span>
-                  </div>
-                  {value && (
-                    <button onClick={() => copyToClipboard(value, label)} className="p-1.5 rounded-md hover:bg-[var(--color-bg-card)] text-[var(--color-text-disabled)] hover:text-[var(--color-primary)] transition-all">
-                      {copied === label ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)]">{t("leads.sidebar.contact")}</h3>
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="text-xs font-bold text-[var(--color-primary)] hover:underline"
+              >
+                {isEditing ? t("common.cancel", "Cancel") : t("common.edit", "Edit")}
+              </button>
             </div>
 
-            {/* Professional */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.professional")}</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
-                  <Building2 className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
-                  <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("leads.sidebar.company")}</p>
-                  <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{lead.company}</p>
+            {isEditing ? (
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <div className="space-y-1.5 text-start">
+                  <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.name", "Name")}</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                  />
                 </div>
-                <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
-                  <Briefcase className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
-                  <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("leads.sidebar.role")}</p>
-                  <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{lead.role}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Signals */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.signals")}</h3>
-              <div className="flex flex-wrap gap-2">
-                {(lead.signals as string[]).map((s: string, i: number) => <SignalChip key={i} signal={s} />)}
-              </div>
-              <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 text-start">
-                <div className="flex gap-3">
-                  <Clock className="w-4 h-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed w-full">
-                    <strong className="block mb-1">{t("leads.sidebar.recentActivity")}:</strong>{" "}
-                    {personaLoading ? (
-                      <span className="flex items-center gap-1.5 text-amber-600/70 dark:text-amber-400/70 font-medium">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        {t("ai.generating", "Generating...")}
-                      </span>
-                    ) : (
-                      <span>{dynamicPersona || t("leads.sidebar.recentActivityText", { company: lead.company })}</span>
-                    )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.phone", "Phone")}</label>
+                    <input
+                      type="text"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.email", "Email")}</label>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
                   </div>
                 </div>
-              </div>
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.company", "Company")}</label>
+                    <input
+                      type="text"
+                      value={editForm.company}
+                      onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.role", "Role")}</label>
+                    <input
+                      type="text"
+                      value={editForm.role}
+                      onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1.5 text-start col-span-2">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.location", "Location")}</label>
+                    <input
+                      type="text"
+                      value={editForm.location}
+                      onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.score", "Score")}</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={editForm.score}
+                      onChange={(e) => setEditForm({ ...editForm, score: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.budgetMin", "Min Budget (AED)")}</label>
+                    <input
+                      type="number"
+                      value={editForm.budgetMin}
+                      onChange={(e) => setEditForm({ ...editForm, budgetMin: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.budgetMax", "Max Budget (AED)")}</label>
+                    <input
+                      type="number"
+                      value={editForm.budgetMax}
+                      onChange={(e) => setEditForm({ ...editForm, budgetMax: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="w-full py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {t("common.save", "Save Changes")}
+                </button>
+              </form>
+            ) : (
+              <>
+                {/* Contact Info */}
+                <div className="space-y-3">
+                  {[
+                    { icon: Phone, value: lead.phone, label: "phone", bg: "bg-blue-50 text-[var(--color-primary)]" },
+                    { icon: Mail, value: lead.email, label: "email", bg: "bg-purple-50 text-purple-600" },
+                  ].map(({ icon: Icon, value, label, bg }) => (
+                    <div key={label} className="flex items-center justify-between p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/30">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center`}><Icon className="w-4 h-4" /></div>
+                        <span className="text-sm font-medium text-[var(--color-text-primary)]">{value || t("common.notAvailable")}</span>
+                      </div>
+                      {value && (
+                        <button onClick={() => copyToClipboard(value, label)} className="p-1.5 rounded-md hover:bg-[var(--color-bg-card)] text-[var(--color-text-disabled)] hover:text-[var(--color-primary)] transition-all">
+                          {copied === label ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Professional */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.professional")}</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
+                      <Building2 className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
+                      <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("leads.sidebar.company")}</p>
+                      <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{lead.company}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
+                      <Briefcase className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
+                      <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("leads.sidebar.role")}</p>
+                      <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{lead.role}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Budget */}
+                {(lead.budgetMin || lead.budgetMax) && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.budget", "Budget")}</h3>
+                    <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
+                      <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                        {lead.budgetMin ? `AED ${lead.budgetMin.toLocaleString()}` : "0"} - {lead.budgetMax ? `AED ${lead.budgetMax.toLocaleString()}` : t("common.any", "Any")}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Metadata (Unstructured CSV extra data) */}
+                {lead.metadata && typeof lead.metadata === 'object' && Object.keys(lead.metadata as Record<string, any>).length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.additionalData", "Additional Data")}</h3>
+                    <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start space-y-2">
+                      {Object.entries(lead.metadata as Record<string, any>).map(([key, val]) => (
+                        <div key={key} className="flex justify-between text-xs border-b border-[var(--color-border)]/50 pb-1.5 last:border-0 last:pb-0">
+                          <span className="font-bold text-[var(--color-text-secondary)]">{key}:</span>
+                          <span className="text-[var(--color-text-primary)] truncate max-w-[200px]" title={String(val)}>{String(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Signals */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.signals")}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(lead.signals as string[]).map((s: string, i: number) => <SignalChip key={i} signal={s} />)}
+                  </div>
+                  <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 text-start">
+                    <div className="flex gap-3">
+                      <Clock className="w-4 h-4 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed w-full">
+                        <strong className="block mb-1">{t("leads.sidebar.recentActivity")}:</strong>{" "}
+                        {personaLoading ? (
+                          <span className="flex items-center gap-1.5 text-amber-600/70 dark:text-amber-400/70 font-medium">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            {t("ai.generating", "Generating...")}
+                          </span>
+                        ) : (
+                          <span>{dynamicPersona || t("leads.sidebar.recentActivityText", { company: lead.company })}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
