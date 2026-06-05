@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  MoreHorizontal, 
+import {
+  MoreHorizontal,
   Loader2,
   GripVertical
 } from "lucide-react";
@@ -40,17 +40,38 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
       if (statusFilter) url += `&status=${statusFilter}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (scrapeRunId) url += `&scrapeRunId=${scrapeRunId}`;
-      
+
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch leads");
       const data = await res.json();
-      
+
+      const parseSignals = (sig: any): string[] => {
+        if (!sig) return [];
+        if (Array.isArray(sig)) return sig.map(String);
+        if (typeof sig === 'string') {
+          try {
+            const parsed = JSON.parse(sig);
+            if (Array.isArray(parsed)) return parsed.map(String);
+            if (typeof parsed === 'object' && parsed !== null) {
+              return Object.values(parsed).map(String);
+            }
+            return [sig];
+          } catch {
+            if (sig.includes(',')) return sig.split(',').map(s => s.trim()).filter(Boolean);
+            return [sig];
+          }
+        }
+        if (typeof sig === 'object' && sig !== null) {
+          return Object.values(sig).map(String);
+        }
+        return [];
+      };
+
       const sanitizedLeads = (data.leads || []).map((l: any) => ({
         ...l,
-        signals: Array.isArray(l.signals) ? l.signals : 
-                (typeof l.signals === 'string' ? JSON.parse(l.signals) : [])
+        signals: parseSignals(l.signals)
       }));
-      
+
       setLeads(sanitizedLeads);
     } catch (err) {
       console.error(err);
@@ -75,7 +96,7 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
 
     const oldLeads = [...leads];
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
-    
+
     try {
       setUpdatingId(leadId);
       const res = await fetch(`/api/leads/${leadId}`, {
@@ -83,7 +104,7 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      
+
       if (res.ok) {
         toast.success(t('common.statusUpdated', { name: leads.find(l => l.id === leadId)?.name }));
       } else {
@@ -121,32 +142,30 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
 
             <Droppable droppableId={status}>
               {(provided, snapshot) => (
-                <div 
+                <div
                   {...provided.droppableProps}
                   ref={provided.innerRef}
-                  className={`flex-1 rounded-2xl p-3 border transition-colors space-y-3 min-h-[500px] ${
-                    snapshot.isDraggingOver 
-                      ? "bg-[var(--color-primary-subtle)] border-[var(--color-primary)]/30" 
+                  className={`flex-1 rounded-2xl p-3 border transition-colors space-y-3 min-h-[500px] ${snapshot.isDraggingOver
+                      ? "bg-[var(--color-primary-subtle)] border-[var(--color-primary)]/30"
                       : "bg-[var(--color-bg-surface)]/30 border-[var(--color-border)]/50"
-                  }`}
+                    }`}
                 >
                   {getLeadsByStatus(status).map((lead, index) => (
                     <Draggable key={lead.id} draggableId={lead.id} index={index}>
                       {(provided, snapshot) => (
-                        <div 
+                        <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
                           onClick={() => onSelectLead(lead)}
-                          className={`bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4 shadow-sm hover:shadow-md hover:border-[var(--color-primary)]/50 transition-all cursor-pointer group relative ${
-                            snapshot.isDragging ? "shadow-xl ring-2 ring-[var(--color-primary)]/20 z-50" : ""
-                          }`}
+                          className={`bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4 shadow-sm hover:shadow-md hover:border-[var(--color-primary)]/50 transition-all cursor-pointer group relative ${snapshot.isDragging ? "shadow-xl ring-2 ring-[var(--color-primary)]/20 z-50" : ""
+                            }`}
                         >
                           {updatingId === lead.id && (
                             <div className="absolute inset-0 bg-[var(--color-bg-card)]/60 backdrop-blur-[1px] rounded-xl z-10 flex items-center justify-center">
                               <Loader2 className="w-5 h-5 text-[var(--color-primary)] animate-spin" />
                             </div>
                           )}
-                          
+
                           <div className="flex justify-between items-start mb-3">
                             <ScoreBadge score={lead.score} />
                             <div className="flex items-center gap-2">

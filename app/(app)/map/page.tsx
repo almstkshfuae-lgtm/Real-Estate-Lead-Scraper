@@ -84,7 +84,35 @@ export default function MapPage() {
       const res = await fetch(url);
       if (!res.ok) throw new Error("Fetch failed");
       const data = await safeJson(res);
-      setLeads(data.leads || []);
+
+      const parseSignals = (sig: any): string[] => {
+        if (!sig) return [];
+        if (Array.isArray(sig)) return sig.map(String);
+        if (typeof sig === 'string') {
+          try {
+            const parsed = JSON.parse(sig);
+            if (Array.isArray(parsed)) return parsed.map(String);
+            if (typeof parsed === 'object' && parsed !== null) {
+              return Object.values(parsed).map(String);
+            }
+            return [sig];
+          } catch {
+            if (sig.includes(',')) return sig.split(',').map(s => s.trim()).filter(Boolean);
+            return [sig];
+          }
+        }
+        if (typeof sig === 'object' && sig !== null) {
+          return Object.values(sig).map(String);
+        }
+        return [];
+      };
+
+      const sanitizedLeads = (data.leads || []).map((l: any) => ({
+        ...l,
+        signals: parseSignals(l.signals)
+      }));
+
+      setLeads(sanitizedLeads);
     } catch (e) {
       console.error(e);
       setLeads([]);
@@ -112,7 +140,35 @@ export default function MapPage() {
         const res = await fetch(url);
         if (!res.ok) throw new Error("Zone fetch failed");
         const data = await safeJson(res);
-        setGeofencedLeads(data.leads || []);
+
+        const parseSignals = (sig: any): string[] => {
+          if (!sig) return [];
+          if (Array.isArray(sig)) return sig.map(String);
+          if (typeof sig === 'string') {
+            try {
+              const parsed = JSON.parse(sig);
+              if (Array.isArray(parsed)) return parsed.map(String);
+              if (typeof parsed === 'object' && parsed !== null) {
+                return Object.values(parsed).map(String);
+              }
+              return [sig];
+            } catch {
+              if (sig.includes(',')) return sig.split(',').map(s => s.trim()).filter(Boolean);
+              return [sig];
+            }
+          }
+          if (typeof sig === 'object' && sig !== null) {
+            return Object.values(sig).map(String);
+          }
+          return [];
+        };
+
+        const sanitizedLeads = (data.leads || []).map((l: any) => ({
+          ...l,
+          signals: parseSignals(l.signals)
+        }));
+
+        setGeofencedLeads(sanitizedLeads);
       } catch (err) {
         console.error("Geofence query failed:", err);
         setGeofencedLeads([]);

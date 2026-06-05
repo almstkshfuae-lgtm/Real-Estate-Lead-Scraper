@@ -17,19 +17,33 @@ import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 export type Lead = {
   id: string;
   name: string;
+  nameAr?: string | null;
   company: string;
+  companyAr?: string | null;
   role: string;
+  roleAr?: string | null;
   source: string;
+  sourceType?: string | null;
   tier: number;
+  phone?: string | null;
+  email?: string | null;
   location: string;
+  latitude?: number | null;
+  longitude?: number | null;
   score: number;
   signals: string[];
+  propertyPref?: any | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  relocated?: boolean;
+  rentalFlag?: boolean;
   status: string;
-  notes?: string;
-  phone?: string;
-  email?: string;
+  notes?: string | null;
   bitrix24Id?: string | null;
+  agentId: string;
+  scrapeRunId: string;
   createdAt: string;
+  updatedAt: string;
   persona?: string | null;
 };
 
@@ -64,10 +78,31 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       if (!res.ok) throw new Error("Failed to fetch leads");
       const data = await res.json();
 
+      const parseSignals = (sig: any): string[] => {
+        if (!sig) return [];
+        if (Array.isArray(sig)) return sig.map(String);
+        if (typeof sig === 'string') {
+          try {
+            const parsed = JSON.parse(sig);
+            if (Array.isArray(parsed)) return parsed.map(String);
+            if (typeof parsed === 'object' && parsed !== null) {
+              return Object.values(parsed).map(String);
+            }
+            return [sig];
+          } catch {
+            if (sig.includes(',')) return sig.split(',').map(s => s.trim()).filter(Boolean);
+            return [sig];
+          }
+        }
+        if (typeof sig === 'object' && sig !== null) {
+          return Object.values(sig).map(String);
+        }
+        return [];
+      };
+
       const sanitizedLeads = (data.leads || []).map((l: any) => ({
         ...l,
-        signals: Array.isArray(l.signals) ? l.signals :
-          (typeof l.signals === 'string' ? JSON.parse(l.signals) : [])
+        signals: parseSignals(l.signals)
       }));
 
       setLeads(sanitizedLeads);

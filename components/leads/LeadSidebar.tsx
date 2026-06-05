@@ -79,7 +79,11 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         }
       };
 
-      fetchPersona();
+      if (lead.persona) {
+        setDynamicPersona(lead.persona);
+      } else {
+        fetchPersona();
+      }
     }
     return () => {
       active = false;
