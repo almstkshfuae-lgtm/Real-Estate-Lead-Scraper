@@ -222,6 +222,20 @@ export async function POST(request: NextRequest) {
 
     console.info(`[Webhook] Persisting ${leadsPayload.length} pre-enriched leads for source: ${sourceKey} in run: ${runId}`);
 
+    let keywordsList: string[] = [];
+    if (scrapeRun && scrapeRun.criteria) {
+      try {
+        const criteriaObj = typeof scrapeRun.criteria === 'string' ? JSON.parse(scrapeRun.criteria) : scrapeRun.criteria;
+        const keywordsString = criteriaObj?.keywords;
+        if (keywordsString && typeof keywordsString === 'string' && keywordsString.trim() !== '') {
+          keywordsList = keywordsString.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+          console.info(`[Webhook] Loaded ${keywordsList.length} keywords for post-scrape filtering:`, keywordsList);
+        }
+      } catch (e) {
+        console.error("[Webhook] Error parsing scrapeRun criteria for keywords:", e);
+      }
+    }
+
     let newLeadsCount = 0;
 
     for (const lead of leadsPayload) {
@@ -229,6 +243,15 @@ export async function POST(request: NextRequest) {
       if (!lead.name || !lead.company) {
         console.warn(`[Webhook] Skipping malformed lead (missing name/company):`, lead);
         continue;
+      }
+
+      if (keywordsList.length > 0) {
+        const leadText = `${lead.name} ${lead.nameAr || ''} ${lead.company} ${lead.companyAr || ''} ${lead.role || ''} ${lead.roleAr || ''} ${lead.location || ''} ${lead.persona || ''} ${(lead.signals || []).join(' ')}`.toLowerCase();
+        const matchesKeywords = keywordsList.some((kw: string) => leadText.includes(kw));
+        if (!matchesKeywords) {
+          console.info(`[Webhook] Skipping lead ${lead.name} because it does not match criteria keywords: ${keywordsList.join(', ')}`);
+          continue;
+        }
       }
 
       try {

@@ -22,6 +22,7 @@
     "searchPlaceholder": "Search leads by name or company...",
     "filters": "Filters",
     "dateRange": "Date Range",
+    "unifiedSearchScrapeBtn": "Start Scrape for \"{{term}}\"",
     "table": {
       "score": "Score",
       "detail": "Lead Detail",

@@ -7,12 +7,14 @@ import {
   Check,
   X,
   ExternalLink,
-  Trash2
+  Trash2,
+  Search
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
 import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
+import { useRouter } from "next/navigation";
 
 export type Lead = {
   id: string;
@@ -60,6 +62,7 @@ interface LeadTableProps {
 }
 
 export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
+  const router = useRouter();
   const { t } = useTranslation('common');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
@@ -370,8 +373,23 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       </div>
 
       {leads.length === 0 && !loading && (
-        <div className="p-12 text-center">
-          <p className="text-[var(--color-text-secondary)]">{t('leads.table.empty')}</p>
+        <div className="p-12 text-center max-w-md mx-auto space-y-4">
+          <p className="text-[var(--color-text-secondary)]">
+            {filters.searchTerm 
+              ? `${t('leads.table.empty')}`
+              : t('leads.table.empty')}
+          </p>
+          {filters.searchTerm && (
+            <div className="pt-2">
+              <button
+                onClick={() => router.push(`/search?keywords=${encodeURIComponent(filters.searchTerm)}`)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-primary)] text-white text-xs font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all shadow-md shadow-blue-500/10"
+              >
+                <Search className="w-3.5 h-3.5" />
+                {t('leads.unifiedSearchScrapeBtn', 'Start Scrape for "{{term}}"', { term: filters.searchTerm })}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

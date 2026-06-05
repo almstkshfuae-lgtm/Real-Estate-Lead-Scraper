@@ -152,7 +152,8 @@ export async function DELETE(
     }
 
     // Agents can only delete their own leads
-    if (session.role !== 'ADMIN' && lead.agentId !== session.id) {
+    const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
+    if (isNonAdmin && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

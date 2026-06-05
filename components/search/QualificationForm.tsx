@@ -22,7 +22,24 @@ import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
 import { useScrapeRunStatus } from "@/hooks/useScrapeRunStatus";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Search, Globe, ChevronDown, ChevronUp } from "lucide-react";
+
+const SOURCE_NAMES: Record<string, string> = {
+  alforsan: 'Al Forsan',
+  adec: 'ADEC',
+  rotary: 'Rotary Club',
+  whatson: "What's On",
+  artsclub: 'Arts Club',
+  dhabianequi: 'Dhabian Equestrian',
+  alhabtoor: 'Al Habtoor',
+  adgm: 'ADGM',
+  difc: 'DIFC',
+  gazette: 'Official Gazette',
+  arabianbusiness: 'Arabian Business',
+  propertymonitor: 'Property Monitor',
+  abudhabichamber: 'Abu Dhabi Chamber',
+};
 
 const DEFAULT_SCRAPE_SOURCES = [
   'alforsan',
@@ -40,15 +57,20 @@ const DEFAULT_SCRAPE_SOURCES = [
   'abudhabichamber',
 ];
 
-export default function QualificationForm({ initialData }: { initialData?: any }) {
+export default function QualificationForm({ initialData, onSaveSuccess }: { initialData?: any; onSaveSuccess?: () => void }) {
   const router = useRouter();
   const { t } = useTranslation('common');
+  const searchParams = useSearchParams();
+  const queryKeywords = searchParams?.get("keywords") || "";
+  
   const [propertyTypes, setPropertyTypes] = useState<string[]>(initialData?.propertyTypes || []);
   const [budgetMin, setBudgetMin] = useState<number>(initialData?.budgetMin || 1000000);
   const [budgetMax, setBudgetMax] = useState<number>(initialData?.budgetMax || 10000000);
   const [emirates, setEmirates] = useState<string[]>(initialData?.emirates || []);
   const [relocated, setRelocated] = useState(initialData?.relocated || false);
   const [excludeRental, setExcludeRental] = useState(initialData?.excludeRental || true);
+  const [keywords, setKeywords] = useState<string>(initialData?.keywords || "");
+  const [showSourcesConfig, setShowSourcesConfig] = useState(false);
 
   // Sync state if initialData changes
   useEffect(() => {
@@ -59,8 +81,15 @@ export default function QualificationForm({ initialData }: { initialData?: any }
       setEmirates(initialData.emirates || []);
       setRelocated(initialData.relocated || false);
       setExcludeRental(initialData.excludeRental || true);
+      setKeywords(initialData.keywords || "");
     }
   }, [initialData]);
+
+  useEffect(() => {
+    if (queryKeywords) {
+      setKeywords(queryKeywords);
+    }
+  }, [queryKeywords]);
 
   const toggleType = (type: string) => {
     setPropertyTypes(prev => 
@@ -104,6 +133,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
         emirates,
         relocated,
         excludeRental,
+        keywords,
       };
 
       const res = await fetch("/api/search", {
@@ -116,6 +146,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
       if (res.ok) {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
+        onSaveSuccess?.();
         
         if (!isScrape) {
           toast.success(t('search.savedSuccess', 'Search criteria saved!'));
@@ -190,6 +221,24 @@ export default function QualificationForm({ initialData }: { initialData?: any }
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Left Column */}
           <div className="space-y-8">
+            {/* Target Keywords */}
+            <div className="space-y-4">
+              <label className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
+                <Search className="w-4 h-4" />
+                {t('search.keywordsLabel', 'Target Keywords')}
+              </label>
+              <input 
+                type="text" 
+                placeholder={t('search.keywordsPlaceholder', 'e.g., luxury, penthouses, DIFC, investor')}
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+              />
+              <p className="text-[10px] text-[var(--color-text-secondary)]">
+                {t('search.keywordsDesc', 'Filter pre-enriched leads to match any of these comma-separated keywords.')}
+              </p>
+            </div>
+
             {/* Property Types */}
             <div className="space-y-4">
               <label className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
@@ -333,6 +382,73 @@ export default function QualificationForm({ initialData }: { initialData?: any }
               </div>
             </div>
           </div>
+        </div>
+
+        {/* ── Active Sources Collapsible Configuration ── */}
+        <div className="border border-[var(--color-border)] rounded-3xl p-6 bg-[var(--color-bg-card)]">
+          <button
+            onClick={() => setShowSourcesConfig(!showSourcesConfig)}
+            className="w-full flex items-center justify-between text-start font-bold text-sm text-[var(--color-text-primary)]"
+          >
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-[var(--color-primary)]" />
+              <span>
+                {t('search.configureSourcesBtn', 'Configure Scrape Sources')} ({activeSources.length}/{DEFAULT_SCRAPE_SOURCES.length})
+              </span>
+            </div>
+            {showSourcesConfig ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showSourcesConfig && (
+            <div className="mt-6 space-y-6 pt-6 border-t border-[var(--color-border)] animate-in fade-in-0 duration-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setActiveSources(DEFAULT_SCRAPE_SOURCES)}
+                  className="px-3 py-1.5 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all"
+                >
+                  {t('search.selectAll', 'Select All')}
+                </button>
+                <button
+                  onClick={() => setActiveSources([])}
+                  className="px-3 py-1.5 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all"
+                >
+                  {t('search.deselectAll', 'Deselect All')}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {DEFAULT_SCRAPE_SOURCES.map((sourceKey) => {
+                  const isChecked = activeSources.includes(sourceKey);
+                  return (
+                    <label
+                      key={sourceKey}
+                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                        isChecked
+                          ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800'
+                          : 'border-[var(--color-border)] bg-[var(--color-bg-surface)]/20 hover:border-[var(--color-text-disabled)]'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          setActiveSources((prev) =>
+                            prev.includes(sourceKey)
+                              ? prev.filter((k) => k !== sourceKey)
+                              : [...prev, sourceKey]
+                          );
+                        }}
+                        className="rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                      />
+                      <span className="text-xs font-bold text-[var(--color-text-primary)]">
+                        {SOURCE_NAMES[sourceKey] || sourceKey}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Live Progress Banner ── */}

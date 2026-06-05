@@ -16,10 +16,11 @@ export async function POST(request: Request) {
     }
 
     // Delete leads that belong to the current user (unless admin)
+    const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
     const deleteResult = await prisma.lead.deleteMany({
       where: {
         id: { in: ids },
-        ...(session.role !== 'ADMIN' && { agentId: session.id })
+        ...(isNonAdmin && { agentId: session.id })
       }
     });
 

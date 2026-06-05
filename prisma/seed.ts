@@ -4,6 +4,11 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' || process.env.PRISMA_MIGRATE_DEPLOY === '1') {
+    console.log('Skipping seed script in production/deployment environment.');
+    return;
+  }
+
   // 1. Admin User
   const adminEmail = 'admin@brilliance-lead.uk';
   const hashedPassword = await bcrypt.hash('almstkshf@2030', 10);

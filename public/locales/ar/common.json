@@ -22,6 +22,7 @@
     "searchPlaceholder": "البحث بالاسم أو الشركة...",
     "filters": "تصفية",
     "dateRange": "نطاق التاريخ",
+    "unifiedSearchScrapeBtn": "بدء البحث الذكي عن \"{{term}}\"",
     "table": {
       "score": "النتيجة",
       "detail": "تفاصيل العميل",
