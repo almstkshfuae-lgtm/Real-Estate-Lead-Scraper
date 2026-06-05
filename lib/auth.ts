@@ -126,7 +126,7 @@ export async function getSessionWithDBVerify(): Promise<AuthUser | null> {
     });
 
     const timeoutPromise = new Promise<any>((_, reject) =>
-      setTimeout(() => reject(new Error('Session DB check timed out')), 3000)
+      setTimeout(() => reject(new Error('Session DB check timed out')), 10000)
     );
 
     const user = await Promise.race([userPromise, timeoutPromise]);
