@@ -48,7 +48,10 @@ export async function GET(request: Request) {
     try {
       const scraperClient = await getScraperClient();
       logs.push({ step: "InternalScraper", status: "START", time: new Date().toISOString() });
-      const origin = new URL(request.url).origin;
+      let origin = new URL(request.url).origin;
+      if (origin.includes('localhost')) {
+        origin = origin.replace('localhost', '127.0.0.1');
+      }
       const webhookUrl = `${origin}/api/scrape/webhook`;
       const response = await scraperClient.scrapeMultipleSources([
         "abudhabi-elites", 

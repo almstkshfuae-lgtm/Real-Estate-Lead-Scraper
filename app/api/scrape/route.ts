@@ -6,7 +6,7 @@ import { getScraperClient } from "@/lib/scraper-client";
 export async function POST(request: NextRequest) {
   try {
     const session = await getSessionWithDBVerify();
-    
+
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -51,16 +51,28 @@ export async function POST(request: NextRequest) {
     });
 
     const scraperClient = await getScraperClient();
-    const origin = request.nextUrl.origin;
+    let origin = request.nextUrl.origin;
+    if (origin.includes('localhost')) {
+      origin = origin.replace('localhost', '127.0.0.1');
+    }
     const webhookUrl = `${origin}/api/scrape/webhook`;
 
     console.log(`[Scraper] Dispatching async scrape run ${scrapeRun.id} to microservice. Webhook: ${webhookUrl}`);
-    
-    // Trigger the microservice scraper asynchronously to prevent serverless execution timeout (15s limit)
-    await scraperClient.scrapeMultipleSources(requestedSources, webhookUrl, scrapeRun.id, criteria);
 
-    return NextResponse.json({ 
-      message: 'HNWI lead scraping started', 
+    try {
+      // Trigger the microservice scraper asynchronously to prevent serverless execution timeout (15s limit)
+      await scraperClient.scrapeMultipleSources(requestedSources, webhookUrl, scrapeRun.id, criteria);
+    } catch (triggerError: any) {
+      console.error("Failed to trigger scraper service, marking run as FAILED:", triggerError.message);
+      await prisma.scrapeRun.update({
+        where: { id: scrapeRun.id },
+        data: { status: "FAILED" }
+      });
+      return NextResponse.json({ error: "Scraper service is unavailable or failed: " + triggerError.message }, { status: 503 });
+    }
+
+    return NextResponse.json({
+      message: 'HNWI lead scraping started',
       runId: scrapeRun.id,
       sources: requestedSources
     });
