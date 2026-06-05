@@ -128,12 +128,31 @@ export async function sendAgentNotification(
 
 export async function notifyNewEliteLeads(agentId: string, tierOneCount: number, runId?: string) {
   if (tierOneCount <= 0) return;
+  
+  if (agentId === "cron") {
+    const admins = await prisma.user.findMany();
+    const adminUsers = admins.filter(u => u.role.toUpperCase() === 'ADMIN');
+    const title = tierOneCount === 1 ? "New Tier 1 Lead Discovered (Cron)" : `New Tier 1 Leads Discovered (${tierOneCount}) (Cron)`;
+    const body = `The scheduled scrape found ${tierOneCount} Tier 1 lead${tierOneCount === 1 ? "" : "s"}${runId ? ` for run ${runId}` : ""}.`;
+    await Promise.all(adminUsers.map(admin => sendAgentNotification(admin.id, "newLead", title, body, { runId, tierOneCount })));
+    return;
+  }
+
   const title = tierOneCount === 1 ? "New Tier 1 Lead Discovered" : `New Tier 1 Leads Discovered (${tierOneCount})`;
   const body = `Your latest scrape found ${tierOneCount} Tier 1 lead${tierOneCount === 1 ? "" : "s"}${runId ? ` for run ${runId}` : ""}.`;
   await sendAgentNotification(agentId, "newLead", title, body, { runId, tierOneCount });
 }
 
 export async function notifyScrapeCompletion(agentId: string, totalLeads: number, runId: string) {
+  if (agentId === "cron") {
+    const admins = await prisma.user.findMany();
+    const adminUsers = admins.filter(u => u.role.toUpperCase() === 'ADMIN');
+    const title = "Scheduled Scrape Completed";
+    const body = `Cron scrape run ${runId} finished with ${totalLeads} lead${totalLeads === 1 ? "" : "s"}.`;
+    await Promise.all(adminUsers.map(admin => sendAgentNotification(admin.id, "scrapeComplete", title, body, { runId, totalLeads })));
+    return;
+  }
+
   const title = "Scrape Completed";
   const body = `Your scrape run ${runId} finished with ${totalLeads} lead${totalLeads === 1 ? "" : "s"}.`;
   await sendAgentNotification(agentId, "scrapeComplete", title, body, { runId, totalLeads });

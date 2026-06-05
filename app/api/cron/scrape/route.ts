@@ -7,9 +7,26 @@ import { put } from "@vercel/blob";
 // Default admin agent ID to assign leads to if triggered by cron
 const SYSTEM_AGENT_ID = "cm0x2abc1234567890abcdef"; 
 
+import { getSessionWithDBVerify } from "@/lib/auth";
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  let isAuthorized = false;
+  
+  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+    isAuthorized = true;
+  } else {
+    try {
+      const session = await getSessionWithDBVerify();
+      if (session && session.role.toUpperCase() === 'ADMIN') {
+        isAuthorized = true;
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  if (!isAuthorized) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

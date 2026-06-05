@@ -58,10 +58,8 @@ export default function ScraperSettingsPage() {
       // For now, let's assume we can hit the old scrape route or we make a new one. 
       // To keep it simple, we hit /api/scrape which we can re-route to use the cron logic.
       
-      const res = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ criteria: { type: "manual" } })
+      const res = await fetch('/api/cron/scrape', {
+        method: 'GET'
       });
 
       if (!res.ok) throw new Error(await res.text());

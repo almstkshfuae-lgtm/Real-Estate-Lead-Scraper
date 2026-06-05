@@ -1852,6 +1852,9 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
   if (criteria.budgetMax !== undefined) criteriaLines.push(`Budget maximum: ${criteria.budgetMax}`);
   if (Array.isArray(criteria.emirates) && criteria.emirates.length > 0) criteriaLines.push(`Locations: ${criteria.emirates.join(', ')}`);
   if (Array.isArray(criteria.signals) && criteria.signals.length > 0) criteriaLines.push(`Target signals: ${criteria.signals.join(', ')}`);
+  if (criteria.tierMin !== undefined) criteriaLines.push(`Minimum tier requirement: ${criteria.tierMin} (extract ONLY leads with this tier or higher importance, e.g. if 2, extract 1 and 2)`);
+  if (criteria.recentlyRelocated === true) criteriaLines.push(`Must be recently relocated`);
+  if (criteria.bounds) criteriaLines.push(`Geofencing bounds (focus on this area): ${JSON.stringify(criteria.bounds)}`);
   const criteriaPrompt = criteriaLines.length > 0
     ? 'Use these as strict filters — discard any profile that does not match:\n' + criteriaLines.join('\n')
     : '';

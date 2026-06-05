@@ -10,7 +10,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { ids } = await request.json();
+    const body = await request.json();
+    const ids = body.ids || body.leadIds;
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: "No lead IDs provided" }, { status: 400 });

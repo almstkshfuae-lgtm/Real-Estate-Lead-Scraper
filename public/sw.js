@@ -85,12 +85,9 @@ self.addEventListener("fetch", (event) => {
               });
             });
           }
-          // For non-navigation requests with no cache, return a generic 503 response
-          // to avoid the browser "promise was resolved with an error response object" warning.
-          return new Response(null, {
-            status: 503,
-            statusText: "Service Unavailable",
-          });
+          // For non-navigation requests with no cache, return a native network error.
+          // This avoids misleading "503 Service Unavailable" logs in the console.
+          return Response.error();
         });
       })
   );

@@ -142,8 +142,42 @@ export async function GET(request: Request) {
     });
     const total = await prisma.lead.count({ where });
 
+    const parsedLeads = leads.map((lead: any) => {
+      let parsedSignals: any[] = [];
+      try {
+        if (typeof lead.signals === 'string') {
+          if (lead.signals.trim().startsWith('[')) {
+            parsedSignals = JSON.parse(lead.signals);
+          } else if (lead.signals.trim() !== '') {
+            parsedSignals = lead.signals.split(',').map((s: string) => s.trim());
+          }
+        } else if (Array.isArray(lead.signals)) {
+          parsedSignals = lead.signals;
+        } else if (lead.signals && typeof lead.signals === 'object') {
+          parsedSignals = Object.values(lead.signals);
+        }
+      } catch (e) {
+        if (typeof lead.signals === 'string') {
+          parsedSignals = lead.signals.split(',').map((s: string) => s.trim());
+        }
+      }
+
+      let parsedPropertyPref = lead.propertyPref;
+      try {
+         if (typeof lead.propertyPref === 'string') {
+            parsedPropertyPref = JSON.parse(lead.propertyPref);
+         }
+      } catch(e) {}
+
+      return {
+        ...lead,
+        signals: Array.isArray(parsedSignals) ? parsedSignals : [],
+        propertyPref: parsedPropertyPref,
+      };
+    });
+
     return NextResponse.json({
-      leads,
+      leads: parsedLeads,
       total,
       page,
       totalPages: Math.ceil(total / limit),

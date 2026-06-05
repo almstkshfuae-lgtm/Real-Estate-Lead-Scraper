@@ -243,12 +243,12 @@ async function enrichCompanyWithAI(company: { name: string; category?: string },
 
   // Default fallback in case Gemini fails
   const fallbackLead = {
-    name: "Managing Director",
-    nameAr: "العضو المنتدب",
+    name: `Representative of ${company.name}`,
+    nameAr: `ممثل ${company.name}`,
     company: company.name,
     companyAr: company.name,
-    role: "Director / Owner",
-    roleAr: "مدير / مالك",
+    role: "Corporate Contact",
+    roleAr: "جهة اتصال الشركة",
     source: source,
     tier: 2,
     location: defaultLocation,
@@ -267,9 +267,9 @@ We have extracted a company registration from a public registry:
 - Category/Industry: "${company.category || "Registered Entity"}"
 - Source Registry: "${source}"
 
-Based on the company profile and category, perform a cognitive enrichment to guess the target investor persona:
-1. Target Lead Name: Generate a realistic name of an executive, founder, or key decision maker (like a Managing Director or Principal) for this type of company in the UAE. Provide it in English (name) and Arabic (nameAr).
-2. Target Lead Role: Assign a specific role/position (like Chief Executive Officer, Managing Partner, or Director) in English (role) and Arabic (roleAr).
+Based on the company profile and category, perform a cognitive enrichment to profile the company:
+1. Target Lead Name: DO NOT INVENT A REAL PERSON'S NAME. Always use exactly "Representative of ${company.name}" for English and "ممثل ${company.name}" for Arabic.
+2. Target Lead Role: Always use "Corporate Contact" for English and "جهة اتصال الشركة" for Arabic.
 3. Location: Assign either "Abu Dhabi" or "Dubai" based on the source registry and company context.
 4. Score & Tier:
    - Tier 1: UHNWI/Leadership (private equity, venture capital, large funds, investment holdings, multi-family offices, high luxury)
