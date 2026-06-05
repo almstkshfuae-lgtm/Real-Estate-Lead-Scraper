@@ -58,31 +58,10 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
       setSignals(null);
       setDynamicPersona(null);
 
-      const fetchPersona = async () => {
-        setPersonaLoading(true);
-        try {
-          const res = await fetch(`/api/leads/${lead.id}/persona?lang=${lang}`);
-          if (!res.ok) throw new Error("Failed to fetch persona");
-          const data = await safeJson(res);
-          if (active) {
-            setDynamicPersona(data.persona);
-          }
-        } catch (err) {
-          console.error("Error loading lead persona:", err);
-          if (active) {
-            setDynamicPersona(null);
-          }
-        } finally {
-          if (active) {
-            setPersonaLoading(false);
-          }
-        }
-      };
-
       if (lead.persona) {
         setDynamicPersona(lead.persona);
       } else {
-        fetchPersona();
+        setDynamicPersona(null);
       }
     }
     return () => {
@@ -185,23 +164,23 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
 
   const handleDelete = async () => {
     if (!window.confirm(t('common.confirmDeleteSingle', { name: lead.name, defaultValue: `Are you sure you want to delete ${lead.name}?` }))) return;
-    
+
     setSaving(true);
     try {
       const res = await fetch(`/api/leads/${lead.id}`, {
         method: 'DELETE',
       });
-      
+
       if (!res.ok) {
         const data = await safeJson(res).catch(() => ({} as any));
         throw new Error(data.error || "Failed to delete lead");
       }
-      
+
       toast.success(t('common.deleted', { name: lead.name, defaultValue: "Lead deleted successfully" }));
       onClose();
       // We should probably trigger a refresh of the leads list here, 
       // but since we don't have a global state, we'll rely on the user refreshing or the next fetch.
-      window.location.reload(); 
+      window.location.reload();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -246,11 +225,10 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium transition-all border-b-2 ${
-              activeTab === tab.id
-                ? "border-[var(--color-primary)] text-[var(--color-primary)]"
-                : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-medium transition-all border-b-2 ${activeTab === tab.id
+              ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              }`}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -332,6 +310,22 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
         {activeTab === "ai" && (
           <div className="space-y-5 text-start">
 
+            {/* Persona Analysis Section */}
+            {lead.persona && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-[var(--color-text-primary)]">{t("ai.personaAnalysis", "Persona Analysis")}</h4>
+                    <p className="text-xs text-[var(--color-text-secondary)]">{t("ai.personaDesc", "Comprehensive AI profile analysis")}</p>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-900/20 text-sm text-[var(--color-text-primary)] whitespace-pre-wrap leading-relaxed">
+                  {lead.persona}
+                </div>
+                <div className="border-t border-[var(--color-border)] mt-5" />
+              </div>
+            )}
+
             {/* Section 1: AI Pitch Generator */}
             <div className="p-5 rounded-2xl bg-gradient-to-br from-[var(--color-primary)] to-blue-700 text-white relative overflow-hidden">
               <div className="absolute -inset-x-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
@@ -346,11 +340,10 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                 <button
                   key={s}
                   onClick={() => setPitchStyle(s)}
-                  className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all ${
-                    pitchStyle === s
-                      ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
-                      : "bg-[var(--color-bg-card)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                  }`}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all ${pitchStyle === s
+                    ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                    : "bg-[var(--color-bg-card)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                    }`}
                 >
                   {t(`ai.style.${s}`, s)}
                 </button>
@@ -377,7 +370,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                     {copied === "pitch" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                     {t("leads.sidebar.aiPitch.copy")}
                   </button>
-                  <button 
+                  <button
                     onClick={async () => {
                       if (!pitch) return;
                       const formattedPitch = formatBilingualWhatsApp(pitch, lang === "ar");
@@ -400,7 +393,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                     <MessageSquare className="w-3 h-3" />
                     {t("leads.sidebar.aiPitch.whatsapp")}
                   </button>
-                  <button 
+                  <button
                     onClick={async () => {
                       if (!pitch) return;
                       const toastId = toast.loading(t("common.sending", "Sending..."));
@@ -408,9 +401,9 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                         const res = await fetch(`/api/leads/${lead.id}/email`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ 
+                          body: JSON.stringify({
                             subject: `Investment Opportunity: ${lead.company}`,
-                            body: pitch 
+                            body: pitch
                           })
                         });
                         const data = await res.json();
@@ -563,7 +556,7 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                   value={followUpTitle}
                   onChange={(e) => setFollowUpTitle(e.target.value)}
                 />
-                
+
                 <div className="grid grid-cols-2 gap-3">
                   <input
                     type="date"
@@ -601,17 +594,17 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
                       const res = await fetch(`/api/leads/${lead.id}/followup`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ 
+                        body: JSON.stringify({
                           title: followUpTitle || t("leads.sidebar.followup.defaultTitle", "Follow-up Meeting"),
                           description: followUpDesc,
                           startTime: start.toISOString(),
                           endTime: end.toISOString()
                         }),
                       });
-                      
+
                       const data = await safeJson(res);
                       if (!res.ok) throw new Error(data.error || "Failed to schedule");
-                      
+
                       toast.success(t("leads.sidebar.followup.success", "Follow-up scheduled in Bitrix24"));
                       setFollowUpTitle("");
                       setFollowUpDesc("");
@@ -651,9 +644,9 @@ export default function LeadSidebar({ lead, onClose }: { lead: Lead | null; onCl
             try {
               const res = await fetch(`/api/leads/${lead.id}/push`, { method: "POST" });
               const data = await safeJson(res);
-              
+
               if (!res.ok) throw new Error(data.error || "Failed to push");
-              
+
               toast.success(t("common.pushedToBitrix", "Pushed to Bitrix24 successfully"));
               // Optionally update lead object locally if we want to show bitrix24Id
             } catch (err: any) {

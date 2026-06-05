@@ -47,24 +47,29 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
 
       const parseSignals = (sig: any): string[] => {
         if (!sig) return [];
-        if (Array.isArray(sig)) return sig.map(String);
+        
+        const extract = (data: any): string[] => {
+          if (!data) return [];
+          if (typeof data === 'string') return [data];
+          if (Array.isArray(data)) return data.flatMap(extract);
+          if (typeof data === 'object') return Object.values(data).flatMap(extract);
+          return [String(data)];
+        };
+
+        let parsedData = sig;
         if (typeof sig === 'string') {
           try {
-            const parsed = JSON.parse(sig);
-            if (Array.isArray(parsed)) return parsed.map(String);
-            if (typeof parsed === 'object' && parsed !== null) {
-              return Object.values(parsed).map(String);
-            }
-            return [sig];
+            parsedData = JSON.parse(sig);
           } catch {
-            if (sig.includes(',')) return sig.split(',').map(s => s.trim()).filter(Boolean);
-            return [sig];
+            if (sig.includes(',')) {
+              return sig.split(',').map(s => s.trim()).filter(Boolean);
+            }
+            return [sig.trim()];
           }
         }
-        if (typeof sig === 'object' && sig !== null) {
-          return Object.values(sig).map(String);
-        }
-        return [];
+
+        const result = extract(parsedData);
+        return result.map(s => s.trim()).filter(s => s && s !== '[object Object]');
       };
 
       const sanitizedLeads = (data.leads || []).map((l: any) => ({

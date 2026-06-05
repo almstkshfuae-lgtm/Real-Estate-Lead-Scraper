@@ -292,7 +292,11 @@ export async function POST(request: NextRequest) {
 
         newLeadsCount++;
       } catch (err: any) {
-        console.error(`[Webhook] DB upsert error for lead: ${lead.name}`, err?.message || err);
+        console.error(`[Webhook] DB upsert error for lead: ${lead.name}`, err?.stack || err?.message || err);
+        // Throw critical Prisma schema/table errors to prevent silent background failure
+        if (err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+          throw err;
+        }
       }
     }
 

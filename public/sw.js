@@ -85,9 +85,12 @@ self.addEventListener("fetch", (event) => {
               });
             });
           }
-          // For non-navigation requests with no cache, return a generic network error
-          // to let the browser/Next.js handle it (e.g. aborted prefetch requests) without SW exceptions.
-          return Response.error();
+          // For non-navigation requests with no cache, return a generic 503 response
+          // to avoid the browser "promise was resolved with an error response object" warning.
+          return new Response(null, {
+            status: 503,
+            statusText: "Service Unavailable",
+          });
         });
       })
   );

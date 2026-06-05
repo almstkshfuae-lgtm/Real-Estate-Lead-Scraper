@@ -59,9 +59,9 @@ model Lead {
   agent        User      @relation(fields: [agentId], references: [id])
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
 
-  @@unique([name, company, source, agentId])
-  @@index([agentId], map: "Lead_agentId_fkey")
-  @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
+  @@unique([name, company, source, agentId], map: "Lead_name_company_source_agentId_key")
+  @@index([agentId], map: "leads_agentId_fkey")
+  @@index([scrapeRunId], map: "leads_scrapeRunId_fkey")
   @@index([source])
   @@map("leads")
 }
