@@ -17,6 +17,95 @@
   }
 }
 
+@layer components {
+  /* Filter Buttons */
+  .filter-btn {
+    @apply transition-all duration-200 border text-sm font-medium px-4 py-2 rounded-xl;
+    border-color: var(--color-border);
+    background-color: var(--color-bg-card);
+    color: var(--color-text-secondary);
+  }
+  .filter-btn:hover {
+    border-color: var(--color-text-disabled);
+  }
+  .filter-btn.active {
+    background-color: var(--color-primary);
+    color: #ffffff;
+    border-color: var(--color-primary);
+    @apply shadow-md;
+  }
+
+  /* Emirates Pill buttons */
+  .emirate-pill {
+    @apply transition-all duration-200 border text-xs font-bold px-3 py-1.5 rounded-lg;
+    border-color: var(--color-border);
+    background-color: var(--color-bg-card);
+    color: var(--color-text-secondary);
+  }
+  .emirate-pill.active {
+    background-color: var(--color-primary-subtle);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  /* Toggle Cards */
+  .toggle-card {
+    @apply w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-200;
+    border-color: var(--color-border);
+    background-color: var(--color-bg-card);
+  }
+  .toggle-card .toggle-title {
+    color: var(--color-text-primary);
+  }
+  .toggle-card.active-success {
+    background-color: rgba(29, 158, 117, 0.08);
+    border-color: var(--color-success);
+  }
+  .toggle-card.active-success .toggle-title {
+    color: var(--color-success);
+  }
+  .toggle-card.active-primary {
+    background-color: var(--color-primary-subtle);
+    border-color: var(--color-primary);
+  }
+  .toggle-card.active-primary .toggle-title {
+    color: var(--color-primary);
+  }
+
+  /* Toggle Switches */
+  .toggle-switch-track {
+    @apply w-10 h-6 rounded-full relative transition-all duration-200 bg-gray-200 dark:bg-gray-700;
+  }
+  .toggle-switch-track.active-success {
+    background-color: var(--color-success);
+  }
+  .toggle-switch-track.active-primary {
+    background-color: var(--color-primary);
+  }
+  .toggle-switch-thumb {
+    @apply absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200;
+  }
+  .toggle-switch-thumb.active {
+    @apply inset-inline-end-1;
+  }
+  .toggle-switch-thumb.inactive {
+    @apply inset-inline-start-1;
+  }
+
+  /* Toggle Icon Containers */
+  .toggle-icon-container {
+    @apply w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] transition-all duration-200;
+  }
+  .toggle-icon-container.active-success {
+    background-color: rgba(29, 158, 117, 0.15);
+    color: var(--color-success);
+  }
+  .toggle-icon-container.active-primary {
+    background-color: var(--color-primary-subtle);
+    color: var(--color-primary);
+  }
+}
+
 @layer utilities {
   .rtl-mirror {
     [dir="rtl"] & {

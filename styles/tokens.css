@@ -39,4 +39,5 @@ html[data-theme="dark"] {
   --color-border: #2E3340;
   --color-text-primary: #F3F4F6;
   --color-text-secondary: #9CA3AF;
+  --color-primary-subtle: rgba(24, 95, 165, 0.2);
 }

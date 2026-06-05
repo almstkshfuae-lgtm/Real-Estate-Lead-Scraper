@@ -48,7 +48,7 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
   - Restricts public access strictly to `/`, `/login`, `/api/auth/login`, and `/install` along with static assets.
   - Protects all other paths, including `/api/auth/me` and `/api/leads`.
   - Wrapped entirely in a `try/catch` block. On verification failure or runtime exceptions during an API call, it returns a clean JSON `{ error: "Unauthorized" }` with status `401` to prevent UI state crashes.
-  - **RBAC & Capping**: Admins have full access. Non-admins (agents) cannot view or access the Integrations page, cannot edit core lead details (restricted to notes and status), and are capped at retrieving a maximum of 10 leads overall from the API (with pagination totals adjusted accordingly).
+  - **RBAC & Capping**: Admins have full access. Non-admins (agents) cannot view or access the Integrations page, cannot edit core lead details (restricted to notes and status), and are capped at retrieving a maximum of 10 leads overall from the API (with pagination totals adjusted accordingly). Additionally, on failed or zero-result scraper runs, a fallback mechanism clones 10 unique admin-imported leads for the agent. Repeated scrapes increment this by 10 more unique leads (10+10=20, 10+10+10=30, etc.), excluding leads already assigned to the agent to prevent duplication.
 
 ### 2. Browser Automation Layer (`scraper-service/`)
 - **Technology**: Decoupled Express.js service running Playwright.

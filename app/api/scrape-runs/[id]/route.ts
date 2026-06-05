@@ -58,16 +58,43 @@ export async function GET(
     let finalLeadsFound = run.leadsFound;
 
     // FOR AGENT ROLE: If the scrape fails or returns 0 results, simulate success by cloning 10 admin-imported leads
+    // Note: This fallback only triggers when the scrape results in zero leads or has failed.
+    // To ensure that repeated searches fetch another 10 unique leads (10+10=20, 10+10+10=30, etc.),
+    // we retrieve the names of the agent's existing leads and exclude them from the query.
     if (!isAdmin && (run.status === "FAILED" || (run.status === "COMPLETED" && run.leadsFound === 0))) {
       try {
-        const adminLeads = await prisma.lead.findMany({
+        // Fetch names of all leads currently assigned to this agent to avoid duplicates
+        const agentLeads = await prisma.lead.findMany({
+          where: { agentId: session.id },
+          select: { name: true }
+        });
+        const existingNames = agentLeads.map(l => l.name);
+
+        // Fetch admin-imported leads that the agent does not already have
+        let adminLeads = await prisma.lead.findMany({
           where: {
             agent: {
               role: 'admin'
+            },
+            name: {
+              notIn: existingNames
             }
           },
           take: 100
         });
+
+        // If there are not enough unique admin leads left, fall back to any admin-imported leads
+        if (adminLeads.length < 10) {
+          const backupLeads = await prisma.lead.findMany({
+            where: {
+              agent: {
+                role: 'admin'
+              }
+            },
+            take: 100
+          });
+          adminLeads = backupLeads;
+        }
 
         if (adminLeads.length > 0) {
           const shuffled = adminLeads.sort(() => 0.5 - Math.random());
