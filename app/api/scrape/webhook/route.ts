@@ -23,6 +23,7 @@ import prisma from "@/lib/prisma";
 import { deduplicateSignals } from "@/lib/ai";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 import { getEnvVar, getRequiredEnvVar } from "@/lib/env";
+import { getSecret } from "@/lib/secrets";
 import { z } from "zod";
 
 // Schema for individual lead validation
@@ -76,18 +77,18 @@ export async function POST(request: NextRequest) {
 
     const { secret, runId, sourceKey, enrichedLeads, isStartedSignal, isCompletedSignal, isFailedSignal, error, selectorIssues } = validation.data;
 
-    let systemSecret = process.env.SCRAPER_SECRET;
-    console.log("[Webhook Debug] systemSecret from env:", systemSecret, "NODE_ENV:", process.env.NODE_ENV);
+    let systemSecret = (await getSecret('scraperSecret')) || process.env.SCRAPER_SECRET;
+    console.log("[Webhook Debug] systemSecret resolved (DB/env):", !!systemSecret, "NODE_ENV:", process.env.NODE_ENV);
     if (!systemSecret || systemSecret.trim() === '') {
       if (process.env.NODE_ENV === 'production') {
-        throw new Error("FATAL: SCRAPER_SECRET environment variable is missing in production!");
+        throw new Error("FATAL: SCRAPER_SECRET is missing in production! Please configure it in settings or env.");
       }
       systemSecret = '96c92e16c2bc5f40c5724ad3bceef2fa39909e4bb136656d4a8309984f828684';
       console.log("[Webhook Debug] fell back to systemSecret:", systemSecret);
     }
-    console.log("[Webhook Debug] received secret:", secret, "expected:", systemSecret);
-    if (secret !== systemSecret) {
-      console.warn("[Webhook] Unauthorized webhook call - secret mismatch. Received:", secret, "Expected:", systemSecret);
+
+    if (secret !== systemSecret && secret !== process.env.SCRAPER_SECRET) {
+      console.warn("[Webhook] Unauthorized webhook call - secret mismatch.");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -177,7 +178,7 @@ export async function POST(request: NextRequest) {
       try {
         const sourceObj = await prisma.sourceConfig.findUnique({ where: { key: sourceKey } });
         const sourceName = sourceObj?.name || sourceKey;
-        
+
         // Update SourceConfig in DB
         await prisma.sourceConfig.update({
           where: { key: sourceKey },
