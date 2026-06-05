@@ -9,6 +9,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (session.role?.toUpperCase() !== 'ADMIN') {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const history = await prisma.exportHistory.findMany({
       orderBy: { createdAt: "desc" },
       include: {

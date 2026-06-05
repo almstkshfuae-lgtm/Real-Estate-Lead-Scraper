@@ -289,8 +289,8 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
             <Info className="w-4 h-4 flex-shrink-0 text-blue-600 animate-pulse" />
             <span>
               {i18n.language === "ar" 
-                ? "لم يتم العثور على مطابقات مباشرة للبحث. نعرض لك 10 عملاء مقترحين يتطابقون مع معايير بحثك المحفوظة." 
-                : "No direct search matches found. Showing 10 recommended leads matching your saved search criteria."}
+                ? "لا تتوفر نتائج بحث مطابقة لك. تم عرض 10 عملاء محتملين مقترحين من المستوردين مسبقاً بواسطة المسؤول العام." 
+                : "No matching leads found for your account. Showing 10 recommended leads imported by the Super Admin."}
             </span>
           </div>
         )}

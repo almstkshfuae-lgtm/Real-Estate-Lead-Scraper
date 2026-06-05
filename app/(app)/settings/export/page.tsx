@@ -10,21 +10,47 @@ export default function ExportHistoryPage() {
   const isRtl = i18n.language === "ar";
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
 
   useEffect(() => {
-    fetch("/api/export/history")
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    fetch("/api/auth/me")
+      .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data.history) {
-          setHistory(data.history);
+        if (!data || !data.user || data.user.role?.toLowerCase() !== 'admin') {
+          setForbidden(true);
+          setLoading(false);
+          return;
         }
+
+        fetch("/api/export/history")
+          .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          })
+          .then(data => {
+            if (data.history) {
+              setHistory(data.history);
+            }
+          })
+          .catch(err => console.error(err))
+          .finally(() => setLoading(false));
       })
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
+      .catch(err => {
+        console.error(err);
+        setForbidden(true);
+        setLoading(false);
+      });
   }, []);
+
+  if (forbidden) {
+    return (
+      <div className="p-6 rounded-3xl border border-red-200 bg-red-50 text-red-800 text-sm font-medium">
+        {isRtl 
+          ? "غير مسموح. هذا السجل متاح فقط للمسؤول العام (Super Admin)." 
+          : "Access Denied. This log is only available for the Super Admin."}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
