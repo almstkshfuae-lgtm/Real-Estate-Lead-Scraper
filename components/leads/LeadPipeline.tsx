@@ -44,7 +44,7 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
       if (!res.ok) throw new Error("Failed to fetch leads");
       const data = await res.json();
       
-      const sanitizedLeads = data.leads.map((l: any) => ({
+      const sanitizedLeads = (data.leads || []).map((l: any) => ({
         ...l,
         signals: Array.isArray(l.signals) ? l.signals : 
                 (typeof l.signals === 'string' ? JSON.parse(l.signals) : [])

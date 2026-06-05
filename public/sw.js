@@ -42,10 +42,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // CRITICAL: Never intercept API routes — let them pass through to the server directly.
-  // Intercepting /api/ calls causes the SW to swallow 500 errors and return invalid Response objects.
+  // CRITICAL: Never intercept API routes, Next.js internal routes, Server Actions, or RSC payloads.
+  // Intercepting these causes the SW to swallow backend errors or timeout RSC navigation.
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/")) {
+  const isApi = url.pathname.startsWith("/api/");
+  const isNextInternal = url.pathname.startsWith("/_next/");
+  const isRsc = url.searchParams.has("_rsc") || 
+                event.request.headers.get("RSC") === "1" || 
+                event.request.headers.get("Next-Router-Prefetch") === "1";
+  const isServerAction = event.request.method === "POST" && event.request.headers.has("Next-Action");
+
+  if (isApi || isNextInternal || isRsc || isServerAction) {
     return;
   }
 

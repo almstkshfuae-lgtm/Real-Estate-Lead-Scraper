@@ -2,14 +2,14 @@
 
 import React from "react";
 import { useState, useEffect } from "react";
-import { ShieldCheck, Database, Link2, MessageSquare, Mail, KeyRound, Globe, Save, Loader2, PlayCircle } from "lucide-react";
+import { ShieldCheck, Database, Link2, MessageSquare, Mail, KeyRound, Globe, Save, Loader2, PlayCircle, CheckCircle2, MessageCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
 
 export default function IntegrationsSettingsPage() {
   const { t } = useTranslation('common');
-  
+
   const [integrations, setIntegrations] = useState({
     googleAiApiKey: "",
     scraperServiceUrl: "",
@@ -65,7 +65,7 @@ export default function IntegrationsSettingsPage() {
     setIntegrations(prev => {
       const next = { ...prev, [key]: value };
       // Persist draft to sessionStorage to survive navigation
-      try { sessionStorage.setItem('integrations-draft', JSON.stringify(next)); } catch {}
+      try { sessionStorage.setItem('integrations-draft', JSON.stringify(next)); } catch { }
       return next;
     });
   };
@@ -80,7 +80,7 @@ export default function IntegrationsSettingsPage() {
       });
       if (!res.ok) throw new Error("Failed to save");
       // Clear sessionStorage draft on successful save
-      try { sessionStorage.removeItem('integrations-draft'); } catch {}
+      try { sessionStorage.removeItem('integrations-draft'); } catch { }
       toast.success(t('settings.integrations.saved', 'Integrations updated successfully.'));
     } catch (e: any) {
       toast.error(e.message);
@@ -101,19 +101,19 @@ export default function IntegrationsSettingsPage() {
     // Prevent concurrent tests on the same system (race condition guard)
     if (testStatus[system] === 'testing') return;
     setTestStatus(prev => ({ ...prev, [system]: 'testing' }));
-    
+
     try {
       const res = await fetch("/api/settings/integrations/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          system, 
-          config: integrations 
+        body: JSON.stringify({
+          system,
+          config: integrations
         })
       });
-      
+
       const data = await safeJson(res).catch(() => ({} as any));
-      
+
       if (data.success) {
         setTestStatus(prev => ({ ...prev, [system]: 'success' }));
         toast.success(t(`settings.integrations.testSuccess.${system}`, `Successfully connected to ${system.toUpperCase()}`));
@@ -181,7 +181,7 @@ export default function IntegrationsSettingsPage() {
                 onChange={(e) => handleChange('googleAiApiKey', e.target.value)}
                 className="w-full h-10 px-3 ps-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute start-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[var(--color-text-secondary)] absolute start-3 top-3" />
             </div>
             <p className="text-[11px] text-[var(--color-text-secondary)]">Powers Gemini-driven scoring, signal extraction, pitches, and chatbot responses.</p>
           </div>
@@ -214,7 +214,7 @@ export default function IntegrationsSettingsPage() {
                 onChange={(e) => handleChange('scraperSecret', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
             <p className="text-[11px] text-[var(--color-text-secondary)]">Used to authenticate requests between the app and the scraper microservice.</p>
           </div>
@@ -246,7 +246,7 @@ export default function IntegrationsSettingsPage() {
                 onChange={(e) => handleChange('proxyApiKey', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
             <p className="text-[11px] text-[var(--color-text-secondary)]">Authentication for a managed proxy pool or rotating residential proxy service.</p>
           </div>
@@ -314,7 +314,7 @@ export default function IntegrationsSettingsPage() {
                 onChange={(e) => handleChange('bitrixToken', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
           </div>
         </div>
@@ -395,7 +395,7 @@ export default function IntegrationsSettingsPage() {
                 onChange={(e) => handleChange('whatsappToken', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
           </div>
         </div>
@@ -460,7 +460,7 @@ export default function IntegrationsSettingsPage() {
                 onChange={(e) => handleChange('smtpPass', e.target.value)}
                 className="w-full h-10 px-3 pl-9 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
               />
-              <Key className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[var(--color-text-secondary)] absolute left-3 top-3" />
             </div>
           </div>
         </div>

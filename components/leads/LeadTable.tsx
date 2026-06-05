@@ -63,7 +63,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       if (!res.ok) throw new Error("Failed to fetch leads");
       const data = await res.json();
 
-      const sanitizedLeads = data.leads.map((l: any) => ({
+      const sanitizedLeads = (data.leads || []).map((l: any) => ({
         ...l,
         signals: Array.isArray(l.signals) ? l.signals :
           (typeof l.signals === 'string' ? JSON.parse(l.signals) : [])
@@ -229,8 +229,8 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
                 <div
                   onClick={toggleSelectAll}
                   className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all ${selectedIds.length === leads.length && leads.length > 0
-                      ? "bg-[var(--color-primary)] border-[var(--color-primary)]"
-                      : "border-[var(--color-border)] bg-[var(--color-bg-card)]"
+                    ? "bg-[var(--color-primary)] border-[var(--color-primary)]"
+                    : "border-[var(--color-border)] bg-[var(--color-bg-card)]"
                     }`}
                 >
                   {selectedIds.length === leads.length && leads.length > 0 && <Check className="w-3 h-3 text-white" />}
@@ -249,16 +249,16 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
               <tr
                 key={lead.id}
                 className={`transition-colors cursor-pointer group ${selectedIds.includes(lead.id)
-                    ? "bg-[var(--color-primary-subtle)]/50"
-                    : "hover:bg-[var(--color-primary-subtle)]/30"
+                  ? "bg-[var(--color-primary-subtle)]/50"
+                  : "hover:bg-[var(--color-primary-subtle)]/30"
                   }`}
                 onClick={() => onSelectLead(lead)}
               >
                 <td className="px-6 py-4" onClick={(e) => toggleSelect(lead.id, e)}>
                   <div
                     className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${selectedIds.includes(lead.id)
-                        ? "bg-[var(--color-primary)] border-[var(--color-primary)]"
-                        : "border-[var(--color-border)] bg-[var(--color-bg-card)] group-hover:border-[var(--color-primary)]"
+                      ? "bg-[var(--color-primary)] border-[var(--color-primary)]"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-card)] group-hover:border-[var(--color-primary)]"
                       }`}
                   >
                     {selectedIds.includes(lead.id) && <Check className="w-3 h-3 text-white" />}
@@ -294,10 +294,10 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
                 </td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider ${lead.status === 'new' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
-                      lead.status === 'contacted' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' :
-                        lead.status === 'qualified' ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' :
-                          lead.status === 'proposal' ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' :
-                            'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                    lead.status === 'contacted' ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' :
+                      lead.status === 'qualified' ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' :
+                        lead.status === 'proposal' ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' :
+                          'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400'
                     }`}>
                     {t(`leads.status.${lead.status}`, lead.status)}
                   </span>

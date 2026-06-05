@@ -81,6 +81,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
 
   const handleSave = async (isScrape = false) => {
     setLoading(true);
+    let toastId: string | number | undefined;
     try {
       const criteria = {
         propertyTypes,
@@ -97,6 +98,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
         body: JSON.stringify({ criteria }),
       });
 
+      let scrapeRes;
       if (res.ok) {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
@@ -106,9 +108,9 @@ export default function QualificationForm({ initialData }: { initialData?: any }
           return;
         }
 
-        const toastId = toast.loading(t('search.scrapeInitializing', 'Initializing scrape job...'));
+        toastId = toast.loading(t('search.scrapeInitializing', 'Initializing scrape job...'));
         
-        const scrapeRes = await fetch("/api/scrape", {
+        scrapeRes = await fetch("/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sources: DEFAULT_SCRAPE_SOURCES, criteria }),
@@ -140,7 +142,7 @@ export default function QualificationForm({ initialData }: { initialData?: any }
       }
     } catch (error: any) {
       console.error("Save error:", error);
-      toast.error(error?.message || t('search.saveError', 'An unexpected error occurred.'));
+      toast.error(error?.message || t('search.saveError', 'An unexpected error occurred.'), toastId ? { id: toastId } : undefined);
     } finally {
       setLoading(false);
     }

@@ -11,20 +11,20 @@ interface AIConfig {
 export async function getAIConfig(): Promise<AIConfig | null> {
   // First prioritize env variables directly (faster, doesn't query DB during builds)
   const envGoogleKey = (getEnvVar('GOOGLE_AI_API_KEY') || getEnvVar('GOOGLE_API_KEY'))?.trim();
-  const rawGoogleKey = envGoogleKey 
-    ? envGoogleKey 
+  const rawGoogleKey = envGoogleKey
+    ? envGoogleKey
     : (await getSecret("googleAiApiKey"))?.trim();
   const googleApiKey = rawGoogleKey && !rawGoogleKey.startsWith('YOUR_') ? rawGoogleKey : null;
-  
+
   const googleProjectId = (getEnvVar('GOOGLE_AI_PROJECT_ID') || getEnvVar('GOOGLE_PROJECT_ID') || getEnvVar('GOOGLE_CLOUD_PROJECT') || getEnvVar('GCLOUD_PROJECT'))?.trim();
   const googleLocation = (getEnvVar('GOOGLE_AI_LOCATION') || "us-central1")?.trim();
-  
+
   let googleModel = (getEnvVar('GOOGLE_AI_MODEL') || getEnvVar('GOOGLE_MODEL') || "gemini-2.5-flash")?.trim();
   // Auto-upgrade legacy or invalid models to stable and fast gemini-2.5-flash
   if (
-    !googleModel || 
-    googleModel === "gemini-1.0" || 
-    googleModel === "gemini-1.0-pro" || 
+    !googleModel ||
+    googleModel === "gemini-1.0" ||
+    googleModel === "gemini-1.0-pro" ||
     googleModel === "gemini-1.5-flash" ||
     googleModel === "gemini-pro" ||
     googleModel === "gemini-flash-latest"
@@ -195,8 +195,8 @@ function extractTextFromAIResponse(response: any): string {
  */
 async function withRetry<T>(
   fn: () => Promise<T>,
-  maxAttempts = 6,
-  baseDelayMs = 2000
+  maxAttempts = 8,
+  baseDelayMs = 3000
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -239,7 +239,7 @@ function safeParseJson(text: string, fallback: any = []): any {
   if (!text) return fallback;
 
   let cleanText = text.trim();
-  
+
   // 1. Remove markdown code blocks if present anywhere in the text
   if (cleanText.includes("```")) {
     const matches = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
@@ -280,8 +280,7 @@ function safeParseJson(text: string, fallback: any = []): any {
       console.error('[AI] JSON Parse failed for raw text:', text.substring(0, 500));
       console.error('[AI] Cleaned text attempt:', jsonStr.substring(0, 500));
     }
-    
-    // 4. Try automatic recovery for common defects (trailing commas, unescaped quotes)
+
     try {
       const fixedJsonStr = jsonStr
         .replace(/,\s*\]/g, ']') // remove trailing comma in arrays
@@ -290,7 +289,8 @@ function safeParseJson(text: string, fallback: any = []): any {
       return JSON.parse(fixedJsonStr);
     } catch (innerError) {
       console.error('[AI] Secondary JSON parsing recovery failed:', innerError);
-      return fallback;
+      if (fallback === null) return null;
+      throw new Error("AI JSON Parsing Failed: Gemini returned an invalid or incomplete JSON response.");
     }
   }
 }
@@ -349,7 +349,7 @@ export function normalizeLocation(loc: string): string {
   if (!normalized) return "Abu Dhabi";
 
   const lower = normalized.toLowerCase();
-  
+
   if (lower.includes("ياس") || lower.includes("yas")) return "Yas Island";
   if (lower.includes("ريم") || lower.includes("reem")) return "Al Reem Island";
   if (lower.includes("سعديات") || lower.includes("saadiyat")) return "Saadiyat Island";
@@ -425,7 +425,7 @@ export function deduplicateSignals(signals: any[]): string[] {
   if (!Array.isArray(signals)) return [];
   const unique: string[] = [];
   const seen = new Set<string>();
-  
+
   for (const sig of signals) {
     if (!sig || typeof sig !== 'string') continue;
     const cleanSig = sig.trim();
@@ -447,7 +447,7 @@ export function cleanScrapedText(text: string): string {
   // 1. Strip script and style blocks entirely
   cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
   cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "");
-  
+
   // 2. Strip standard HTML tags
   cleaned = cleaned.replace(/<[^>]+>/g, " ");
 
@@ -599,35 +599,35 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
   const isProjectBased = Boolean(config.projectId);
   const body = isProjectBased
     ? {
-        instances: [
-          {
-            content: `${systemPrompt}\n\n${userPrompt}`
-          }
-        ],
-        parameters: {
-          temperature: 0.0,
-          maxOutputTokens: maxTokens,
-          topP: 0.95,
-          topK: 40
+      instances: [
+        {
+          content: `${systemPrompt}\n\n${userPrompt}`
         }
+      ],
+      parameters: {
+        temperature: 0.0,
+        maxOutputTokens: maxTokens,
+        topP: 0.95,
+        topK: 40
       }
+    }
     : {
-        contents: [
-          {
-            parts: [
-              {
-                text: `${systemPrompt}\n\n${userPrompt}`
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.0,
-          maxOutputTokens: maxTokens,
-          topP: 0.95,
-          topK: 40
+      contents: [
+        {
+          parts: [
+            {
+              text: `${systemPrompt}\n\n${userPrompt}`
+            }
+          ]
         }
-      };
+      ],
+      generationConfig: {
+        temperature: 0.0,
+        maxOutputTokens: maxTokens,
+        topP: 0.95,
+        topK: 40
+      }
+    };
 
   const endpoint = isProjectBased
     ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`
@@ -649,7 +649,7 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
       // Log the error details for debugging (masking any potential sensitive snippets)
       try {
         console.error('[AI] Gemini API error', { status: response.status, body: errorText.substring(0, 1000) });
-      } catch {}
+      } catch { }
       if (response.status === 400 && errorText.includes("API key not valid")) {
         throw new Error("Gemini API key invalid or unauthorized. Verify GOOGLE_AI_API_KEY and project settings.");
       }
@@ -661,7 +661,7 @@ async function generateGeminiText(systemPrompt: string, userPrompt: string, maxT
 
     const data = await response.json();
     return extractTextFromAIResponse(data) || "";
-  }, 6, 2000);
+  }, 8, 3000);
 }
 
 /**
@@ -680,10 +680,10 @@ export async function extractHNWILeads(scrapedData: {
   const criteriaPrompt = formatCriteriaPrompt(criteria);
   const cleanedContent = cleanScrapedText(scrapedData.content);
 
-  const isDirectorySource = scrapedData.type === 'Business Directory' || 
-                            scrapedData.type === 'Google Maps Business Directory' ||
-                            (scrapedData.name || '').toLowerCase().includes('maps') || 
-                            (scrapedData.name || '').toLowerCase().includes('yellow');
+  const isDirectorySource = scrapedData.type === 'Business Directory' ||
+    scrapedData.type === 'Google Maps Business Directory' ||
+    (scrapedData.name || '').toLowerCase().includes('maps') ||
+    (scrapedData.name || '').toLowerCase().includes('yellow');
 
   const absoluteRule = isDirectorySource
     ? `0. ABSOLUTE RULE: Since this content is from a business directory (no individual human names are expected), you are permitted to extract the business/company itself as a lead if no specific human name is present.
@@ -782,14 +782,19 @@ Output ONLY the JSON array. No other text.`,
   );
 
   if (!content) {
-    console.warn("[AI] AI extraction unavailable — returning empty (no heuristic fallback)");
-    return [];
+    console.warn("[AI] AI extraction unavailable — no content returned by Gemini.");
+    throw new Error("AI extraction failed: Gemini returned empty content.");
   }
 
-  let leads = safeParseJson(content, []);
+  let leads;
+  try {
+    leads = safeParseJson(content, null);
+  } catch (err) {
+    leads = null;
+  }
 
-  // Fix 5: If parse returned empty AND response looks truncated, retry with a smaller budget
-  if ((!Array.isArray(leads) || leads.length === 0) && isLikelyTruncated(content)) {
+  // Fix 5: If parse returned empty/failed AND response looks truncated, retry with a smaller budget
+  if ((!leads || !Array.isArray(leads) || leads.length === 0) && isLikelyTruncated(content)) {
     console.warn('[AI] Truncated response detected — retrying Gemini call with reduced token budget (max 5 leads)...');
     const retryContent = await generateGeminiText(
       `You are an expert at extracting HNWI leads from UAE business content.
@@ -800,9 +805,18 @@ Output ONLY the JSON array. No other text.`,
       4096
     );
     if (retryContent) {
-      leads = safeParseJson(retryContent, []);
-      console.info(`[AI] Truncation retry yielded ${Array.isArray(leads) ? leads.length : 0} leads.`);
+      try {
+        leads = safeParseJson(retryContent, []);
+        console.info(`[AI] Truncation retry yielded ${Array.isArray(leads) ? leads.length : 0} leads.`);
+      } catch (err) {
+        console.error("[AI] Truncation retry parsing failed.");
+        leads = null;
+      }
     }
+  }
+
+  if (!leads || !Array.isArray(leads)) {
+    throw new Error("AI JSON Parsing Failed after retries: Gemini returned an invalid or incomplete JSON response.");
   }
 
   if (!Array.isArray(leads) || leads.length === 0) {
@@ -812,15 +826,15 @@ Output ONLY the JSON array. No other text.`,
 
   return Array.isArray(leads)
     ? leads
-        .filter((lead: any) =>
-          lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
-          && filterLeadByCriteria(lead, criteria)
-          && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent, lead.company, lead.companyAr)
-        )
-        .map((lead: any) => ({
-          ...lead,
-          signals: deduplicateSignals(lead.signals)
-        }))
+      .filter((lead: any) =>
+        lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
+        && filterLeadByCriteria(lead, criteria)
+        && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent, lead.company, lead.companyAr)
+      )
+      .map((lead: any) => ({
+        ...lead,
+        signals: deduplicateSignals(lead.signals)
+      }))
     : [];
 }
 
@@ -837,19 +851,19 @@ function verifyLeadInSource(
 ): boolean {
   if (!name || !sourceText) return false;
 
-  const isPlaceholder = name.toLowerCase().startsWith('representative of') || 
-                        (nameAr && nameAr.startsWith('ممثل'));
+  const isPlaceholder = name.toLowerCase().startsWith('representative of') ||
+    (nameAr && nameAr.startsWith('ممثل'));
 
   if (isPlaceholder && (company || companyAr)) {
     const normalizedSource = sourceText.toLowerCase();
-    
+
     // Check English Company Match
     if (company) {
       const coLower = company.toLowerCase().trim();
       if (normalizedSource.includes(coLower)) {
         return true;
       }
-      
+
       const stopWords = new Set([
         'al', 'el', 'bin', 'ibn', 'the', 'of', 'and', 'ltd', 'limited', 'llc', 'inc', 'co', 'company', 'group'
       ]);
@@ -888,12 +902,12 @@ function verifyLeadInSource(
     console.warn(`[AI] Directory entity "${company || ''}" (Arabic: "${companyAr || ''}") not found in source text — discarding lead`);
     return false;
   }
-  
+
   const normalizedSource = sourceText.toLowerCase();
 
   const getKeyWords = (str: string) => {
     const stopWords = new Set([
-      'al', 'el', 'bin', 'ibn', 'the', 'of', 'and', 
+      'al', 'el', 'bin', 'ibn', 'the', 'of', 'and',
       'sheikh', 'sheikha', 'dr', 'mr', 'mrs', 'ms', 'eng', 'ceo', 'founder', 'president'
     ]);
     return str
@@ -931,7 +945,7 @@ function verifyLeadInSource(
 
     const normSourceAr = normalizeArabic(sourceText);
     const normNameAr = normalizeArabic(nameAr);
-    
+
     const stopWordsAr = new Set(['من', 'في', 'بن', 'ال', 'ابن', 'الشيخ', 'الشيخة', 'دكتور', 'سيد', 'سيدة', 'مهندس']);
     const arKeyWords = normNameAr.split(/\s+/).filter(word => word.length > 2 && !stopWordsAr.has(word));
 
@@ -1015,14 +1029,14 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
 
   return Array.isArray(leads)
     ? leads
-        .filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
-          && filterLeadByCriteria(lead, criteria)
-          && verifyLeadInSource(lead.name, lead.nameAr, cleanedText, lead.company, lead.companyAr)
-        )
-        .map((lead: any) => ({
-          ...lead,
-          signals: deduplicateSignals(lead.signals)
-        }))
+      .filter((lead: any) => lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
+        && filterLeadByCriteria(lead, criteria)
+        && verifyLeadInSource(lead.name, lead.nameAr, cleanedText, lead.company, lead.companyAr)
+      )
+      .map((lead: any) => ({
+        ...lead,
+        signals: deduplicateSignals(lead.signals)
+      }))
     : [];
 }
 
@@ -1033,7 +1047,7 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
 export async function enrichLeadWithAI(lead: any) {
   const normalizedLoc = normalizeLocation(lead.location);
   const coords = resolveCoords(normalizedLoc);
-  
+
   const parsedMin = parseBudgetToFloat(lead.budgetMin);
   const parsedMax = parseBudgetToFloat(lead.budgetMax);
 
@@ -1176,13 +1190,13 @@ export async function generateGeminiStream(
   const isProjectBased = Boolean(config.projectId);
   const body = isProjectBased
     ? {
-        instances: [{ content: `${systemPrompt}\n\n${userPrompt}` }],
-        parameters: { temperature: 0.0, maxOutputTokens: maxTokens, topP: 0.95, topK: 40 }
-      }
+      instances: [{ content: `${systemPrompt}\n\n${userPrompt}` }],
+      parameters: { temperature: 0.0, maxOutputTokens: maxTokens, topP: 0.95, topK: 40 }
+    }
     : {
-        contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
-        generationConfig: { temperature: 0.0, maxOutputTokens: maxTokens, topP: 0.95, topK: 40 }
-      };
+      contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+      generationConfig: { temperature: 0.0, maxOutputTokens: maxTokens, topP: 0.95, topK: 40 }
+    };
 
   const endpoint = isProjectBased
     ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`
@@ -1217,7 +1231,7 @@ export async function generateGeminiStream(
         }
 
         const chunkText = decoder.decode(value, { stream: true });
-        
+
         let text = "";
         let cleanChunk = chunkText.trim();
         let shouldClose = false;
@@ -1273,7 +1287,7 @@ export async function generateGeminiStream(
     },
     cancel(reason) {
       if (reader) {
-        reader.cancel(reason).catch(() => {});
+        reader.cancel(reason).catch(() => { });
       }
     }
   });
