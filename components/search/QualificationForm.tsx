@@ -108,17 +108,28 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const { status: runStatus, leadsFound, isPolling } = useScrapeRunStatus(activeRunId);
   const [activeSources, setActiveSources] = useState<string[]>(DEFAULT_SCRAPE_SOURCES);
-  const [userRole, setUserRole] = useState<string>("agent");
+  const [userRole, setUserRole] = useState<string>("");
+  const [loadingUser, setLoadingUser] = useState(true);
 
   useEffect(() => {
     fetch("/api/auth/me")
-      .then(res => res.ok ? res.json() : null)
+      .then(res => {
+        if (res.status === 401) {
+          router.push("/login");
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
       .then(data => {
         if (data && data.user) {
-          setUserRole(data.user.role || "agent");
+          setUserRole((data.user.role || "agent").toLowerCase());
         }
+        setLoadingUser(false);
       })
-      .catch(err => console.error("Error loading user in QualificationForm:", err));
+      .catch(err => {
+        console.error("Error loading user in QualificationForm:", err);
+        setLoadingUser(false);
+      });
 
     fetch("/api/scrape")
       .then(res => res.ok ? res.json() : null)
@@ -214,6 +225,14 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   const emirateOptions = [
     'Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'
   ];
+
+  if (loadingUser) {
+    return (
+      <div className="max-w-4xl mx-auto p-8 flex items-center justify-center min-h-[300px]">
+        <Loader2 className="w-8 h-8 text-[var(--color-primary)] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">

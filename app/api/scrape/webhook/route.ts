@@ -30,7 +30,7 @@ import { z } from "zod";
 const leadSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   nameAr: z.string().optional().nullable(),
-  company: z.string().trim().min(1, "Company is required"),
+  company: z.string().trim().optional().nullable(),
   companyAr: z.string().optional().nullable(),
   role: z.string().optional().nullable(),
   roleAr: z.string().optional().nullable(),
@@ -240,8 +240,8 @@ export async function POST(request: NextRequest) {
 
     for (const lead of leadsPayload) {
       // Basic sanity check — scraper-service already validated, but be defensive
-      if (!lead.name || !lead.company) {
-        console.warn(`[Webhook] Skipping malformed lead (missing name/company):`, lead);
+      if (!lead.name) {
+        console.warn(`[Webhook] Skipping malformed lead (missing name):`, lead);
         continue;
       }
 
@@ -257,18 +257,21 @@ export async function POST(request: NextRequest) {
       try {
         const cleanSignals = deduplicateSignals(lead.signals || []);
 
+        const leadCompany = lead.company || "Not Specified";
+        const leadCompanyAr = lead.companyAr || (lead.company ? null : "غير محدد");
+
         await prisma.lead.upsert({
           where: {
             name_company_source_agentId: {
               name: lead.name,
-              company: lead.company,
+              company: leadCompany,
               source: lead.source || "HNWI Sources",
               agentId: agentId
             }
           },
           update: {
             nameAr: lead.nameAr || null,
-            companyAr: lead.companyAr || null,
+            companyAr: leadCompanyAr,
             role: lead.role || "Professional",
             roleAr: lead.roleAr || null,
             tier: lead.tier || 2,
@@ -290,8 +293,8 @@ export async function POST(request: NextRequest) {
           create: {
             name: lead.name,
             nameAr: lead.nameAr || null,
-            company: lead.company,
-            companyAr: lead.companyAr || null,
+            company: leadCompany,
+            companyAr: leadCompanyAr,
             role: lead.role || "Professional",
             roleAr: lead.roleAr || null,
             source: lead.source || "HNWI Sources",

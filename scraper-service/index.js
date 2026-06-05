@@ -1983,7 +1983,7 @@ Output ONLY a JSON array. No other text.`;
   };
 
   const enrichedLeads = leads
-    .filter(l => l.name && l.company && l.role)
+    .filter(l => l && (l.name || l.company || l.phone || l.email))
     .map(l => {
       const coords = resolveCoords(l.location);
       return {
