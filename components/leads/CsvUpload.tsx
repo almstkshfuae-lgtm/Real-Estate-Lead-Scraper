@@ -10,88 +10,148 @@ interface CsvUploadProps {
   onSuccess?: () => void;
 }
 
-// ─── Column name mapping ──────────────────────────────────────────────────────
-// Maps any known header variant (Arabic / English / exported headers) to a
-// canonical field name consumed by the import API route.
-const HEADER_ALIASES: Record<string, string> = {
-  // name
-  name: "name",
-  Name: "name",
-  "Name (EN)": "name",
-  "Name (AR)": "name",
-  "الاسم": "name",
-  "الاسم الكامل": "name",
-  "Full Name": "name",
-  "full name": "name",
-  "fullname": "name",
+// ─── Flexible Column name mapping ─────────────────────────────────────────────
+// Maps any header variant (Arabic / English / fuzzy matches) to a canonical key.
+export function getCanonicalHeader(header: string): string | null {
+  if (!header) return null;
+  const normalized = header.toLowerCase().replace(/[\s\-_]/g, "");
 
-  // email
-  email: "email",
-  Email: "email",
-  "البريد الإلكتروني": "email",
-  "البريد": "email",
-  "E-Mail": "email",
-  "e-mail": "email",
+  // 1. Email check (very specific)
+  if (
+    normalized.includes("email") ||
+    normalized.includes("mail") ||
+    normalized.includes("البريد") ||
+    normalized.includes("بريد")
+  ) {
+    return "email";
+  }
 
-  // phone
-  phone: "phone",
-  Phone: "phone",
-  "Phone Number": "phone",
-  "رقم الهاتف": "phone",
-  "رقم التليفون": "phone",
-  "الهاتف": "phone",
-  "Mobile": "phone",
-  "mobile": "phone",
-  "Tel": "phone",
-  "tel": "phone",
-  "Telephone": "phone",
+  // 2. Company check
+  if (
+    normalized.includes("company") ||
+    normalized.includes("org") ||
+    normalized.includes("firm") ||
+    normalized.includes("employer") ||
+    normalized.includes("شركة") ||
+    normalized.includes("الشركة")
+  ) {
+    return "company";
+  }
 
-  // company
-  company: "company",
-  Company: "company",
-  "Company (EN)": "company",
-  "Company (AR)": "company",
-  "الشركة": "company",
-  "اسم الشركة": "company",
-  "Organization": "company",
+  // 3. Role check
+  if (
+    normalized.includes("role") ||
+    normalized.includes("title") ||
+    normalized.includes("job") ||
+    normalized.includes("position") ||
+    normalized.includes("designation") ||
+    normalized.includes("منصب") ||
+    normalized.includes("وظيفة")
+  ) {
+    return "role";
+  }
 
-  // role
-  role: "role",
-  Role: "role",
-  "Role (EN)": "role",
-  "Role (AR)": "role",
-  "المنصب": "role",
-  "الوظيفة": "role",
-  "Job Title": "role",
-  "Title": "role",
-  "Position": "role",
+  // 4. Location check
+  if (
+    normalized.includes("location") ||
+    normalized.includes("address") ||
+    normalized.includes("city") ||
+    normalized.includes("emirate") ||
+    normalized.includes("region") ||
+    normalized.includes("state") ||
+    normalized.includes("area") ||
+    normalized.includes("عنوان") ||
+    normalized.includes("موقع") ||
+    normalized.includes("إمارة") ||
+    normalized.includes("مدينة")
+  ) {
+    return "location";
+  }
 
-  // location
-  location: "location",
-  Location: "location",
-  "الموقع": "location",
-  "العنوان": "location",
-  "Address": "location",
-  "address": "location",
-  "City": "location",
-  "city": "location",
-  "Emirate": "location",
-  "emirate": "location",
-  "المدينة": "location",
-  "الإمارة": "location",
-};
+  // 5. Name check (placed before generic contact/phone check so "Contact Name" becomes "name")
+  if (
+    normalized.includes("name") ||
+    normalized.includes("nom") ||
+    normalized.includes("الاسم") ||
+    normalized.includes("اسم") ||
+    normalized.includes("client") ||
+    normalized.includes("customer") ||
+    normalized.includes("lead") ||
+    normalized.includes("buyer") ||
+    normalized.includes("person") ||
+    normalized.includes("user")
+  ) {
+    return "name";
+  }
+
+  // 6. Phone / Contact check
+  if (
+    normalized.includes("phone") ||
+    normalized.includes("mobile") ||
+    normalized.includes("cell") ||
+    normalized.includes("tel") ||
+    normalized.includes("contact") ||
+    normalized.includes("هاتف") ||
+    normalized.includes("تليفون") ||
+    normalized.includes("جوال") ||
+    normalized === "ph"
+  ) {
+    return "phone";
+  }
+
+  return null;
+}
 
 /**
- * Normalise a raw PapaParse row using HEADER_ALIASES.
- * Unknown columns are preserved as-is so the API can still see them.
+ * Normalise a raw PapaParse row using fuzzy header matching.
+ * Combines first and last name columns if present.
+ * Unknown columns are preserved as-is so the API can still process them.
  */
 function normalizeRow(raw: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
+
+  // Combine separate First Name and Last Name columns if they exist
+  let firstName = "";
+  let lastName = "";
+
   for (const [key, value] of Object.entries(raw)) {
-    const canonical = HEADER_ALIASES[key.trim()] || key.trim();
-    // Prefer first occurrence so duplicate aliases don't overwrite
-    if (!(canonical in out)) {
+    const normKey = key.toLowerCase().replace(/[\s\-_]/g, "");
+    const valStr = String(value ?? "").trim();
+
+    if (normKey.includes("firstname") || normKey === "fname" || normKey === "first") {
+      firstName = valStr;
+      continue;
+    }
+    if (normKey.includes("lastname") || normKey === "lname" || normKey === "last") {
+      lastName = valStr;
+      continue;
+    }
+  }
+
+  if (firstName || lastName) {
+    out["name"] = `${firstName} ${lastName}`.trim();
+  }
+
+  for (const [key, value] of Object.entries(raw)) {
+    const normKey = key.toLowerCase().replace(/[\s\-_]/g, "");
+
+    // Skip keys already consumed as part of first/last name
+    if (
+      normKey.includes("firstname") || normKey === "fname" || normKey === "first" ||
+      normKey.includes("lastname") || normKey === "lname" || normKey === "last"
+    ) {
+      continue;
+    }
+
+    const canonical = getCanonicalHeader(key);
+    if (canonical) {
+      // Don't overwrite dynamic name concatenation if name is already populated
+      if (canonical === "name" && out["name"]) {
+        continue;
+      }
       out[canonical] = String(value ?? "").trim();
+    } else {
+      out[key.trim()] = String(value ?? "").trim();
     }
   }
   return out;
@@ -246,17 +306,15 @@ export default function CsvUpload({ onSuccess }: CsvUploadProps) {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                    isDragging
+                  className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-colors ${isDragging
                       ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5"
                       : "border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-bg-surface)]"
-                  }`}
+                    }`}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <UploadCloud
-                    className={`w-10 h-10 mb-4 ${
-                      isDragging ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)]"
-                    }`}
+                    className={`w-10 h-10 mb-4 ${isDragging ? "text-[var(--color-primary)]" : "text-[var(--color-text-secondary)]"
+                      }`}
                   />
                   <p className="text-sm font-medium text-[var(--color-text-primary)] mb-1">
                     {t("leads.upload.dragDrop", "Drag and drop your CSV file here")}
@@ -312,15 +370,14 @@ export default function CsvUpload({ onSuccess }: CsvUploadProps) {
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {detectedHeaders.map((h) => {
-                          const canonical = HEADER_ALIASES[h.trim()];
+                          const canonical = getCanonicalHeader(h);
                           return (
                             <span
                               key={h}
-                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                canonical
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${canonical
                                   ? "bg-green-500/15 text-green-600 dark:text-green-400"
                                   : "bg-[var(--color-border)] text-[var(--color-text-secondary)]"
-                              }`}
+                                }`}
                             >
                               {h}
                               {canonical && canonical !== h.trim() && (

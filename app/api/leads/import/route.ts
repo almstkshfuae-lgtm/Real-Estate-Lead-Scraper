@@ -4,45 +4,149 @@ import { getSessionWithDBVerify } from "@/lib/auth";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 import { normalizeLocation, resolveCoords } from "@/lib/ai";
 
-// ─── Field aliases shared with CsvUpload ─────────────────────────────────────
-// Maps any raw CSV column name (Arabic or English variant) to a canonical key.
-const FIELD_ALIASES: Record<string, string> = {
-  // name
-  name: "name", Name: "name", "Name (EN)": "name", "Name (AR)": "name",
-  "الاسم": "name", "الاسم الكامل": "name", "Full Name": "name",
-  "full name": "name", fullname: "name",
-  // email
-  email: "email", Email: "email", "البريد الإلكتروني": "email",
-  "البريد": "email", "E-Mail": "email", "e-mail": "email",
-  // phone
-  phone: "phone", Phone: "phone", "Phone Number": "phone",
-  "رقم الهاتف": "phone", "رقم التليفون": "phone", "الهاتف": "phone",
-  Mobile: "phone", mobile: "phone", Tel: "phone", tel: "phone",
-  Telephone: "phone",
-  // company
-  company: "company", Company: "company", "Company (EN)": "company",
-  "Company (AR)": "company", "الشركة": "company", "اسم الشركة": "company",
-  Organization: "company",
-  // role
-  role: "role", Role: "role", "Role (EN)": "role", "Role (AR)": "role",
-  "المنصب": "role", "الوظيفة": "role", "Job Title": "role",
-  Title: "role", Position: "role",
-  // location
-  location: "location", Location: "location", "الموقع": "location",
-  "العنوان": "location", Address: "location", address: "location",
-  City: "location", city: "location", Emirate: "location",
-  emirate: "location", "المدينة": "location", "الإمارة": "location",
-};
+// ─── Flexible Column name mapping ─────────────────────────────────────────────
+// Maps any header variant (Arabic / English / fuzzy matches) to a canonical key.
+function getCanonicalHeader(header: string): string | null {
+  if (!header) return null;
+  const normalized = header.toLowerCase().replace(/[\s\-_]/g, "");
+
+  // 1. Email check (very specific)
+  if (
+    normalized.includes("email") ||
+    normalized.includes("mail") ||
+    normalized.includes("البريد") ||
+    normalized.includes("بريد")
+  ) {
+    return "email";
+  }
+
+  // 2. Company check
+  if (
+    normalized.includes("company") ||
+    normalized.includes("org") ||
+    normalized.includes("firm") ||
+    normalized.includes("employer") ||
+    normalized.includes("شركة") ||
+    normalized.includes("الشركة")
+  ) {
+    return "company";
+  }
+
+  // 3. Role check
+  if (
+    normalized.includes("role") ||
+    normalized.includes("title") ||
+    normalized.includes("job") ||
+    normalized.includes("position") ||
+    normalized.includes("designation") ||
+    normalized.includes("منصب") ||
+    normalized.includes("وظيفة")
+  ) {
+    return "role";
+  }
+
+  // 4. Location check
+  if (
+    normalized.includes("location") ||
+    normalized.includes("address") ||
+    normalized.includes("city") ||
+    normalized.includes("emirate") ||
+    normalized.includes("region") ||
+    normalized.includes("state") ||
+    normalized.includes("area") ||
+    normalized.includes("عنوان") ||
+    normalized.includes("موقع") ||
+    normalized.includes("إمارة") ||
+    normalized.includes("مدينة")
+  ) {
+    return "location";
+  }
+
+  // 5. Name check (placed before generic contact/phone check so "Contact Name" becomes "name")
+  if (
+    normalized.includes("name") ||
+    normalized.includes("nom") ||
+    normalized.includes("الاسم") ||
+    normalized.includes("اسم") ||
+    normalized.includes("client") ||
+    normalized.includes("customer") ||
+    normalized.includes("lead") ||
+    normalized.includes("buyer") ||
+    normalized.includes("person") ||
+    normalized.includes("user")
+  ) {
+    return "name";
+  }
+
+  // 6. Phone / Contact check
+  if (
+    normalized.includes("phone") ||
+    normalized.includes("mobile") ||
+    normalized.includes("cell") ||
+    normalized.includes("tel") ||
+    normalized.includes("contact") ||
+    normalized.includes("هاتف") ||
+    normalized.includes("تليفون") ||
+    normalized.includes("جوال") ||
+    normalized === "ph"
+  ) {
+    return "phone";
+  }
+
+  return null;
+}
 
 /**
- * Normalise a raw row using FIELD_ALIASES.
+ * Normalise a raw row using fuzzy header matching.
+ * Combines first and last name columns if present.
  * Unknown keys are kept as-is so we don't silently discard any column.
  */
 function resolveRow(raw: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
+
+  // Combine separate First Name and Last Name columns if they exist
+  let firstName = "";
+  let lastName = "";
+
   for (const [key, value] of Object.entries(raw)) {
-    const canon = FIELD_ALIASES[key.trim()] ?? key.trim();
-    if (!(canon in out)) out[canon] = String(value ?? "").trim();
+    const normKey = key.toLowerCase().replace(/[\s\-_]/g, "");
+    const valStr = String(value ?? "").trim();
+
+    if (normKey.includes("firstname") || normKey === "fname" || normKey === "first") {
+      firstName = valStr;
+      continue;
+    }
+    if (normKey.includes("lastname") || normKey === "lname" || normKey === "last") {
+      lastName = valStr;
+      continue;
+    }
+  }
+
+  if (firstName || lastName) {
+    out["name"] = `${firstName} ${lastName}`.trim();
+  }
+
+  for (const [key, value] of Object.entries(raw)) {
+    const normKey = key.toLowerCase().replace(/[\s\-_]/g, "");
+
+    // Skip keys already consumed as part of first/last name
+    if (
+      normKey.includes("firstname") || normKey === "fname" || normKey === "first" ||
+      normKey.includes("lastname") || normKey === "lname" || normKey === "last"
+    ) {
+      continue;
+    }
+
+    const canonical = getCanonicalHeader(key);
+    if (canonical) {
+      // Don't overwrite dynamic name concatenation if name is already populated
+      if (canonical === "name" && out["name"]) {
+        continue;
+      }
+      out[canonical] = String(value ?? "").trim();
+    } else {
+      out[key.trim()] = String(value ?? "").trim();
+    }
   }
   return out;
 }

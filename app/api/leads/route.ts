@@ -129,22 +129,17 @@ export async function GET(request: Request) {
     // Adjust limit dynamically based on payload size
     const finalLimit = minimal ? Math.min(500, limit) : Math.min(100, limit);
 
-    // ─── Parallel read queries ────────────────────────────────────────────────
-    // findMany + count run in parallel via Promise.all. For read-only queries
-    // this is the correct pattern — $transaction([...]) with an array of promises
-    // requires Interactive Transactions which carry higher connection overhead.
-    // Promise.all lets the connection pool serve both queries concurrently without
-    // holding a single connection open for the entire batch.
-    const [leads, total] = await Promise.all([
-      prisma.lead.findMany({
-        where,
-        select: selectFields,
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: finalLimit,
-      }),
-      prisma.lead.count({ where }),
-    ]);
+    // ─── Sequential read queries ──────────────────────────────────────────────
+    // Running queries sequentially allows the first query to warm up the database 
+    // connection pool, preventing concurrent handshake conflicts and connection pool timeouts (P2024).
+    const leads = await prisma.lead.findMany({
+      where,
+      select: selectFields,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: finalLimit,
+    });
+    const total = await prisma.lead.count({ where });
 
     return NextResponse.json({
       leads,

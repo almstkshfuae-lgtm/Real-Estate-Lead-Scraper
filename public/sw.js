@@ -61,7 +61,7 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => {
+      .catch((err) => {
         // If network request fails, search in cache
         return caches.match(event.request).then((cachedResponse) => {
           if (cachedResponse) {
@@ -78,8 +78,9 @@ self.addEventListener("fetch", (event) => {
               });
             });
           }
-          // For non-navigation requests with no cache, return a proper empty Response
-          return new Response("", { status: 408, statusText: "Request Timeout" });
+          // For non-navigation requests with no cache, bubble up the original error
+          // to let the browser/Next.js handle it (e.g. aborted prefetch requests).
+          throw err || new TypeError("Failed to fetch");
         });
       })
   );
