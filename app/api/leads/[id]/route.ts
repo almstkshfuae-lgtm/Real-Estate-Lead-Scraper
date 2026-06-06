@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionWithDBVerify } from "@/lib/auth";
 import { normalizeLocation, resolveCoords } from "@/lib/ai";
+import { cleanPhone } from "../import/route";
 
 export async function PATCH(
   request: Request,
@@ -108,7 +109,7 @@ export async function PATCH(
       data: {
         ...(name !== undefined && { name: name.trim() }),
         ...(email !== undefined && { email: email ? email.trim().toLowerCase() : null }),
-        ...(phone !== undefined && { phone: phone ? phone.trim() : null }),
+        ...(phone !== undefined && { phone: phone ? cleanPhone(phone) : null }),
         ...(company !== undefined && { company: company.trim() }),
         ...(role !== undefined && { role: role.trim() }),
         ...(location !== undefined && {

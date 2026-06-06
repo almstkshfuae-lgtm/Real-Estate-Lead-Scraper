@@ -152,10 +152,33 @@ function resolveRow(raw: Record<string, string>): Record<string, string> {
 }
 
 /** Clean and normalise a phone string; returns null if clearly empty. */
-function cleanPhone(raw: string): string | null {
+export function cleanPhone(raw: string): string | null {
   if (!raw) return null;
-  // Remove spaces, dashes, parentheses but keep leading +
-  const cleaned = raw.replace(/[\s\-().]/g, "").replace(/^00/, "+");
+  
+  // Remove spaces, dashes, parentheses, dots
+  let cleaned = raw.replace(/[\s\-().]/g, "");
+  
+  // Replace leading 00 with +
+  if (cleaned.startsWith("00")) {
+    cleaned = "+" + cleaned.substring(2);
+  }
+  
+  // If it doesn't start with +, add standard country code normalization
+  if (!cleaned.startsWith("+")) {
+    // If it starts with a leading 0 followed by 5 (e.g., 050, 052) and length is 10:
+    if (cleaned.startsWith("05") && cleaned.length === 10) {
+      cleaned = "+971" + cleaned.substring(1);
+    }
+    // If it starts with 5 and has length of 9 (e.g., 507778888):
+    else if (cleaned.startsWith("5") && cleaned.length === 9) {
+      cleaned = "+971" + cleaned;
+    }
+    // If it is already in international format but missing + (e.g., 971..., 966..., 1...):
+    else if (cleaned.length >= 7) {
+      cleaned = "+" + cleaned;
+    }
+  }
+
   // Must have at least 7 digits to be a valid number
   if (cleaned.replace(/\D/g, "").length < 7) return null;
   return cleaned;

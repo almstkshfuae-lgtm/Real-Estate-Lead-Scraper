@@ -25,6 +25,7 @@ import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications
 import { getEnvVar, getRequiredEnvVar } from "@/lib/env";
 import { getSecret } from "@/lib/secrets";
 import { z } from "zod";
+import { cleanPhone } from "../../leads/import/route";
 
 // Schema for individual lead validation
 const leadSchema = z.object({
@@ -275,7 +276,7 @@ export async function POST(request: NextRequest) {
             role: lead.role || "Professional",
             roleAr: lead.roleAr || null,
             tier: lead.tier || 2,
-            phone: lead.phone || null,
+            phone: lead.phone ? cleanPhone(lead.phone) : null,
             email: lead.email || null,
             location: lead.location || "Abu Dhabi",
             latitude: lead.latitude ?? null,
@@ -300,7 +301,7 @@ export async function POST(request: NextRequest) {
             source: lead.source || "HNWI Sources",
             sourceType: lead.sourceType || "Unknown",
             tier: lead.tier || 2,
-            phone: lead.phone || null,
+            phone: lead.phone ? cleanPhone(lead.phone) : null,
             email: lead.email || null,
             location: lead.location || "Abu Dhabi",
             latitude: lead.latitude ?? null,

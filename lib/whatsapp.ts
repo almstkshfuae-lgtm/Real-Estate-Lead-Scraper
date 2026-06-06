@@ -23,10 +23,10 @@ export interface WhatsAppMessageParams {
  * Sends a WhatsApp templated message to a lead
  */
 export async function sendWhatsAppMessage(
-  phoneId: string, 
-  token: string, 
-  to: string, 
-  templateName: string, 
+  phoneId: string,
+  token: string,
+  to: string,
+  templateName: string,
   languageCode: string = "en",
   components: any[] = []
 ) {
@@ -73,9 +73,9 @@ export async function sendWhatsAppMessage(
  * Sends a simple text message (requires 24h window or existing session)
  */
 export async function sendWhatsAppText(
-  phoneId: string, 
-  token: string, 
-  to: string, 
+  phoneId: string,
+  token: string,
+  to: string,
   text: string
 ) {
   if (!phoneId || !token) {
@@ -135,14 +135,11 @@ export function sanitizeUAENumber(phone: string): string {
   // Strip all non-digit characters
   let cleaned = phone.replace(/\D/g, '');
 
-  // If it starts with 00971, strip 00
-  if (cleaned.startsWith('00971')) {
+  // If it starts with 00, strip the leading 00 to support general international numbers (e.g., 00966... -> 966...)
+  if (cleaned.startsWith('00')) {
     cleaned = cleaned.substring(2);
   }
-  // If it starts with 971, it's already in international format
-  else if (cleaned.startsWith('971')) {
-    // Keep it as is
-  }
+  // Otherwise, handle local UAE numbers
   // If it starts with a leading 0 followed by 5 (e.g., 050, 052, 054, 055, 056, 058), replace leading 0 with 971
   else if (cleaned.startsWith('05') && cleaned.length === 10) {
     cleaned = '971' + cleaned.substring(1);
@@ -151,6 +148,6 @@ export function sanitizeUAENumber(phone: string): string {
   else if (cleaned.startsWith('5') && cleaned.length === 9) {
     cleaned = '971' + cleaned;
   }
-  
+
   return cleaned;
 }
