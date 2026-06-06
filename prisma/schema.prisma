@@ -108,7 +108,7 @@ model ScrapeRun {
 model Search {
   id        String   @id @default(cuid())
   agentId   String
-  criteria  String
+  criteria  String @db.Text
   createdAt DateTime @default(now())
   agent     User     @relation(fields: [agentId], references: [id])
 
