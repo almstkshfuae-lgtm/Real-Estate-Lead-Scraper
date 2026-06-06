@@ -1138,11 +1138,17 @@ export async function generatePersonaAnalysis(lead: any, lang = "en") {
   const content = await generateGeminiText(
     `You are a professional behavioral psychologist and UAE real estate investment analyst.
 Analyze the following lead data and create a buyer persona.
+CRITICAL: The lead's "location" field refers to their targeted investment area in the UAE, NOT their current residential location. They are a high-profile global/international investor who may be based anywhere in the world (e.g., Canada, Europe, etc.). Do NOT assume or write that they currently reside in the UAE or the target area unless explicitly confirmed by notes. Frame the persona around an international investor expanding their portfolio in the UAE.
+
 Focus on:
-1. Investment Motivation (Why they buy)
+1. Investment Motivation (Why they buy in the UAE from abroad)
 2. Risk Profile (Conservative vs Aggressive)
-3. Lifestyle Alignment (What property suits them)
+3. Lifestyle/Portfolio Alignment (What property suits them)
 4. Decision Signals (UHNW, Executive, Business Owner)
+
+At the very end of the paragraph, you MUST append a new line starting with:
+- If English: "Outreach Advice: [1 sentence highly actionable recommendation for the agent]"
+- If Arabic: "نصيحة التواصل: [توصية عملية ومحددة من جملة واحدة للوكيل العقاري]"
 
 Format the output as a concise, professional paragraph in ${lang === 'ar' ? 'Arabic (العربية)' : 'English'}.
 Do not use placeholders. Use the data provided.`,
