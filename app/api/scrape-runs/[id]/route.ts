@@ -63,6 +63,31 @@ export async function GET(
     // we retrieve the names of the agent's existing leads and exclude them from the query.
     if (!isAdmin && (run.status === "FAILED" || (run.status === "COMPLETED" && run.leadsFound === 0))) {
       try {
+        // Prevent concurrent duplicate fallback lead cloning
+        const existingRunLeadsCount = await prisma.lead.count({
+          where: { scrapeRunId: run.id, agentId: session.id }
+        });
+        if (existingRunLeadsCount > 0) {
+          console.info(`[Fallback Check] Leads already exist for scrapeRunId ${run.id}. Skipping clone.`);
+          return NextResponse.json(
+            {
+              run: {
+                id: run.id,
+                status: "COMPLETED",
+                leadsFound: existingRunLeadsCount,
+                startedAt: run.startedAt,
+                completedAt: run.completedAt || new Date(),
+                sources: run.sources,
+              },
+            },
+            {
+              headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+              },
+            }
+          );
+        }
+
         // Fetch names of all leads currently assigned to this agent to avoid duplicates
         const agentLeads = await prisma.lead.findMany({
           where: { agentId: session.id },

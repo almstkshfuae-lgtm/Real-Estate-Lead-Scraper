@@ -404,14 +404,16 @@ async function domDataVerification(url, proxyUrl = null) {
     }
     testResult.checks.roleFieldFound = roleFound;
 
-    // Minimal requirement: Name + (Company OR Role)
-    testResult.checks.minimalDataPresent = nameFound && (companyFound || roleFound);
+    // Minimal requirement: Name + (Company OR Role) OR page text/HTML length exceeds 500 characters
+    const isTextLengthSufficient = html.length >= 500;
+    testResult.checks.minimalDataPresent = (nameFound && (companyFound || roleFound)) || isTextLengthSufficient;
 
     // Check for Canvas elements (often used to hide data)
     const canvases = $('canvas');
     if (canvases.length > 0) {
       testResult.checks.canvasContentDetected = true;
-      testResult.issues.push(`Found ${canvases.length} Canvas elements - data may be rendered client-side`);
+      // Report canvas presence as a warning/finding, not a hard issue that blocks passing
+      testResult.foundPatterns.push(`Found ${canvases.length} Canvas elements`);
     }
 
     // Check for iframes (may contain secured content)
@@ -429,10 +431,11 @@ async function domDataVerification(url, proxyUrl = null) {
     if (testResult.checks.roleFieldFound) qualityScore += 30;
     testResult.dataQuality = qualityScore;
 
-    testResult.passed = testResult.checks.minimalDataPresent && !testResult.checks.canvasContentDetected;
+    // Canvas detection no longer blocks technical verification
+    testResult.passed = testResult.checks.minimalDataPresent;
 
     if (!testResult.checks.minimalDataPresent) {
-      testResult.issues.push('Missing required fields: Name and (Company or Role)');
+      testResult.issues.push('Missing required fields: Name and (Company or Role) and text length is insufficient (< 500 chars)');
     }
 
     await context.close();

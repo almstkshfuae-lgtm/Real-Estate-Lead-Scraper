@@ -246,14 +246,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      if (keywordsList.length > 0) {
-        const leadText = `${lead.name} ${lead.nameAr || ''} ${lead.company} ${lead.companyAr || ''} ${lead.role || ''} ${lead.roleAr || ''} ${lead.location || ''} ${lead.persona || ''} ${(lead.signals || []).join(' ')}`.toLowerCase();
-        const matchesKeywords = keywordsList.some((kw: string) => leadText.includes(kw));
-        if (!matchesKeywords) {
-          console.info(`[Webhook] Skipping lead ${lead.name} because it does not match criteria keywords: ${keywordsList.join(', ')}`);
-          continue;
-        }
-      }
+      // Post-scrape keyword filtering is disabled to rely on AI-based scoring and classification instead of strict string checks.
 
       try {
         const cleanSignals = deduplicateSignals(lead.signals || []);

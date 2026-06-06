@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { sources, criteria } = await request.json();
-    const finalCriteria = role === 'AGENT' ? {} : (criteria || {});
+    const finalCriteria = criteria || {};
 
     const DEFAULT_SCRAPE_SOURCES = [
       'alforsan',

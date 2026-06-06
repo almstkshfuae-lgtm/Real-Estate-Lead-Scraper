@@ -181,8 +181,6 @@ export async function GET(request: Request) {
       total = isNonAdmin ? Math.min(10, realTotal) : realTotal;
     }
 
-    const isMatchedFallback = false;
-
     const parsedLeads = leads.map((lead: any) => {
       let parsedSignals: any[] = [];
       try {
@@ -216,6 +214,10 @@ export async function GET(request: Request) {
         propertyPref: parsedPropertyPref,
       };
     });
+
+    const isMatchedFallback = parsedLeads.some((lead: any) =>
+      lead.sourceType === "Match" || (typeof lead.source === 'string' && lead.source.includes("(Match "))
+    );
 
     return NextResponse.json({
       leads: parsedLeads,

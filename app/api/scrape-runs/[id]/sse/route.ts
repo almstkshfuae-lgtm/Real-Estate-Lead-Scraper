@@ -72,6 +72,21 @@ export async function GET(
       const handleAgentFallback = async (currentRun: typeof run) => {
         if (!isAdmin && (currentRun.status === "FAILED" || (currentRun.status === "COMPLETED" && currentRun.leadsFound === 0))) {
           try {
+            // Prevent concurrent duplicate fallback lead cloning
+            const existingRunLeadsCount = await prisma.lead.count({
+              where: { scrapeRunId: currentRun.id, agentId: session.id }
+            });
+            if (existingRunLeadsCount > 0) {
+              console.info(`[SSE Fallback Check] Leads already exist for scrapeRunId ${currentRun.id}. Skipping clone.`);
+              const updatedRun = {
+                ...currentRun,
+                status: "COMPLETED" as const,
+                leadsFound: existingRunLeadsCount,
+                completedAt: currentRun.completedAt || new Date()
+              };
+              return updatedRun;
+            }
+
             const agentLeads = await prisma.lead.findMany({
               where: { agentId: session.id },
               select: { name: true }

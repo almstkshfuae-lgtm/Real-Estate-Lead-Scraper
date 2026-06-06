@@ -1876,14 +1876,14 @@ async function callGeminiForLeads(scrapedContent, criteria = {}) {
     (scrapedContent.name || '').toLowerCase().includes('yellow');
 
   const absoluteRule = isDirectorySource
-    ? `ABSOLUTE RULE: Since this content is from a business directory (no individual human names are expected), you are permitted to extract the business/company itself as a lead if no specific human name is present.
+    ? `ABSOLUTE RULE: Since this content is from a business directory or contains company listings, you are permitted and encouraged to extract the business/company itself as a lead if no specific human name is present.
 For each business:
-- For "name" and "nameAr", use a generic placeholder like "Representative of [Company Name]" or "ممثل [اسم الشركة]".
-- Use the actual business/company name for "company" and "companyAr".
+- For "name" and "nameAr", use the actual business/company name.
+- Use the actual business/company name for "company" and "companyAr" as well.
 - Set "role" to "Corporate Contact" and "roleAr" to "جهة اتصال الشركة".
 - Capture their telephone as "phone", website/email if present, and location.
 - NEVER invent or hallucinate contact numbers or locations; only extract what is explicitly written.`
-    : `ABSOLUTE RULE: Extract any real people or professionals (such as doctors, executives, etc.) explicitly named in the text. Return an EMPTY ARRAY [] if no names are found. NEVER invent data.`;
+    : `ABSOLUTE RULE: Extract any real people or professionals (such as doctors, executives, etc.) explicitly named in the text. If no individual human names are found but valid business profiles or contact details are present, you are permitted and encouraged to extract the business/company itself as a lead, setting the "name" (and "nameAr") and "company" (and "companyAr") fields to the business/company name. NEVER invent data.`;
 
   const systemPrompt = `You are an expert at extracting high-quality leads from web content.
 ${absoluteRule}
