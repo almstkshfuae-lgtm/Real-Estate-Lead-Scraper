@@ -72,6 +72,24 @@ export async function GET(request: Request) {
       conditions.push({ scrapeRunId });
     }
 
+    const recentlyRelocatedParam = searchParams.get("recentlyRelocated") || searchParams.get("relocated");
+    if (recentlyRelocatedParam === "true") {
+      conditions.push({ relocated: true });
+    }
+
+    const excludeRentalParam = searchParams.get("excludeRental");
+    if (excludeRentalParam === "true") {
+      conditions.push({ rentalFlag: false });
+    }
+
+    const tierMinParam = searchParams.get("tierMin");
+    if (tierMinParam) {
+      const parsedTierMin = parseInt(tierMinParam);
+      if (!isNaN(parsedTierMin)) {
+        conditions.push({ tier: { lte: parsedTierMin } });
+      }
+    }
+
     const scoreMin = searchParams.get("scoreMin") || "";
     if (scoreMin) {
       const parsedScoreMin = parseInt(scoreMin);
@@ -163,36 +181,7 @@ export async function GET(request: Request) {
       total = isNonAdmin ? Math.min(10, realTotal) : realTotal;
     }
 
-    let isMatchedFallback = false;
-    if (isNonAdmin && leads.length === 0) {
-      const adminLeads = await prisma.lead.findMany({
-        where: {
-          agent: {
-            role: 'admin'
-          },
-          ...(search && {
-            OR: [
-              { name: { contains: search } },
-              { nameAr: { contains: search } },
-              { company: { contains: search } },
-              { companyAr: { contains: search } },
-              { phone: { contains: search } },
-              { email: { contains: search } },
-              { location: { contains: search } },
-            ]
-          })
-        },
-        select: selectFields,
-        orderBy: { score: "desc" },
-        take: 10
-      });
-
-      if (adminLeads.length > 0) {
-        leads = adminLeads;
-        total = adminLeads.length;
-        isMatchedFallback = true;
-      }
-    }
+    const isMatchedFallback = false;
 
     const parsedLeads = leads.map((lead: any) => {
       let parsedSignals: any[] = [];

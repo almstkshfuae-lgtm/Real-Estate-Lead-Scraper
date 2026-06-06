@@ -105,6 +105,7 @@ export async function PUT(request: NextRequest) {
         id: true,
         email: true,
         name: true,
+        nameAr: true,
         language: true,
         theme: true,
         role: true,
@@ -115,6 +116,8 @@ export async function PUT(request: NextRequest) {
       id: updatedUser.id,
       email: updatedUser.email,
       role: updatedUser.role,
+      name: updatedUser.name,
+      nameAr: updatedUser.nameAr,
     });
 
     const response = NextResponse.json({ success: true, user: updatedUser }, { status: 200 });

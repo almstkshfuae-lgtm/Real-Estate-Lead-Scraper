@@ -21,6 +21,8 @@ export type AuthUser = {
   id: string;
   email: string;
   role: string;
+  name?: string;
+  nameAr?: string | null;
 };
 
 export async function createToken(user: AuthUser) {

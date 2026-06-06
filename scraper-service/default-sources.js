@@ -418,5 +418,28 @@ export const DEFAULT_SCRAPER_SOURCES = [
     },
     maxPages: 1,
     delayBetweenPages: 1000
+  },
+  {
+    key: 'ded',
+    url: 'https://eservices.dubaided.gov.ae',
+    name: 'DED License Portal',
+    type: 'Company Registry',
+    signals: ['DED License', 'Company Ingestion', 'Dubai Business'],
+    crawlDepth: 3,
+    navigationSelectors: {
+      memberDirectory: ['a[href*="license"]', 'a[href*="search"]', 'a[href*="directory"]'],
+      pagination: ['.pagination a', 'a[rel="next"]', 'button[aria-label*="next"]'],
+      expandButtons: ['button[aria-expanded]', '.expand-btn'],
+      memberLinks: ['a[href*="company"]', 'a[href*="details"]', '.entity-link']
+    },
+    contentSelectors: {
+      namePatterns: ['.license-name', 'td:first-child a', '.company-name', 'h1', 'h2', 'h3'],
+      companyPatterns: ['.license-type', '.category'],
+      rolePatterns: ['.manager', '.director', '.position'],
+      phonePatterns: ['href*="tel:"', '.phone'],
+      emailPatterns: ['href*="mailto:"', '.email']
+    },
+    maxPages: 10,
+    delayBetweenPages: 2000
   }
 ];

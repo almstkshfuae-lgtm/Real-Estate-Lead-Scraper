@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       'alhabtoor',
       'adgm',
       'difc',
+      'ded',
       'gazette',
       'arabianbusiness',
       'propertymonitor',

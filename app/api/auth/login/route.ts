@@ -30,6 +30,8 @@ export async function POST(request: NextRequest) {
       id: user.id,
       email: user.email,
       role: user.role,
+      name: user.name,
+      nameAr: user.nameAr,
     });
 
     const response = NextResponse.json(

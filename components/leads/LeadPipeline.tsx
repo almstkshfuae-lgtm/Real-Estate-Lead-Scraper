@@ -45,36 +45,9 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
       if (!res.ok) throw new Error("Failed to fetch leads");
       const data = await res.json();
 
-      const parseSignals = (sig: any): string[] => {
-        if (!sig) return [];
-        
-        const extract = (data: any): string[] => {
-          if (!data) return [];
-          if (typeof data === 'string') return [data];
-          if (Array.isArray(data)) return data.flatMap(extract);
-          if (typeof data === 'object') return Object.values(data).flatMap(extract);
-          return [String(data)];
-        };
-
-        let parsedData = sig;
-        if (typeof sig === 'string') {
-          try {
-            parsedData = JSON.parse(sig);
-          } catch {
-            if (sig.includes(',')) {
-              return sig.split(',').map(s => s.trim()).filter(Boolean);
-            }
-            return [sig.trim()];
-          }
-        }
-
-        const result = extract(parsedData);
-        return result.map(s => s.trim()).filter(s => s && s !== '[object Object]');
-      };
-
       const sanitizedLeads = (data.leads || []).map((l: any) => ({
         ...l,
-        signals: parseSignals(l.signals)
+        signals: Array.isArray(l.signals) ? l.signals : []
       }));
 
       setLeads(sanitizedLeads);

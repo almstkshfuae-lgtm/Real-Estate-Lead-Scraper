@@ -9,17 +9,17 @@ interface ScrapeRunState {
   leadsFound: number;
   isPolling: boolean;
   error: string | null;
+  isUsingSSE?: boolean;
 }
 
 /**
- * React hook that polls a single ScrapeRun status by ID.
+ * React hook that connects to a single ScrapeRun status by ID using Server-Sent Events (SSE),
+ * with automatic fallback to HTTP polling if SSE is not supported or encounters an error.
  *
- * - Polls GET /api/scrape-runs/[runId] at `intervalMs` (default 5s)
+ * - Attempts to stream status from GET /api/scrape-runs/[runId]/sse
+ * - If unsupported or error occurs, falls back to polling GET /api/scrape-runs/[runId] every intervalMs
  * - Automatically stops when status reaches COMPLETED or FAILED
- * - Returns { status, leadsFound, isPolling, error }
- *
- * Usage:
- *   const { status, leadsFound, isPolling } = useScrapeRunStatus(runId);
+ * - Returns { status, leadsFound, isPolling, error, isUsingSSE }
  */
 export function useScrapeRunStatus(
   runId: string | null,
@@ -30,9 +30,11 @@ export function useScrapeRunStatus(
     leadsFound: 0,
     isPolling: false,
     error: null,
+    isUsingSSE: false,
   });
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const runIdRef = useRef(runId);
 
   // Keep the ref current to avoid stale closures
@@ -43,9 +45,16 @@ export function useScrapeRunStatus(
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    setState((prev) => ({ ...prev, isPolling: false }));
   }, []);
 
+  const stopSSE = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, []);
+
+  // Standard fallback HTTP polling fetch
   const fetchStatus = useCallback(async () => {
     const id = runIdRef.current;
     if (!id) return;
@@ -68,14 +77,11 @@ export function useScrapeRunStatus(
         leadsFound: run.leadsFound ?? 0,
         isPolling: run.status !== "COMPLETED" && run.status !== "FAILED",
         error: null,
+        isUsingSSE: false,
       });
 
-      // Stop polling on terminal state
       if (run.status === "COMPLETED" || run.status === "FAILED") {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
+        stopPolling();
       }
     } catch (err: any) {
       console.error("[useScrapeRunStatus] Poll error:", err?.message);
@@ -83,38 +89,96 @@ export function useScrapeRunStatus(
         ...prev,
         error: err?.message || "Failed to fetch status",
       }));
-      // Don't stop polling on transient network errors — retry on next tick
     }
-  }, []);
+  }, [stopPolling]);
 
-  useEffect(() => {
-    // Cleanup any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+  // Start the standard HTTP polling interval as fallback
+  const startPollingFallback = useCallback(() => {
+    stopSSE();
+    stopPolling();
 
-    if (!runId) {
-      setState({ status: null, leadsFound: 0, isPolling: false, error: null });
-      return;
-    }
+    const id = runIdRef.current;
+    if (!id) return;
 
-    // Start polling
-    setState((prev) => ({ ...prev, isPolling: true, error: null }));
+    console.info(`[useScrapeRunStatus] Starting HTTP polling fallback for run: ${id}`);
+    
+    setState((prev) => ({ 
+      ...prev, 
+      isPolling: true, 
+      isUsingSSE: false 
+    }));
 
     // Immediate first fetch
     fetchStatus();
 
-    // Then poll at interval
+    // Poll at interval
     intervalRef.current = setInterval(fetchStatus, intervalMs);
+  }, [fetchStatus, intervalMs, stopPolling, stopSSE]);
+
+  useEffect(() => {
+    // Cleanup any existing connections/intervals
+    stopPolling();
+    stopSSE();
+
+    if (!runId) {
+      setState({ status: null, leadsFound: 0, isPolling: false, error: null, isUsingSSE: false });
+      return;
+    }
+
+    // Try EventSource/SSE first
+    if (typeof window !== "undefined" && window.EventSource) {
+      console.info(`[useScrapeRunStatus] Attempting SSE connection for run: ${runId}`);
+      
+      setState({ 
+        status: "PENDING", 
+        leadsFound: 0, 
+        isPolling: true, 
+        error: null, 
+        isUsingSSE: true 
+      });
+
+      const es = new EventSource(`/api/scrape-runs/${runId}/sse`);
+      eventSourceRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const run = data.run;
+
+          if (run) {
+            setState({
+              status: run.status as ScrapeRunStatus,
+              leadsFound: run.leadsFound ?? 0,
+              isPolling: run.status !== "COMPLETED" && run.status !== "FAILED",
+              error: data.error || null,
+              isUsingSSE: true,
+            });
+
+            if (run.status === "COMPLETED" || run.status === "FAILED") {
+              console.info(`[useScrapeRunStatus] SSE reached terminal state (${run.status}). Closing connection.`);
+              es.close();
+            }
+          }
+        } catch (err) {
+          console.error("[useScrapeRunStatus] Error parsing SSE message payload:", err);
+        }
+      };
+
+      es.onerror = (err) => {
+        console.warn("[useScrapeRunStatus] SSE stream error. Falling back to HTTP polling.", err);
+        startPollingFallback();
+      };
+    } else {
+      console.warn("[useScrapeRunStatus] EventSource is not supported. Falling back to HTTP polling.");
+      startPollingFallback();
+    }
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      stopPolling();
+      stopSSE();
     };
-  }, [runId, intervalMs, fetchStatus]);
+  }, [runId, intervalMs, startPollingFallback, stopPolling, stopSSE]);
 
   return state;
 }
+
