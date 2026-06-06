@@ -101,6 +101,25 @@ await page.waitForTimeout(5000);  // Increase from 2000
 
 ---
 
+### Problem: Playwright Launch Fails with "Executable doesn't exist" (Docker / Railway Version Mismatch)
+
+**Error**: `browserType.launch: Executable doesn't exist at /ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell` (often resolves in immediate scrape job failure in 7-9 seconds).
+
+**Cause**: A version mismatch between the installed `playwright` npm package inside the container and the pre-installed browser binaries in the Docker base image (e.g., base image has Playwright `1.49.1` binaries, but caret `^` allowed `npm install` to upgrade the npm package to `1.60.0` or newer).
+
+**Solution**:
+1. Pin the `playwright` version strictly in `scraper-service/package.json` to match the Docker base image:
+   ```json
+   "playwright": "1.49.1"
+   ```
+2. Update the `scraper-service/package-lock.json` lockfile:
+   ```bash
+   cd scraper-service && npm install
+   ```
+3. Commit both files and trigger a redeployment on Railway so the container rebuilds with matching pinned dependencies.
+
+---
+
 ## 2. API & Pipeline Issues
 
 ### Problem: Scraper Service Not Responding to API Calls
