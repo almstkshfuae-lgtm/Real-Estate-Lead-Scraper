@@ -86,10 +86,10 @@
     @apply absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-200;
   }
   .toggle-switch-thumb.active {
-    @apply inset-inline-end-1;
+    inset-inline-end: 4px;
   }
   .toggle-switch-thumb.inactive {
-    @apply inset-inline-start-1;
+    inset-inline-start: 4px;
   }
 
   /* Toggle Icon Containers */
