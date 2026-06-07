@@ -618,9 +618,13 @@ function extractLikelyRole(content: string) {
 
 function heuristicExtractLeads(scrapedData: any, criteria?: any) {
   const content = String(scrapedData.content || "");
-  const emails = Array.from(new Set((content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [])));
-  const phones = Array.from(new Set((content.match(/\+?[0-9][0-9()\-\.\s]{7,}[0-9]/g) || [])
-    .map((value) => normalizePhone(value))));
+  const emails = Array.from(new Set((content.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi) || [])));
+  const rawPhones = content.match(/(?:(?:\+|00)\d{1,3}[\s-]?)?(?:\(?\d{2,5}\)?[\s-]?)?\d{3,4}[\s-]?\d{3,4}[\s-]?\d{0,4}/g) || [];
+  const phones = Array.from(new Set(
+    rawPhones
+      .map((value) => normalizePhone(value))
+      .filter((value) => value.length >= 8 && value.length <= 16 && !/^\d{8}$/.test(value)) // avoid 8-digit dates
+  ));
   const company = scrapedData.name || scrapedData.title || "HNWI Source";
   const location = scrapedData.type?.includes("Dubai") ? "Dubai" : scrapedData.type?.includes("Abu Dhabi") ? "Abu Dhabi" : "Abu Dhabi";
   const role = extractLikelyRole(content);

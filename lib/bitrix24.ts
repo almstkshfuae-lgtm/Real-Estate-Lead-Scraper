@@ -83,6 +83,39 @@ export async function pushContact(domain: string, token: string, lead: any) {
 }
 
 /**
+ * Updates an existing contact in Bitrix24
+ */
+export async function updateContact(domain: string, token: string, contactId: string, lead: any) {
+  if (!domain || !token || !contactId) return null;
+
+  const baseUrl = token.startsWith('http') 
+    ? token 
+    : `https://${domain.replace(/\/$/, '')}/rest/1/${token}/`;
+
+  const method = 'crm.contact.update.json';
+  const url = baseUrl.endsWith('/') ? `${baseUrl}${method}` : `${baseUrl}/${method}`;
+
+  const params: Partial<BitrixContactParams> = {
+    COMMENTS: `Lead from Brilliance UAE.\nTier: T${lead.tier}\nScore: ${lead.score}\nSource: ${lead.source}\nLocation: ${lead.location}\nBudget: ${lead.budgetMin || 0} - ${lead.budgetMax || 0} AED\nNotes: ${lead.notes || 'No notes'}`,
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: contactId, fields: params }),
+    });
+    if (response.ok) {
+      const result = await response.json();
+      return result.result;
+    }
+  } catch (err) {
+    console.error("Bitrix24 update error:", err);
+  }
+  return null;
+}
+
+/**
  * Pushes a lead to Bitrix24 as a Deal linked to a Contact
  */
 export async function pushDeal(domain: string, token: string, contactId: string, lead: any) {

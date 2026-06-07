@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from './lib/auth';
 
+// Simple in-memory cache for proxy token verification
+// Reduces CPU overhead on high-traffic API routes
+const tokenCache = new Map<string, { user: any; expiresAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 1000;
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -32,7 +38,24 @@ export async function proxy(request: NextRequest) {
 
     let user = null;
     if (token) {
-      user = await verifyToken(token);
+      const now = Date.now();
+      const cached = tokenCache.get(token);
+      
+      if (cached && cached.expiresAt > now) {
+        user = cached.user;
+      } else {
+        user = await verifyToken(token);
+        if (user) {
+          // Opportunistic cleanup to prevent memory leaks
+          if (tokenCache.size >= MAX_CACHE_SIZE) {
+            const oldestKey = tokenCache.keys().next().value;
+            if (oldestKey) tokenCache.delete(oldestKey);
+          }
+          tokenCache.set(token, { user, expiresAt: now + CACHE_TTL_MS });
+        } else if (cached) {
+          tokenCache.delete(token);
+        }
+      }
     }
 
     // 3. Handle unauthenticated requests uniformly based on content type

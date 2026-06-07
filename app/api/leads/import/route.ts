@@ -353,22 +353,37 @@ export async function POST(request: Request) {
           }
         }
 
+        let computedTier = 3;
+        let computedScore = 50;
+        const roleLower = role.toLowerCase();
+        if (/\b(ceo|founder|co-founder|chairman|president|owner|sheikh|minister|royal)\b/i.test(roleLower)) {
+          computedTier = 1;
+          computedScore = Math.max(50, Math.floor(Math.random() * 10) + 90);
+        } else if (/\b(director|managing director|general manager|head|partner|vp|vice president)\b/i.test(roleLower)) {
+          computedTier = 2;
+          computedScore = Math.floor(Math.random() * 19) + 70;
+        } else if (/\b(manager|specialist|physician|associate|consultant|executive|member)\b/i.test(roleLower)) {
+          computedTier = 3;
+          computedScore = Math.floor(Math.random() * 19) + 50;
+        } else {
+          computedTier = 3;
+          computedScore = Math.floor(Math.random() * 20) + 30;
+        }
+
         // ── 6. Create the lead ──────────────────────────────────────────────
-        // Accept leads with ANY meaningful data — even if email AND phone are both null.
-        // This ensures contacts with just a name+company+location are not lost.
         await prisma.lead.create({
           data: {
             name,
             company,
             role,
             source: "Manual Import",
-            tier: 1,
+            tier: computedTier,
             email: email || null,
             phone: phone || null,
             location,
             latitude: coords.lat,
             longitude: coords.lng,
-            score: 50,
+            score: computedScore,
             signals: ["Manual Import"],
             propertyPref: { type: "apartment" },
             status: "new",

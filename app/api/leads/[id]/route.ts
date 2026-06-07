@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionWithDBVerify } from "@/lib/auth";
+import { updateContact } from "@/lib/bitrix24";
 import { normalizeLocation, resolveCoords } from "@/lib/ai";
 import { cleanPhone } from "../import/route";
 
@@ -103,6 +104,12 @@ export async function PATCH(
     }
 
     const parsedScore = score !== undefined ? parseInt(score, 10) : undefined;
+    let computedTier = undefined;
+    if (parsedScore !== undefined && !isNaN(parsedScore)) {
+      if (parsedScore >= 90) computedTier = 1;
+      else if (parsedScore >= 60) computedTier = 2;
+      else computedTier = 3;
+    }
 
     const updatedLead = await prisma.lead.update({
       where: { id },
@@ -118,12 +125,23 @@ export async function PATCH(
           longitude: lng
         }),
         ...(parsedScore !== undefined && { score: isNaN(parsedScore) ? 50 : parsedScore }),
+        ...(computedTier !== undefined && { tier: computedTier }),
         ...(budgetMin !== undefined && { budgetMin: budgetMin !== "" && budgetMin !== null ? parseFloat(budgetMin) : null }),
         ...(budgetMax !== undefined && { budgetMax: budgetMax !== "" && budgetMax !== null ? parseFloat(budgetMax) : null }),
         ...(status !== undefined && { status }),
         ...(notes !== undefined && { notes }),
       },
     });
+
+    // CRM Sync: If the lead is already exported to Bitrix24, sync the new data
+    if (updatedLead.bitrix24Id) {
+      const b24Domain = process.env.BITRIX24_DOMAIN;
+      const b24Token = process.env.BITRIX24_WEBHOOK_TOKEN;
+      if (b24Domain && b24Token) {
+        // Fire and forget so we don't block the UI response
+        updateContact(b24Domain, b24Token, updatedLead.bitrix24Id, updatedLead).catch(console.error);
+      }
+    }
 
     return NextResponse.json({ lead: updatedLead });
   } catch (error) {

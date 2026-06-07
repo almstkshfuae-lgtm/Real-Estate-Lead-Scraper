@@ -336,85 +336,128 @@ export async function POST(request: NextRequest) {
     }
 
     let newLeadsCount = 0;
+    const BATCH_SIZE = 10;
 
+    // Deduplicate payload in memory to prevent race conditions during batch processing (P2002 errors)
+    const uniqueLeadsMap = new Map();
     for (const lead of leadsPayload) {
-      // Basic sanity check — scraper-service already validated, but be defensive
-      if (!lead.name) {
-        console.warn(`[Webhook] Skipping malformed lead (missing name):`, lead);
-        continue;
+      if (!lead.name) continue;
+      const leadCompany = lead.company || "Not Specified";
+      const key = `${lead.name.trim().toLowerCase()}|${leadCompany.trim().toLowerCase()}`;
+      
+      if (!uniqueLeadsMap.has(key)) {
+        uniqueLeadsMap.set(key, lead);
+      } else {
+        const existing = uniqueLeadsMap.get(key);
+        if (lead.source && !existing.source?.includes(lead.source)) {
+          existing.source = `${existing.source || "HNWI Sources"}, ${lead.source}`;
+        }
+        existing.score = Math.max(existing.score || 50, lead.score || 50);
+        existing.tier = Math.min(existing.tier || 2, lead.tier || 2);
       }
+    }
+    const cleanLeadsPayload = Array.from(uniqueLeadsMap.values());
 
-      // Post-scrape keyword filtering is disabled to rely on AI-based scoring and classification instead of strict string checks.
+    for (let i = 0; i < cleanLeadsPayload.length; i += BATCH_SIZE) {
+      const batch = cleanLeadsPayload.slice(i, i + BATCH_SIZE);
 
-      try {
+      const results = await Promise.allSettled(batch.map(async (lead: any) => {
+        // Basic sanity check — scraper-service already validated, but be defensive
+        if (!lead.name) {
+          console.warn(`[Webhook] Skipping malformed lead (missing name):`, lead);
+          return 0;
+        }
+
         const cleanSignals = deduplicateSignals(lead.signals || []);
-
         const leadCompany = lead.company || "Not Specified";
         const leadCompanyAr = lead.companyAr || (lead.company ? null : "غير محدد");
 
-        await prisma.lead.upsert({
+        const existingLead = await prisma.lead.findFirst({
           where: {
-            name_company_source_agentId: {
-              name: lead.name,
-              company: leadCompany,
-              source: lead.source || "HNWI Sources",
-              agentId: agentId
-            }
-          },
-          update: {
-            nameAr: lead.nameAr || null,
-            companyAr: leadCompanyAr,
-            role: lead.role || "Professional",
-            roleAr: lead.roleAr || null,
-            tier: lead.tier || 2,
-            phone: lead.phone ? cleanPhone(lead.phone) : null,
-            email: lead.email || null,
-            location: lead.location || "Abu Dhabi",
-            latitude: lead.latitude ?? null,
-            longitude: lead.longitude ?? null,
-            score: lead.score || 50,
-            signals: cleanSignals,
-            budgetMin: lead.budgetMin ?? null,
-            budgetMax: lead.budgetMax ?? null,
-            relocated: lead.relocated ?? false,
-            propertyPref: lead.propertyPref || {},
-            persona: lead.persona || null,
-            agentId: agentId,
-            scrapeRunId: runId
-          },
-          create: {
             name: lead.name,
-            nameAr: lead.nameAr || null,
             company: leadCompany,
-            companyAr: leadCompanyAr,
-            role: lead.role || "Professional",
-            roleAr: lead.roleAr || null,
-            source: lead.source || "HNWI Sources",
-            sourceType: lead.sourceType || "Unknown",
-            tier: lead.tier || 2,
-            phone: lead.phone ? cleanPhone(lead.phone) : null,
-            email: lead.email || null,
-            location: lead.location || "Abu Dhabi",
-            latitude: lead.latitude ?? null,
-            longitude: lead.longitude ?? null,
-            score: lead.score || 50,
-            signals: cleanSignals,
-            budgetMin: lead.budgetMin ?? null,
-            budgetMax: lead.budgetMax ?? null,
-            relocated: lead.relocated ?? false,
-            propertyPref: lead.propertyPref || {},
-            persona: lead.persona || null,
-            agentId: agentId,
-            scrapeRunId: runId
+            agentId: agentId
           }
         });
 
-        newLeadsCount++;
-      } catch (err: any) {
-        console.error(`[Webhook] DB upsert error for lead: ${lead.name}`, err?.stack || err?.message || err);
-        // Throw critical Prisma schema/table errors to prevent silent background failure
-        if (err?.code === 'P2021' || err?.message?.includes('does not exist')) {
-          throw err;
+        if (existingLead) {
+          // Merge logic: append source if not present
+          let mergedSource = existingLead.source;
+          const newSource = lead.source || "HNWI Sources";
+          if (!mergedSource.includes(newSource)) {
+            mergedSource = `${mergedSource}, ${newSource}`;
+          }
+
+          // Keep the higher tier/score
+          const mergedTier = Math.min(existingLead.tier, lead.tier || 2); // Lower number is better
+          const mergedScore = Math.max(existingLead.score, lead.score || 50);
+
+          await prisma.lead.update({
+            where: { id: existingLead.id },
+            data: {
+              nameAr: lead.nameAr || existingLead.nameAr,
+              companyAr: leadCompanyAr || existingLead.companyAr,
+              role: lead.role || existingLead.role,
+              roleAr: lead.roleAr || existingLead.roleAr,
+              source: mergedSource,
+              tier: mergedTier,
+              phone: (lead.phone ? cleanPhone(lead.phone) : null) || existingLead.phone,
+              email: lead.email || existingLead.email,
+              location: lead.location || existingLead.location,
+              latitude: lead.latitude ?? existingLead.latitude,
+              longitude: lead.longitude ?? existingLead.longitude,
+              score: mergedScore,
+              signals: cleanSignals.length > 0 ? cleanSignals : (existingLead.signals as any),
+              budgetMin: lead.budgetMin ?? existingLead.budgetMin,
+              budgetMax: lead.budgetMax ?? existingLead.budgetMax,
+              relocated: lead.relocated ?? existingLead.relocated,
+              propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (existingLead.propertyPref as any),
+              persona: lead.persona || existingLead.persona,
+              scrapeRunId: runId
+            }
+          });
+          return 1;
+        } else {
+          await prisma.lead.create({
+            data: {
+              name: lead.name,
+              nameAr: lead.nameAr || null,
+              company: leadCompany,
+              companyAr: leadCompanyAr,
+              role: lead.role || "Professional",
+              roleAr: lead.roleAr || null,
+              source: lead.source || "HNWI Sources",
+              sourceType: lead.sourceType || "Unknown",
+              tier: lead.tier || 2,
+              phone: lead.phone ? cleanPhone(lead.phone) : null,
+              email: lead.email || null,
+              location: lead.location || "Abu Dhabi",
+              latitude: lead.latitude ?? null,
+              longitude: lead.longitude ?? null,
+              score: lead.score || 50,
+              signals: cleanSignals,
+              budgetMin: lead.budgetMin ?? null,
+              budgetMax: lead.budgetMax ?? null,
+              relocated: lead.relocated ?? false,
+              propertyPref: lead.propertyPref || {},
+              persona: lead.persona || null,
+              agentId: agentId,
+              scrapeRunId: runId
+            }
+          });
+          return 1;
+        }
+      }));
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          newLeadsCount += result.value;
+        } else {
+          console.error(`[Webhook] DB upsert error in batch:`, result.reason?.stack || result.reason?.message || result.reason);
+          // Throw critical Prisma schema/table errors to prevent silent background failure
+          if (result.reason?.code === 'P2021' || result.reason?.message?.includes('does not exist')) {
+            throw result.reason;
+          }
         }
       }
     }
