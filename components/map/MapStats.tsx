@@ -7,9 +7,10 @@ interface MapStatsProps {
   leads: MapLead[];
   filteredCount: number;
   geofencedCount: number;
+  projects?: any[];
 }
 
-export default function MapStats({ leads, filteredCount, geofencedCount }: MapStatsProps) {
+export default function MapStats({ leads, filteredCount, geofencedCount, projects = [] }: MapStatsProps) {
   const { t } = useTranslation("common");
 
   const { avgScore, t1Count, topLocations, stats } = useMemo(() => {
@@ -128,6 +129,35 @@ export default function MapStats({ leads, filteredCount, geofencedCount }: MapSt
           </div>
         ))}
       </div>
+
+      {/* Projects summary if available */}
+      {projects && projects.length > 0 && (
+        <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)]">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="w-4 h-4 text-[#085041]" />
+            <span className="text-xs font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
+              {t("map.stats.projects", "Off-Plan Projects")}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2.5 bg-[var(--color-bg-surface)] rounded-lg">
+              <div className="text-[var(--color-text-secondary)] font-medium">Projects</div>
+              <div className="text-lg font-extrabold text-[var(--color-text-primary)] mt-0.5">{projects.length}</div>
+            </div>
+            <div className="p-2.5 bg-[var(--color-bg-surface)] rounded-lg">
+              <div className="text-[var(--color-text-secondary)] font-medium">Avg Start Price</div>
+              <div className="text-sm font-extrabold text-[#085041] mt-1 truncate">
+                {(() => {
+                  const validPrices = projects.map(p => p.startingPrice).filter(price => typeof price === "number" && price > 0);
+                  if (validPrices.length === 0) return "N/A";
+                  const avgPrice = Math.round(validPrices.reduce((a, b) => a + b, 0) / validPrices.length);
+                  return `${(avgPrice / 1000000).toFixed(1)}M AED`;
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hot Zones */}
       {topLocations.length > 0 && (

@@ -48,6 +48,7 @@ export default function MapPage() {
   const isRtl = i18n.language === "ar";
 
   const [leads, setLeads] = useState<MapLead[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLayer, setActiveLayer] = useState<LayerType>("markers");
   const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
@@ -81,9 +82,13 @@ export default function MapPage() {
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (statusFilter) url += `&status=${statusFilter}`;
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Fetch failed");
-      const data = await safeJson(res);
+      const [leadsRes, projectsRes] = await Promise.all([
+        fetch(url),
+        fetch("/api/projects/heatmap")
+      ]);
+
+      if (!leadsRes.ok) throw new Error("Fetch failed");
+      const data = await safeJson(leadsRes);
 
       const sanitizedLeads = (data.leads || []).map((l: any) => ({
         ...l,
@@ -91,6 +96,11 @@ export default function MapPage() {
       }));
 
       setLeads(sanitizedLeads);
+
+      if (projectsRes.ok) {
+        const projData = await safeJson(projectsRes);
+        setProjects(projData.projects || []);
+      }
     } catch (e) {
       console.error(e);
       setLeads([]);
@@ -432,6 +442,7 @@ export default function MapPage() {
 
           <GeoMap
             leads={leads}
+            projects={projects}
             language={i18n.language}
             activeLayer={activeLayer}
             onSelectLead={(lead) => setSelectedLead(lead)}
@@ -496,6 +507,7 @@ export default function MapPage() {
             leads={leads}
             filteredCount={leads.length}
             geofencedCount={geofencedLeads.length}
+            projects={projects}
           />
 
           {/* Geofenced Leads List */}

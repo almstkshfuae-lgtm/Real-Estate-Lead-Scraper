@@ -97,6 +97,7 @@ export interface MapLead {
 
 interface GeoMapProps {
   leads: MapLead[];
+  projects?: any[];
   language: string;
   activeLayer: "markers" | "heatmap";
   onSelectLead: (lead: MapLead) => void;
@@ -106,6 +107,7 @@ interface GeoMapProps {
 
 function GeoMap({
   leads,
+  projects = [],
   language,
   activeLayer,
   onSelectLead,
@@ -371,10 +373,10 @@ function GeoMap({
             markersRef.current.push(marker);
           }
         });
-
       } else if (activeLayer === "heatmap") {
         const heatGroup = L.layerGroup();
 
+        // 1. Plot Lead demand intensity
         leads.forEach((lead) => {
           const lat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : getCoords(lead.location, lead.id).lat;
           const lng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : getCoords(lead.location, lead.id).lng;
@@ -403,6 +405,31 @@ function GeoMap({
             interactive: false,
           });
 
+          heatGroup.addLayer(circle);
+        });
+
+        // 2. Plot Real Estate Project supply/price density
+        projects.forEach((proj) => {
+          const coords = getCoords(proj.location, proj.id);
+          
+          const price = typeof proj.startingPrice === "number" && !isNaN(proj.startingPrice) ? proj.startingPrice : 0;
+          const priceMultiplier = price > 0
+            ? 1.0 + Math.min(2.0, price / 5000000)
+            : 1.0;
+            
+          const intensity = Math.max(0.15, Math.min(1, priceMultiplier / 3.0));
+          const radius = 18000 + 24000 * intensity;
+          const alpha = 0.12 + intensity * 0.20;
+          const color = intensity > 0.6 ? "#A32D2D" : intensity > 0.3 ? "#BA7517" : "#185FA5";
+          
+          const circle = L.circle([coords.lat, coords.lng], {
+            radius,
+            color: "transparent",
+            fillColor: color,
+            fillOpacity: alpha,
+            interactive: false,
+          });
+          
           heatGroup.addLayer(circle);
         });
 
