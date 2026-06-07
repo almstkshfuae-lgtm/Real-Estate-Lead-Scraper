@@ -334,14 +334,14 @@ export const UAE_AREAS_COORDS: Record<string, { lat: number; lng: number }> = {
   "Umm Al Quwain": { lat: 25.5647, lng: 55.5534 }
 };
 
-export function resolveCoords(location: string): { lat: number; lng: number } {
+export function resolveCoords(location: string): { lat: number | null; lng: number | null } {
   const normalized = location?.trim() || "";
   for (const [key, val] of Object.entries(UAE_AREAS_COORDS)) {
     if (normalized.toLowerCase().includes(key.toLowerCase())) {
       return val;
     }
   }
-  return { lat: 24.4539, lng: 54.3773 }; // Standard Abu Dhabi default center
+  return { lat: null, lng: null }; // Return null for unknown locations instead of defaulting to Abu Dhabi
 }
 
 export function normalizeLocation(loc: string): string {
@@ -385,7 +385,7 @@ export function normalizeLocation(loc: string): string {
     }
   }
 
-  return "Abu Dhabi";
+  return normalized; // Return the original name if not a recognized UAE location
 }
 
 export function parseBudgetToFloat(val: any): number | null {
@@ -717,6 +717,8 @@ REQUIRED FIELDS FOR EACH LEAD:
 - role (English) - Position/Title
 - roleAr (Arabic) - Arabic translation of role (MUST INCLUDE)
 - location (String) - "Abu Dhabi", "Dubai", or city name - REQUIRED
+- latitude (Number or null) - Approximate latitude coordinate of the location if international or specific, otherwise null
+- longitude (Number or null) - Approximate longitude coordinate of the location if international or specific, otherwise null
 - tier (1, 2, or 3) - REQUIRED: 1=Leadership/Founder, 2=Senior Management, 3=Professional
 - score (0-100) - REQUIRED: Investment potential score
 - email (String or null) - If visible on page
@@ -764,6 +766,8 @@ Example format:
     "email": "m.almaktoum@holdings.ae",
     "phone": "+971501234567",
     "location": "Abu Dhabi",
+    "latitude": 24.4539,
+    "longitude": 54.3773,
     "budgetMin": null,
     "budgetMax": null,
     "relocated": null,
@@ -986,6 +990,8 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
     - role (English)
     - roleAr (Arabic)
     - location (String)
+    - latitude (Number or null) - Approximate latitude coordinate of the location if international or specific, otherwise null
+    - longitude (Number or null) - Approximate longitude coordinate of the location if international or specific, otherwise null
     - tier (1, 2, or 3)
     - score (0-100)
     - signals (Array of strings)

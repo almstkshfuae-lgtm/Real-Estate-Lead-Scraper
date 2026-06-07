@@ -782,7 +782,8 @@ async function seedDefaultSources() {
         contentSelectors: source.contentSelectors,
         crawlDepth: source.crawlDepth,
         maxPages: source.maxPages,
-        delayBetweenPages: source.delayBetweenPages
+        delayBetweenPages: source.delayBetweenPages,
+        active: source.active !== undefined ? source.active : true
       },
       create: {
         key: source.key,

@@ -261,8 +261,8 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
           <div className="p-3 bg-blue-50 border-b border-blue-100 text-blue-800 text-xs flex items-center gap-2 font-medium">
             <Info className="w-4 h-4 flex-shrink-0 text-blue-600 animate-pulse" />
             <span>
-              {i18n.language === "ar" 
-                ? "لا تتوفر نتائج بحث مطابقة لك. تم عرض 10 عملاء محتملين مقترحين من المستوردين مسبقاً بواسطة المسؤول العام." 
+              {i18n.language === "ar"
+                ? "لا تتوفر نتائج بحث مطابقة لك. تم عرض 10 عملاء محتملين مقترحين من المستوردين مسبقاً بواسطة المسؤول العام."
                 : "No matching leads found for your account. Showing 10 recommended leads imported by the Super Admin."}
             </span>
           </div>
@@ -333,9 +333,11 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-1 max-w-[200px]">
-                    {Array.isArray(lead.signals) && lead.signals.map((signal, i) => (
-                      <SignalChip key={i} signal={signal} />
-                    ))}
+                    {Array.isArray(lead.signals) && lead.signals
+                      .filter(s => s !== "Manual Import")
+                      .map((signal, i) => (
+                        <SignalChip key={i} signal={signal} />
+                      ))}
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -362,7 +364,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       {leads.length === 0 && !loading && (
         <div className="p-12 text-center max-w-md mx-auto space-y-4">
           <p className="text-[var(--color-text-secondary)]">
-            {filters.searchTerm 
+            {filters.searchTerm
               ? `${t('leads.table.empty')}`
               : t('leads.table.empty')}
           </p>
@@ -408,7 +410,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
           >
             {t('common.previous')}
           </button>
-          
+
           {Array.from({ length: totalPages }, (_, i) => i + 1)
             .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
             .map((p, idx, arr) => (
@@ -416,11 +418,10 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
                 {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-xs text-[var(--color-text-secondary)]">...</span>}
                 <button
                   onClick={() => setPage(p)}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    page === p
-                      ? "bg-[var(--color-primary)] text-white"
-                      : "border border-[var(--color-border)] hover:bg-[var(--color-bg-surface)]"
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${page === p
+                    ? "bg-[var(--color-primary)] text-white"
+                    : "border border-[var(--color-border)] hover:bg-[var(--color-bg-surface)]"
+                    }`}
                 >
                   {p}
                 </button>

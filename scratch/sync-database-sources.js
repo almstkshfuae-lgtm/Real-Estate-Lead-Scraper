@@ -33,7 +33,8 @@ async function main() {
         contentSelectors: source.contentSelectors,
         crawlDepth: source.crawlDepth,
         maxPages: source.maxPages,
-        delayBetweenPages: source.delayBetweenPages
+        delayBetweenPages: source.delayBetweenPages,
+        active: source.active !== undefined ? source.active : true
       },
       create: {
         key: source.key,
@@ -46,7 +47,7 @@ async function main() {
         crawlDepth: source.crawlDepth,
         maxPages: source.maxPages,
         delayBetweenPages: source.delayBetweenPages,
-        active: true
+        active: source.active !== undefined ? source.active : true
       }
     });
   }

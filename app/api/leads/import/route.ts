@@ -10,6 +10,30 @@ function getCanonicalHeader(header: string): string | null {
   if (!header) return null;
   const normalized = header.toLowerCase().replace(/[\s\-_]/g, "");
 
+  // 0. Social media / link check (to prevent matching standard columns and ensure routing to metadata)
+  if (
+    normalized.includes("linkedin") ||
+    normalized.includes("facebook") ||
+    normalized.includes("twitter") ||
+    normalized.includes("instagram") ||
+    normalized.includes("snapchat") ||
+    normalized.includes("tiktok") ||
+    normalized.includes("social") ||
+    normalized.includes("link") ||
+    normalized.includes("url") ||
+    normalized.includes("website") ||
+    normalized.includes("web") ||
+    normalized.includes("profile") ||
+    normalized.includes("page") ||
+    normalized.includes("youtube") ||
+    normalized.includes("github") ||
+    normalized.includes("telegram") ||
+    normalized.includes("t.me") ||
+    normalized.includes("wa.me")
+  ) {
+    return null;
+  }
+
   // 1. Email check (very specific)
   if (
     normalized.includes("email") ||
@@ -78,17 +102,20 @@ function getCanonicalHeader(header: string): string | null {
     return "name";
   }
 
-  // 6. Phone / Contact check
+  // 6. Phone / Contact check (more specific to avoid matching general contact links/social URLs)
   if (
     normalized.includes("phone") ||
     normalized.includes("mobile") ||
     normalized.includes("cell") ||
     normalized.includes("tel") ||
-    normalized.includes("contact") ||
     normalized.includes("هاتف") ||
     normalized.includes("تليفون") ||
     normalized.includes("جوال") ||
-    normalized === "ph"
+    normalized === "ph" ||
+    normalized === "contact" ||
+    normalized.includes("contactnumber") ||
+    normalized.includes("contactphone") ||
+    normalized.includes("contactno")
   ) {
     return "phone";
   }

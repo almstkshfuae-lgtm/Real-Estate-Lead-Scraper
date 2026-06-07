@@ -55,7 +55,7 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
   if (!lead) return null;
 
   const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
-  const signals = Array.isArray(lead.signals) ? lead.signals : [];
+  const signals = (Array.isArray(lead.signals) ? lead.signals : []).filter(s => s !== "Manual Import");
   const scoreColor = getScoreColor(lead.score);
   const tierColor = getTierColor(lead.tier);
 

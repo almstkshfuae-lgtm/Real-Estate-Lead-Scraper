@@ -497,7 +497,9 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.signals")}</h3>
                   <div className="flex flex-wrap gap-2">
-                    {(lead.signals as string[]).map((s: string, i: number) => <SignalChip key={i} signal={s} />)}
+                    {((lead.signals || []) as string[])
+                      .filter(s => s !== "Manual Import")
+                      .map((s: string, i: number) => <SignalChip key={i} signal={s} />)}
                   </div>
                   <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 text-start">
                     <div className="flex gap-3">

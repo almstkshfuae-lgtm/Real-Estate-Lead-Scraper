@@ -4,6 +4,7 @@ export const DEFAULT_SCRAPER_SOURCES = [
     url: 'https://www.alforsan.ae',
     name: 'Al Forsan International Sports Resort',
     type: 'Equestrian Club',
+    active: false,
     signals: ['Equestrian Investor', 'Sports Enthusiast', 'Member'],
     crawlDepth: 3,
     navigationSelectors: {
