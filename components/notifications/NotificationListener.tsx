@@ -15,6 +15,7 @@ interface NotificationItem {
 export default function NotificationListener() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const seenNotifications = useRef<Set<string>>(new Set());
+  const isInitialFetch = useRef<boolean>(true);
 
   useEffect(() => {
     const loadPreferences = async () => {
@@ -62,20 +63,24 @@ export default function NotificationListener() {
           if (seenNotifications.current.has(notification.id)) return;
           seenNotifications.current.add(notification.id);
 
-          toast(messageFormatter(notification.title, notification.body), {
-            description: notification.body,
-            action: {
-              label: "View",
-              onClick: () => window.location.href = "/notifications",
-            },
-          });
-
-          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-            new Notification(notification.title, {
-              body: notification.body,
+          if (!isInitialFetch.current) {
+            toast(messageFormatter(notification.title, notification.body), {
+              description: notification.body,
+              action: {
+                label: "View",
+                onClick: () => window.location.href = "/notifications",
+              },
             });
+
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              new Notification(notification.title, {
+                body: notification.body,
+              });
+            }
           }
         });
+
+        isInitialFetch.current = false;
       } catch (error) {
         // Silent fail
       }
