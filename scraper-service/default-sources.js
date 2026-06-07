@@ -13,9 +13,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="member"]', '[class*="member-card"] a', '.profile-link']
     },
     contentSelectors: {
-      namePatterns: ['data-name', 'class*="name"', '.member-title'],
-      companyPatterns: ['data-company', 'class*="organization"', '.affiliation'],
-      rolePatterns: ['data-role', 'class*="position"', '.title'],
+      namePatterns: ['data-name', 'class*="name"', '.member-title', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['data-company', 'class*="organization"', '.affiliation', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['data-role', 'class*="position"', '.title', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['data-phone', 'href*="tel:"'],
       emailPatterns: ['data-email', 'href*="mailto:"']
     },
@@ -36,9 +36,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="member"]', '[class*="member"] a', '.person-card a']
     },
     contentSelectors: {
-      namePatterns: ['data-name', 'class*="member-name"', '.person-name'],
-      companyPatterns: ['data-company', 'class*="company"', 'class*="business"', '.occupation'],
-      rolePatterns: ['data-role', 'class*="title"', 'class*="position"', '.job-title'],
+      namePatterns: ['data-name', 'class*="member-name"', '.person-name', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['data-company', 'class*="company"', 'class*="business"', '.occupation', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['data-role', 'class*="title"', 'class*="position"', '.job-title', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['data-phone', 'href*="tel:"'],
       emailPatterns: ['data-email', 'href*="mailto:"']
     },
@@ -59,9 +59,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="news"]', 'a[href*="article"]', '.article-link']
     },
     contentSelectors: {
-      namePatterns: ['data-author', 'class*="author"', 'class*="byline"', '.writer-name'],
-      companyPatterns: ['data-source', 'class*="source"', 'class*="publication"'],
-      rolePatterns: ['class*="title"', 'class*="executive"', '.position-mention'],
+      namePatterns: ['data-author', 'class*="author"', 'class*="byline"', '.writer-name', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['data-source', 'class*="source"', 'class*="publication"', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['class*="title"', 'class*="executive"', '.position-mention', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: [],
       emailPatterns: []
     },
@@ -82,9 +82,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="member"]', '[class*="patron"] a', '.profile-link']
     },
     contentSelectors: {
-      namePatterns: ['data-name', 'class*="patron-name"'],
-      companyPatterns: ['data-company', 'class*="company"', '.affiliation'],
-      rolePatterns: ['data-role', 'class*="title"'],
+      namePatterns: ['data-name', 'class*="patron-name"', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['data-company', 'class*="company"', '.affiliation', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['data-role', 'class*="title"', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['data-phone'],
       emailPatterns: ['data-email']
     },
@@ -105,9 +105,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="profile"]', '[class*="member"] a']
     },
     contentSelectors: {
-      namePatterns: ['data-name', 'class*="rider-name"'],
-      companyPatterns: ['data-sponsor', 'class*="sponsor"'],
-      rolePatterns: ['class*="title"'],
+      namePatterns: ['data-name', 'class*="rider-name"', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['data-sponsor', 'class*="sponsor"', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['class*="title"', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['data-phone'],
       emailPatterns: ['data-email']
     },
@@ -128,9 +128,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="member"]', '[class*="player"] a', '.profile-link']
     },
     contentSelectors: {
-      namePatterns: ['data-name', 'class*="player-name"'],
-      companyPatterns: ['data-sponsor', 'class*="company"'],
-      rolePatterns: ['data-role', 'class*="title"'],
+      namePatterns: ['data-name', 'class*="player-name"', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['data-sponsor', 'class*="company"', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['data-role', 'class*="title"', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['data-phone'],
       emailPatterns: ['data-email']
     },
@@ -151,9 +151,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="company"]', 'a[href*="entity"]', '.company-link']
     },
     contentSelectors: {
-      namePatterns: ['data-name', '.company-name'],
-      companyPatterns: ['.entity-type', '.registration-number'],
-      rolePatterns: ['.director-name', '.officer-name', '.role'],
+      namePatterns: ['data-name', '.company-name', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['.entity-type', '.registration-number', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['.director-name', '.officer-name', '.role', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['href*="tel:"', '.phone'],
       emailPatterns: ['href*="mailto:"', '.email']
     },
@@ -174,9 +174,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="view-entity"]', 'a[href*="company"]', '.entity-link']
     },
     contentSelectors: {
-      namePatterns: ['.entity-name'],
-      companyPatterns: ['.industry', '.status'],
-      rolePatterns: ['.director', '.principal'],
+      namePatterns: ['.entity-name', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['.industry', '.status', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['.director', '.principal', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['href*="tel:"'],
       emailPatterns: ['href*="mailto:"']
     },
@@ -197,9 +197,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="gazette"]', 'a[href*="decree"]', '.gazette-link']
     },
     contentSelectors: {
-      namePatterns: ['.decree-title'],
-      companyPatterns: ['.entity-mention', '.corporate-body'],
-      rolePatterns: ['.signatory', '.minister'],
+      namePatterns: ['.decree-title', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['.entity-mention', '.corporate-body', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['.signatory', '.minister', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: [],
       emailPatterns: []
     },
@@ -220,9 +220,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="report"]', 'a[href*="insight"]', '.report-link']
     },
     contentSelectors: {
-      namePatterns: ['.report-title'],
-      companyPatterns: ['.client-name', '.firm'],
-      rolePatterns: ['.analyst', '.buyer-type'],
+      namePatterns: ['.report-title', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['.client-name', '.firm', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['.analyst', '.buyer-type', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: [],
       emailPatterns: []
     },
@@ -243,9 +243,9 @@ export const DEFAULT_SCRAPER_SOURCES = [
       memberLinks: ['a[href*="company"]', 'a[href*="details"]', '.entity-link']
     },
     contentSelectors: {
-      namePatterns: ['.license-name', '.company-name'],
-      companyPatterns: ['.license-type', '.category'],
-      rolePatterns: ['.manager', '.director', '.position'],
+      namePatterns: ['.license-name', '.company-name', 'h1', 'h2', 'h3', 'div', 'p', 'strong', 'td'],
+      companyPatterns: ['.license-type', '.category', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
+      rolePatterns: ['.manager', '.director', '.position', 'h1', 'h2', 'h3', 'div', 'p', 'td'],
       phonePatterns: ['href*="tel:"', '.phone'],
       emailPatterns: ['href*="mailto:"', '.email']
     },
