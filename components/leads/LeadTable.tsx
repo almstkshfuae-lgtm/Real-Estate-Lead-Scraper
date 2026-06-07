@@ -257,16 +257,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
           </div>
         )}
 
-        {isMatchedFallback && !loading && (
-          <div className="p-3 bg-blue-50 border-b border-blue-100 text-blue-800 text-xs flex items-center gap-2 font-medium">
-            <Info className="w-4 h-4 flex-shrink-0 text-blue-600 animate-pulse" />
-            <span>
-              {i18n.language === "ar"
-                ? "لا تتوفر نتائج بحث مطابقة لك. تم عرض 10 عملاء محتملين مقترحين من المستوردين مسبقاً بواسطة المسؤول العام."
-                : "No matching leads found for your account. Showing 10 recommended leads imported by the Super Admin."}
-            </span>
-          </div>
-        )}
+        {/* Fallback warning message has been removed per user request */}
 
         <table className="w-full text-start border-collapse">
           <thead>

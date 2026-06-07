@@ -387,21 +387,7 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
               </div>
             </div>
 
-            {/* Summary Box */}
-            <div className="p-6 rounded-3xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] space-y-4 text-start">
-              <h3 className="text-sm font-bold text-[var(--color-text-primary)]">{t('search.intelligenceTitle')}</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-[var(--color-text-secondary)]">{t('search.scrapeDepth')}</span>
-                  <span className="font-bold">{activeSources.length} {t('search.activeSources', 'active sources')}</span>
-                </div>
-              </div>
-              <div className="pt-4 border-t border-[var(--color-border)]">
-                <p className="text-[10px] text-[var(--color-text-disabled)] leading-relaxed italic">
-                  {t('search.disclaimer')}
-                </p>
-              </div>
-            </div>
+            {/* Summary Box removed per user request */}
           </div>
         </div>
 
