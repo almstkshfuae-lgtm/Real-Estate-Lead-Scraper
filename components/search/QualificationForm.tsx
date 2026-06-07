@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  Building2, 
-  DollarSign, 
-  MapPin, 
-  Zap, 
-  Filter, 
+import {
+  Building2,
+  DollarSign,
+  MapPin,
+  Zap,
+  Filter,
   Play,
   Save,
   Info,
@@ -58,7 +58,7 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   const { t } = useTranslation('common');
   const searchParams = useSearchParams();
   const queryKeywords = searchParams?.get("keywords") || "";
-  
+
   const [propertyTypes, setPropertyTypes] = useState<string[]>(initialData?.propertyTypes || []);
   const [budgetMin, setBudgetMin] = useState<number>(initialData?.budgetMin || 1000000);
   const [budgetMax, setBudgetMax] = useState<number>(initialData?.budgetMax || 10000000);
@@ -88,13 +88,13 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   }, [queryKeywords]);
 
   const toggleType = (type: string) => {
-    setPropertyTypes(prev => 
+    setPropertyTypes(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
     );
   };
 
   const toggleEmirate = (emirate: string) => {
-    setEmirates(prev => 
+    setEmirates(prev =>
       prev.includes(emirate) ? prev.filter(e => e !== emirate) : [...prev, emirate]
     );
   };
@@ -164,14 +164,14 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
         onSaveSuccess?.();
-        
+
         if (!isScrape) {
           toast.success(t('search.savedSuccess', 'Search criteria saved!'));
           return;
         }
 
         toastId = toast.loading(t('search.scrapeInitializing', 'Initializing scrape job...'));
-        
+
         scrapeRes = await fetch("/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -252,8 +252,8 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                 <Search className="w-4 h-4" />
                 {t('search.keywordsLabel', 'Target Keywords')}
               </label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder={t('search.keywordsPlaceholder', 'e.g., luxury, penthouses, DIFC, investor')}
                 value={keywords}
                 onChange={(e) => setKeywords(e.target.value)}
@@ -275,9 +275,8 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                   <button
                     key={type.id}
                     onClick={() => toggleType(type.id)}
-                    className={`filter-btn ${
-                      propertyTypes.includes(type.id) ? "active" : ""
-                    }`}
+                    className={`filter-btn ${propertyTypes.includes(type.id) ? "active" : ""
+                      }`}
                   >
                     {type.label}
                   </button>
@@ -294,8 +293,8 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Min</p>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={budgetMin}
                     onChange={(e) => setBudgetMin(Number(e.target.value))}
                     className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
@@ -303,8 +302,8 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                 </div>
                 <div className="space-y-1">
                   <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Max</p>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={budgetMax}
                     onChange={(e) => setBudgetMax(Number(e.target.value))}
                     className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
@@ -324,9 +323,8 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                   <button
                     key={emirate}
                     onClick={() => toggleEmirate(emirate)}
-                    className={`emirate-pill ${
-                      emirates.includes(emirate) ? "active" : ""
-                    }`}
+                    className={`emirate-pill ${emirates.includes(emirate) ? "active" : ""
+                      }`}
                   >
                     {emirate}
                   </button>
@@ -343,13 +341,12 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                 <Zap className="w-4 h-4" />
                 {t('search.options')}
               </label>
-              
+
               <div className="space-y-4">
-                <button 
+                <button
                   onClick={() => setRelocated(!relocated)}
-                  className={`toggle-card ${
-                    relocated ? "active-success" : ""
-                  }`}
+                  className={`toggle-card ${relocated ? "active-success" : ""
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`toggle-icon-container ${relocated ? 'active-success' : ''}`}>
@@ -365,11 +362,10 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                   </div>
                 </button>
 
-                <button 
+                <button
                   onClick={() => setExcludeRental(!excludeRental)}
-                  className={`toggle-card ${
-                    excludeRental ? "active-primary" : ""
-                  }`}
+                  className={`toggle-card ${excludeRental ? "active-primary" : ""
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`toggle-icon-container ${excludeRental ? 'active-primary' : ''}`}>
@@ -429,11 +425,10 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                   return (
                     <label
                       key={sourceKey}
-                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                        isChecked
-                          ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800'
-                          : 'border-[var(--color-border)] bg-[var(--color-bg-surface)]/20 hover:border-[var(--color-text-disabled)]'
-                      }`}
+                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isChecked
+                        ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800'
+                        : 'border-[var(--color-border)] bg-[var(--color-bg-surface)]/20 hover:border-[var(--color-text-disabled)]'
+                        }`}
                     >
                       <input
                         type="checkbox"
@@ -541,7 +536,7 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
         )}
 
         <div className="mt-8 flex gap-4">
-          <button 
+          <button
             disabled={loading || isPolling}
             onClick={() => handleSave(true)}
             className="flex-1 py-4 bg-[var(--color-primary)] text-white font-bold rounded-2xl hover:bg-[var(--color-primary-hover)] transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-50"
@@ -553,7 +548,7 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
             )}
             {loading ? t('search.scrapeInitializing') : isPolling ? t('search.scrapeInProgress', 'Scrape in progress...') : t('search.startScrape')}
           </button>
-          <button 
+          <button
             disabled={loading}
             onClick={() => handleSave(false)}
             className={`px-6 py-4 border border-[var(--color-border)] font-bold rounded-2xl transition-all flex items-center justify-center ${saveSuccess ? 'text-green-500 border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800' : 'bg-[var(--color-bg-card)] hover:bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]'}`}

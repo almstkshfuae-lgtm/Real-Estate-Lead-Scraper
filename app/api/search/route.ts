@@ -77,7 +77,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    await prisma.search.delete({
+    await prisma.search.deleteMany({
       where: {
         id,
         agentId: session.id,

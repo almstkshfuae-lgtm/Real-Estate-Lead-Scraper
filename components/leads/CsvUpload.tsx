@@ -487,7 +487,7 @@ export default function CsvUpload({ onSuccess }: CsvUploadProps) {
                     <p className="text-xs text-blue-600 dark:text-blue-400">
                       {t(
                         "leads.upload.previewNote",
-                        'We will assign Tier 1 and "Manual Import" to all imported leads. Deduplication will be applied automatically.'
+                        'We will assign Tier 1 to all imported leads. Deduplication will be applied automatically.'
                       )}
                     </p>
                   </div>

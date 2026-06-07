@@ -171,9 +171,12 @@ function getCoords(location: string, seed: string = ""): { lat: number; lng: num
     }
   }
 
-  // 3. Unknown location — return null instead of random UAE coordinates
-  // Leads with unresolvable locations will be excluded from the map
-  return null;
+  // 3. Unknown location — return fallback instead of null
+  // We use a central UAE coordinate with a wider spread so leads are not hidden
+  const hash = stableHash(normalized + seed + "fallback");
+  const offsetLat = ((hash % 1000) / 1000 - 0.5) * 0.15;
+  const offsetLng = (((hash >> 10) % 1000) / 1000 - 0.5) * 0.25;
+  return { lat: 24.8 + offsetLat, lng: 55.0 + offsetLng };
 }
 
 function getTierColor(tier: number): string {
@@ -264,9 +267,18 @@ function GeoMap({
         shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
       });
 
+      // Create bounds for Greater MENA / World fallback area
+      const maxBounds = L.latLngBounds(
+        L.latLng(-10, -30), // South-West
+        L.latLng(70, 150)   // North-East
+      );
+
       const map = L.map(mapRef.current!, {
         center: [25.2048, 55.2708],
         zoom: 9,
+        minZoom: 3,
+        maxBounds: maxBounds,
+        maxBoundsViscosity: 1.0,
         zoomControl: false,
         attributionControl: true,
       });
@@ -370,7 +382,7 @@ function GeoMap({
                     color: white;
                     box-shadow: 0 2px 8px ${tierColor}66;
                     cursor: pointer;
-                    font-family: 'Inter', sans-serif;
+                    font-family: ${language === 'ar' ? "'Cairo', 'Tajawal', system-ui" : "'Inter', sans-serif"};
                   ">${lead.score}</div>
                 </div>
               `,
@@ -388,10 +400,12 @@ function GeoMap({
             
             const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
             const signals = Array.isArray(lead.signals) ? lead.signals : [];
+            const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
+            const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
             
             marker.bindPopup(`
-              <div style="
-                font-family: 'Inter', sans-serif;
+              <div ${dirAttr} style="
+                font-family: ${fontFamily};
                 min-width: 200px;
                 padding: 4px;
               ">
@@ -461,8 +475,8 @@ function GeoMap({
                     box-shadow: 0 4px 12px ${tierColor}44;
                     cursor: pointer;
                   ">
-                    <div style="font-size: 14px; font-weight: 800; font-family: 'Inter', sans-serif; line-height:1;">${clusterLeads.length}</div>
-                    <div style="font-size: 9px; font-weight: 500; opacity: 0.85; font-family: 'Inter', sans-serif;">leads</div>
+                    <div style="font-size: 14px; font-weight: 800; font-family: ${language === 'ar' ? "'Cairo', 'Tajawal'" : "'Inter'"}, sans-serif; line-height:1;">${clusterLeads.length}</div>
+                    <div style="font-size: 9px; font-weight: 500; opacity: 0.85; font-family: ${language === 'ar' ? "'Cairo', 'Tajawal'" : "'Inter'"}, sans-serif;">${language === 'ar' ? 'عميل' : 'leads'}</div>
                   </div>
                 </div>
               `,
@@ -471,10 +485,13 @@ function GeoMap({
             });
 
             const marker = L.marker([baseCoords.lat, baseCoords.lng], { icon });
+            const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
+            const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
+            
             marker.bindPopup(`
-              <div style="font-family: 'Inter', sans-serif; padding: 4px; min-width: 200px;">
+              <div ${dirAttr} style="font-family: ${fontFamily}; padding: 4px; min-width: 200px;">
                 <div style="font-weight: 700; font-size: 13px; color: #111827; margin-bottom: 2px;">${location}</div>
-                <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">${clusterLeads.length} leads · Avg Score ${avgScore}</div>
+                <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">${clusterLeads.length} ${language === 'ar' ? 'عميل · متوسط التقييم' : 'leads · Avg Score'} ${avgScore}</div>
                 <div style="display: flex; flex-wrap: wrap; gap: 4px;">
                   ${clusterLeads.slice(0, 5).map(l => `
                     <span style="

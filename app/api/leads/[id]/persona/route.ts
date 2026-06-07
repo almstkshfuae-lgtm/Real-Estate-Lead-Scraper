@@ -26,7 +26,7 @@ export async function GET(
     }
 
     // Agents can only access their own leads
-    if (session.role !== 'ADMIN' && lead.agentId !== session.id) {
+    if (session.role?.toUpperCase() !== 'ADMIN' && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
