@@ -379,7 +379,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch(browserOptions);
+    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     // Set request/response interception for diagnostics
@@ -495,7 +495,7 @@ async function domDataVerification(url, proxyUrl = null) {
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch(browserOptions);
+    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -586,9 +586,8 @@ async function domDataVerification(url, proxyUrl = null) {
     }
     testResult.checks.roleFieldFound = roleFound;
 
-    // Minimal requirement: Name + (Company OR Role) OR page text/HTML length exceeds 500 characters
-    const isTextLengthSufficient = html.length >= 500;
-    testResult.checks.minimalDataPresent = (nameFound && (companyFound || roleFound)) || isTextLengthSufficient;
+    // Minimal requirement: Name MUST be found AND (Company OR Role) MUST be found.
+    testResult.checks.minimalDataPresent = (nameFound && (companyFound || roleFound));
 
     // Check for Canvas elements (often used to hide data)
     const canvases = $('canvas');
@@ -663,7 +662,7 @@ async function interactionMapping(url, proxyUrl = null) {
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch(browserOptions);
+    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -824,7 +823,7 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch(browserOptions);
+    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });

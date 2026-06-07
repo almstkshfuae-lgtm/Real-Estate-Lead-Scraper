@@ -138,7 +138,7 @@ async function diagnose() {
     }
 
     console.log('🚀 Launching Playwright browser...');
-    browser = await chromium.launch(browserOptions);
+    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       viewport: { width: 1280, height: 800 }

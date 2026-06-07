@@ -20,7 +20,6 @@ export async function POST(request: NextRequest) {
     const finalCriteria = criteria || {};
 
     const DEFAULT_SCRAPE_SOURCES = [
-      'alforsan',
       'adec',
       'rotary',
       'whatson',
@@ -31,12 +30,7 @@ export async function POST(request: NextRequest) {
       'difc',
       'ded',
       'gazette',
-      'arabianbusiness',
       'propertymonitor',
-      'abudhabichamber',
-      'canadian-doctors',
-      'cpsa',
-      'ahus-canada',
     ];
 
     const requestedSources = Array.isArray(sources) && sources.length > 0 ? sources : DEFAULT_SCRAPE_SOURCES;

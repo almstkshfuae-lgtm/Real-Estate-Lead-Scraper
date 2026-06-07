@@ -2241,7 +2241,7 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
       '--no-sandbox',
       '--disable-setuid-sandbox'
     ];
-    browser = await chromium.launch({ headless: true, args: BROWSER_ARGS });
+    browser = await chromium.launch({ channel: 'msedge',  headless: true, args: BROWSER_ARGS });
     console.log('\ud83d\udd75\ufe0f  Browser launched with full stealth init-scripts active');
     if (jobDiagnostics) {
       jobDiagnostics.browserInstance = browser;
@@ -2449,7 +2449,7 @@ async function scrapeSource(sourceKey, proxyUrl = null) {
     '--no-sandbox',
     '--disable-setuid-sandbox'
   ];
-  const browser = await chromium.launch({ headless: true, args: BROWSER_ARGS });
+  const browser = await chromium.launch({ channel: 'msedge',  headless: true, args: BROWSER_ARGS });
 
   try {
     const sourceMap = await getSourceConfigMap();
@@ -2534,7 +2534,7 @@ app.post('/validate-proxy', async (req, res) => {
 
 async function testScraperConnection(proxyUrl = null) {
   const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
-  const browser = await chromium.launch({
+  const browser = await chromium.launch({ channel: 'msedge', 
     headless: true,
     args: ['--disable-blink-features=AutomationControlled']
   });

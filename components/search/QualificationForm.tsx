@@ -26,7 +26,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, Globe, ChevronDown, ChevronUp } from "lucide-react";
 
 const SOURCE_NAMES: Record<string, string> = {
-  alforsan: 'Al Forsan',
   adec: 'ADEC',
   rotary: 'Rotary Club',
   whatson: "What's On",
@@ -37,13 +36,10 @@ const SOURCE_NAMES: Record<string, string> = {
   difc: 'DIFC',
   ded: 'DED License Portal',
   gazette: 'Official Gazette',
-  arabianbusiness: 'Arabian Business',
   propertymonitor: 'Property Monitor',
-  abudhabichamber: 'Abu Dhabi Chamber',
 };
 
 const DEFAULT_SCRAPE_SOURCES = [
-  'alforsan',
   'adec',
   'rotary',
   'whatson',
@@ -54,9 +50,7 @@ const DEFAULT_SCRAPE_SOURCES = [
   'difc',
   'ded',
   'gazette',
-  'arabianbusiness',
   'propertymonitor',
-  'abudhabichamber',
 ];
 
 export default function QualificationForm({ initialData, onSaveSuccess }: { initialData?: any; onSaveSuccess?: () => void }) {

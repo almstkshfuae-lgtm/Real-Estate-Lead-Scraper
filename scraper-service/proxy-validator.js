@@ -31,7 +31,7 @@ export async function validateProxyConnection(proxyUrl, timeoutMs = 30000) {
     };
   }
 
-  const browser = await chromium.launch({
+  const browser = await chromium.launch({ channel: 'msedge', 
     headless: true,
     args: ['--disable-blink-features=AutomationControlled']
   });
@@ -152,7 +152,7 @@ export async function verifyProxyEgress(proxyUrl, timeoutMs = 30000) {
   }
 
   // Use Playwright to perform a proxied request and observe reported IP
-  const browser = await chromium.launch({ headless: true, args: ['--disable-blink-features=AutomationControlled'] });
+  const browser = await chromium.launch({ channel: 'msedge',  headless: true, args: ['--disable-blink-features=AutomationControlled'] });
   try {
     const context = await browser.newContext({
       proxy: { server: proxyUrl },
