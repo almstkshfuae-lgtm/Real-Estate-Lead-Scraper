@@ -1,12 +1,15 @@
 /**
- * POST /api/scrape-runs/cleanup
+ * GET & POST /api/scrape-runs/cleanup
  *
  * Zombie run recovery — marks any PROCESSING or PENDING ScrapeRun
- * older than 35 minutes as FAILED.
+ * older than 10 minutes as FAILED.
  *
- * The scraper-service's zombie watchdog kills jobs at 25 minutes and
+ * The scraper-service's zombie watchdog kills jobs at 8 minutes and
  * sends a `isFailedSignal` webhook. This cleanup catches runs where
  * the webhook itself failed (network drop, Railway restart, etc.).
+ *
+ * Vercel Cron sends GET requests, so GET is the primary handler.
+ * POST is kept for backwards compatibility (manual trigger / scraper-service).
  *
  * Protected by CRON_SECRET bearer token — intended for Vercel Cron.
  */
@@ -16,7 +19,8 @@ import prisma from "@/lib/prisma";
 
 const ZOMBIE_AGE_MINUTES = 10;
 
-export async function POST(request: NextRequest) {
+/** Shared auth check — Vercel Cron sends CRON_SECRET via bearer token. */
+function isAuthorized(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
   const url = new URL(request.url);
   const querySecret = url.searchParams.get("secret");
@@ -26,10 +30,11 @@ export async function POST(request: NextRequest) {
                               (process.env.SCRAPER_SECRET && authHeader === `Bearer ${process.env.SCRAPER_SECRET}`);
   const isDev = process.env.NODE_ENV !== "production";
 
-  if (!isCronAuth && !isScraperSecretAuth && !isDev) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  return !!(isCronAuth || isScraperSecretAuth || isDev);
+}
 
+/** Core cleanup logic — find and mark zombie runs as FAILED. */
+async function runCleanup(): Promise<NextResponse> {
   try {
     const cutoff = new Date(Date.now() - ZOMBIE_AGE_MINUTES * 60 * 1000);
 
@@ -75,4 +80,20 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/** GET handler — called by Vercel Cron every 10 minutes. */
+export async function GET(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return runCleanup();
+}
+
+/** POST handler — kept for backwards compatibility (manual trigger / scraper-service). */
+export async function POST(request: NextRequest) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return runCleanup();
 }

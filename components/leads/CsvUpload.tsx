@@ -30,8 +30,8 @@ export function getCanonicalHeader(header: string): string | null {
     normalized.includes("snapchat") ||
     normalized.includes("tiktok") ||
     normalized.includes("social") ||
-    normalized.includes("link") ||
-    normalized.includes("url") ||
+    normalized === "link" ||
+    normalized === "url" ||
     normalized.includes("website") ||
     normalized.includes("web") ||
     normalized.includes("profile") ||

@@ -148,7 +148,7 @@ function stableHash(input: string) {
   return Math.abs(hash);
 }
 
-function getCoords(location: string, seed: string = ""): { lat: number; lng: number } {
+function getCoords(location: string, seed: string = ""): { lat: number; lng: number } | null {
   const normalized = location?.trim() || "";
   
   // 1. Try UAE Areas first
@@ -171,11 +171,9 @@ function getCoords(location: string, seed: string = ""): { lat: number; lng: num
     }
   }
 
-  const hash = stableHash((normalized || "uae-fallback") + seed);
-  return {
-    lat: 24.4 + ((hash % 1000) / 1000) * 1.5,
-    lng: 54.0 + (((hash >> 10) % 1000) / 1000) * 2.5,
-  };
+  // 3. Unknown location — return null instead of random UAE coordinates
+  // Leads with unresolvable locations will be excluded from the map
+  return null;
 }
 
 function getTierColor(tier: number): string {
@@ -331,6 +329,7 @@ function GeoMap({
 
         Object.entries(clusterMap).forEach(([location, clusterLeads]) => {
           const baseCoords = getCoords(location);
+          if (!baseCoords) return; // Skip clusters with unresolvable location
 
           if (clusterLeads.length === 1) {
             // Single lead marker
@@ -379,8 +378,12 @@ function GeoMap({
               iconAnchor: [22, 22],
             });
 
-            const lat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : getCoords(location, lead.id).lat;
-            const lng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : getCoords(location, lead.id).lng;
+            const dbLat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : null;
+            const dbLng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : null;
+            const fallbackCoords = (dbLat === null || dbLng === null) ? getCoords(location, lead.id) : null;
+            const lat = dbLat ?? fallbackCoords?.lat ?? null;
+            const lng = dbLng ?? fallbackCoords?.lng ?? null;
+            if (lat === null || lng === null) return; // Skip leads with unresolvable coordinates
             const marker = L.marker([lat, lng], { icon });
             
             const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
@@ -495,8 +498,12 @@ function GeoMap({
 
         // 1. Plot Lead demand intensity
         leads.forEach((lead) => {
-          const lat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : getCoords(lead.location, lead.id).lat;
-          const lng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : getCoords(lead.location, lead.id).lng;
+          const dbLat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : null;
+          const dbLng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : null;
+          const fallbackCoords = (dbLat === null || dbLng === null) ? getCoords(lead.location, lead.id) : null;
+          const lat = dbLat ?? fallbackCoords?.lat ?? null;
+          const lng = dbLng ?? fallbackCoords?.lng ?? null;
+          if (lat === null || lng === null) return; // Skip leads with unresolvable coordinates
           
           const bMax = typeof lead.budgetMax === "number" && !isNaN(lead.budgetMax) ? lead.budgetMax : 0;
           const bMin = typeof lead.budgetMin === "number" && !isNaN(lead.budgetMin) ? lead.budgetMin : 0;
@@ -528,6 +535,7 @@ function GeoMap({
         // 2. Plot Real Estate Project supply/price density
         projects.forEach((proj) => {
           const coords = getCoords(proj.location, proj.id);
+          if (!coords) return; // Skip projects with unresolvable location
           
           const price = typeof proj.startingPrice === "number" && !isNaN(proj.startingPrice) ? proj.startingPrice : 0;
           const priceMultiplier = price > 0
