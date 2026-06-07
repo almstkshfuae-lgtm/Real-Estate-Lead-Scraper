@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-const ZOMBIE_AGE_MINUTES = 35;
+const ZOMBIE_AGE_MINUTES = 10;
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");

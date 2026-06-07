@@ -167,7 +167,7 @@ async function processQueue() {
   let zombieWatchdog = null;
   const ZOMBIE_KILL_MS = process.env.SCRAPER_ZOMBIE_KILL_MS
     ? parseInt(process.env.SCRAPER_ZOMBIE_KILL_MS, 10)
-    : 25 * 60 * 1000; // 25 minutes default
+    : 8 * 60 * 1000; // 8 minutes default
 
   let watchdogTriggered = false;
 
@@ -1188,6 +1188,37 @@ async function scrollGoogleMapsFeed(page, visitedUrls, maxPages) {
   return false;
 }
 
+async function checkForBotBlock(page) {
+  try {
+    const content = await page.content();
+    const lowerContent = content.toLowerCase();
+    
+    const blockIndicators = [
+      'cf-challenge',
+      'cloudflare-challenge',
+      'captcha-delivery',
+      'g-recaptcha',
+      'h-captcha',
+      'verify you are human',
+      'security check',
+      'checking your browser',
+      'attention required',
+      'access denied',
+      'blocked'
+    ];
+
+    for (const indicator of blockIndicators) {
+      if (lowerContent.includes(indicator)) {
+        throw new Error(`Anti-bot detection / CAPTCHA page detected: "${indicator}". Scrape blocked.`);
+      }
+    }
+  } catch (err) {
+    if (err.message.includes('Anti-bot detection')) {
+      throw err;
+    }
+  }
+}
+
 async function dismissGoogleConsent(page) {
   const url = page.url();
   if (url.includes('consent.google.') || url.includes('google.com/consent') || url.includes('consent.youtube.')) {
@@ -1319,7 +1350,8 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
     if (jobDiagnostics) {
       jobDiagnostics.currentPageUrl = startUrl;
     }
-    await page.goto(startUrl, { timeout: 45000, waitUntil: 'domcontentloaded' });
+    await page.goto(startUrl, { timeout: 15000, waitUntil: 'domcontentloaded' });
+    await checkForBotBlock(page);
     await dismissGoogleConsent(page);
 
     // Force lazy-loaded content: scroll to bottom then back to top
@@ -1531,6 +1563,7 @@ async function scrapePageRecursively(
   try {
     // Wait for page load
     await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+    await checkForBotBlock(page);
     await page.waitForTimeout(getRandomDelay(1000, 2500));
     await simulateHumanBrowsing(page);
 
@@ -1606,7 +1639,7 @@ async function scrapePageRecursively(
         }
 
         try {
-          await page.goto(memberUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+          await page.goto(memberUrl, { timeout: 15000, waitUntil: 'domcontentloaded' });
           await page.waitForTimeout(getRandomDelay(1200, 2500));
           await simulateHumanBrowsing(page);
 
@@ -1626,12 +1659,12 @@ async function scrapePageRecursively(
           }
 
           // Return to listing page for the next member link
-          await page.goto(currentUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+          await page.goto(currentUrl, { timeout: 15000, waitUntil: 'domcontentloaded' });
           await page.waitForTimeout(getRandomDelay(800, 1500));
         } catch (memberErr) {
           console.warn(`[DeepCrawl] ⚠️ Failed to scrape member ${memberUrl}:`, memberErr.message);
           // Try to recover by going back to the listing page
-          try { await page.goto(currentUrl, { timeout: 20000, waitUntil: 'domcontentloaded' }); } catch { /* ignore */ }
+          try { await page.goto(currentUrl, { timeout: 15000, waitUntil: 'domcontentloaded' }); } catch { /* ignore */ }
         }
       }
     }
@@ -1667,6 +1700,19 @@ async function scrapePageRecursively(
           // For real navigation: check we haven't visited the href
           // For SPA (no href change): always proceed — content hash will decide
           if (isSpaLink || !visitedUrls.has(href)) {
+            const isDisabled = await locator.evaluate(el => {
+              return el.hasAttribute('disabled') || 
+                     el.getAttribute('aria-disabled') === 'true' || 
+                     el.classList.contains('disabled') ||
+                     el.classList.contains('inactive') ||
+                     window.getComputedStyle(el).pointerEvents === 'none';
+            }).catch(() => false);
+
+            if (isDisabled) {
+              console.log(`  → Next page element is disabled/inactive. Stopping pagination.`);
+              return;
+            }
+
             console.log(`  → Found next page element via "${selectorUsed}"${href ? ` (link: ${href})` : ' (SPA click)'}`);
             // Use JS scroll instead of scrollIntoViewIfNeeded — more reliable for Angular SPA elements
             await locator.evaluate(el => el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' }));
@@ -1721,6 +1767,9 @@ async function scrapePageRecursively(
 
   } catch (error) {
     console.error(`  ⚠️  Error on page ${visitedUrls.size}:`, error.message);
+    if (error.message.includes('Anti-bot detection')) {
+      throw error;
+    }
     // Continue with next page if available
   }
 }
@@ -2690,3 +2739,30 @@ async function startServer() {
 }
 
 startServer();
+
+// Process-level exception handling to prevent Zombie Runs on complete service crashes
+const handleFatalCrash = async (err, context) => {
+  console.error(`💥 FATAL CRASH: Uncaught ${context}:`, err);
+  
+  if (Array.isArray(scrapeQueue) && scrapeQueue.length > 0) {
+    const currentJob = scrapeQueue[0];
+    if (currentJob && currentJob.webhookUrl && currentJob.runId) {
+      console.error(`💥 Sending failure webhook for active job ${currentJob.runId} before crashing...`);
+      try {
+        await axios.post(currentJob.webhookUrl, {
+          secret: SECRET,
+          runId: currentJob.runId,
+          isFailedSignal: true,
+          error: `Fatal scraper service crash (${context}): ${err?.message || String(err)}`
+        }, { timeout: 5000 });
+        console.error(`💥 Failure webhook sent successfully for job ${currentJob.runId}.`);
+      } catch (webhookErr) {
+        console.error(`💥 Failed to send failure webhook for job ${currentJob.runId}:`, webhookErr.message);
+      }
+    }
+  }
+  process.exit(1);
+};
+
+process.on('uncaughtException', (err) => handleFatalCrash(err, 'Exception'));
+process.on('unhandledRejection', (reason) => handleFatalCrash(reason, 'Rejection'));
