@@ -53,6 +53,176 @@ async function dismissGoogleConsent(page) {
   return false;
 }
 
+// ─── Advanced Stealth Overrides ───────────────────────────────────────────────
+// Applied to every new page context to defeat Cloudflare/Turnstile bot detection.
+// Covers: webdriver flag, chrome runtime object, permissions API, plugins,
+// languages, WebGL vendor/renderer, screen properties, and hardware concurrency.
+export async function applyStealthOverrides(page) {
+  await page.addInitScript(() => {
+    // 1. Remove webdriver flag
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+    // 2. Simulate real Chrome runtime
+    window.chrome = {
+      app: {
+        isInstalled: false,
+        InstallState: { DISABLED: 'DISABLED', INSTALLED: 'INSTALLED', NOT_INSTALLED: 'NOT_INSTALLED' },
+        RunningState: { CANNOT_RUN: 'CANNOT_RUN', RUNNING: 'RUNNING', CAN_RUN: 'CAN_RUN' }
+      },
+      runtime: {
+        onConnect: { addListener: () => { } },
+        onMessage: { addListener: () => { } }
+      }
+    };
+
+    // 3. Fix permissions API (Cloudflare checks this)
+    const originalQuery = window.navigator.permissions.query.bind(navigator.permissions);
+    window.navigator.permissions.query = (parameters) =>
+      parameters.name === 'notifications'
+        ? Promise.resolve({ state: Notification.permission })
+        : originalQuery(parameters);
+
+    // 4. Simulate realistic plugin list
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => {
+        const makePlugin = (name, desc, filename) =>
+          Object.create(Plugin.prototype, {
+            name: { value: name }, description: { value: desc }, filename: { value: filename }, length: { value: 1 }
+          });
+        const arr = [
+          makePlugin('Chrome PDF Plugin', 'Portable Document Format', 'internal-pdf-viewer'),
+          makePlugin('Chrome PDF Viewer', '', 'mhjfbmdgcfjbbpaeojofohoefgiehjai'),
+          makePlugin('Native Client', '', 'internal-nacl-plugin')
+        ];
+        arr.item = (i) => arr[i];
+        arr.namedItem = (name) => arr.find(p => p.name === name) || null;
+        arr.refresh = () => { };
+        return arr;
+      }
+    });
+
+    // 5. Languages
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'ar-AE', 'ar'] });
+
+    // 6. WebGL fingerprint masking
+    const getParameterProxied = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function (parameter) {
+      if (parameter === 37445) return 'Intel Inc.';       // UNMASKED_VENDOR_WEBGL
+      if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
+      return getParameterProxied.call(this, parameter);
+    };
+
+    // 7. Screen and hardware realism
+    Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
+    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+    Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
+
+    // Note: Overriding HTMLIFrameElement.prototype.contentWindow was removed as it acts as an obvious bot detection trigger.
+  });
+}
+
+/**
+ * Attempt to solve/bypass Cloudflare Turnstile or JS challenges on the page.
+ * Waits for challenge to appear, clicks the checkbox if present, and waits for resolution.
+ */
+export async function resolveCloudflareChallenge(page, timeoutMs = 20000) {
+  const startTime = Date.now();
+  console.log('[AntiBot] Checking for Cloudflare/Turnstile challenge...');
+  
+  // Wait a moment for dynamic challenge to load
+  await page.waitForTimeout(2000);
+
+  const isChallengePresent = async () => {
+    try {
+      const html = await page.content();
+      const title = await page.title();
+      const url = page.url();
+
+      return (
+        html.includes('cf-challenge') ||
+        html.includes('cloudflare-challenge') ||
+        html.includes('verify you are human') ||
+        html.includes('checking your browser') ||
+        url.includes('challenge-platform') ||
+        title.includes('Just a moment...')
+      );
+    } catch (e) {
+      return false;
+    }
+  };
+
+  if (!(await isChallengePresent())) {
+    console.log('[AntiBot] No Cloudflare challenge detected.');
+    return false;
+  }
+
+  console.log('[AntiBot] Cloudflare Turnstile or JS challenge detected! Attempting automatic bypass...');
+
+  // Loop checking/solving until resolved or timeout
+  while (Date.now() - startTime < timeoutMs) {
+    if (!(await isChallengePresent())) {
+      console.log('[AntiBot] Cloudflare challenge resolved successfully!');
+      return true;
+    }
+
+    // Try finding Turnstile iframe
+    const cfFrame = page.frames().find(f => f.url().includes('challenges.cloudflare.com') || f.name().includes('cf-'));
+    
+    if (cfFrame) {
+      console.log('[AntiBot] Found Cloudflare challenges iframe.');
+      try {
+        // Look for checkbox container or input
+        const checkbox = await cfFrame.$('input[type="checkbox"], #challenge-stage, .cb-i, .mark');
+        if (checkbox) {
+          console.log('[AntiBot] Found checkbox inside Turnstile iframe. Attempting click...');
+          await checkbox.click({ timeout: 3000 });
+          console.log('[AntiBot] Clicked Turnstile checkbox inside iframe.');
+        } else {
+          // coordinate click fallback on the iframe element
+          const iframeElement = await page.$('iframe[src*="challenges.cloudflare.com"], iframe[id*="cf-"]');
+          if (iframeElement) {
+            const box = await iframeElement.boundingBox();
+            if (box) {
+              const clickX = box.x + 30;
+              const clickY = box.y + box.height / 2;
+              await page.mouse.click(clickX, clickY);
+              console.log(`[AntiBot] Clicked iframe at coordinate coordinates (${clickX}, ${clickY}).`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[AntiBot] Error interacting with Turnstile iframe: ${err.message}`);
+        try {
+          const iframeElement = await page.$('iframe[src*="challenges.cloudflare.com"], iframe[id*="cf-"]');
+          if (iframeElement) {
+            const box = await iframeElement.boundingBox();
+            if (box) {
+              const clickX = box.x + 30;
+              const clickY = box.y + box.height / 2;
+              await page.mouse.click(clickX, clickY);
+              console.log(`[AntiBot] Fallback coordinate click successful at (${clickX}, ${clickY}).`);
+            }
+          }
+        } catch (innerErr) {
+          // ignore
+        }
+      }
+    }
+
+    await page.waitForTimeout(2500);
+  }
+
+  // Final check
+  if (!(await isChallengePresent())) {
+    console.log('[AntiBot] Cloudflare challenge resolved successfully!');
+    return true;
+  }
+
+  console.warn('[AntiBot] Cloudflare Turnstile solve timed out.');
+  return false;
+}
+
 function getPlaywrightProxyOptions(proxyUrl) {
   if (!proxyUrl) return null;
   
@@ -86,6 +256,50 @@ function getPlaywrightProxyOptions(proxyUrl) {
   } catch (e) {
     return { server: proxyUrl };
   }
+}
+
+/**
+ * Creates a browser context and page with top-tier stealth overrides and HTTP headers.
+ */
+async function createStealthContextAndPage(browser, proxyUrl = null) {
+  const proxyOptions = getPlaywrightProxyOptions(proxyUrl);
+  const contextOptions = {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    viewport: { width: 1280, height: 800 },
+    extraHTTPHeaders: {
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-User': '?1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Ch-Ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"'
+    }
+  };
+  if (proxyOptions) {
+    contextOptions.proxy = proxyOptions;
+  }
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
+  
+  // Apply stealth overrides
+  await applyStealthOverrides(page);
+
+  // Block heavy assets to prevent timeouts
+  await page.route('**/*', (route) => {
+    const type = route.request().resourceType();
+    const blockedTypes = ['image', 'font', 'media'];
+    if (blockedTypes.includes(type)) {
+      route.abort();
+    } else {
+      route.continue();
+    }
+  });
+
+  return { context, page };
 }
 
 /**
@@ -166,25 +380,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
     }
 
     browser = await chromium.launch(browserOptions);
-    const contextOptions = {
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    };
-    if (proxyOptions) {
-      contextOptions.proxy = proxyOptions;
-    }
-    const context = await browser.newContext(contextOptions);
-    const page = await context.newPage();
-
-    // Block heavy assets to prevent timeouts
-    await page.route('**/*', (route) => {
-      const type = route.request().resourceType();
-      const blockedTypes = ['image', 'font', 'media'];
-      if (blockedTypes.includes(type)) {
-        route.abort();
-      } else {
-        route.continue();
-      }
-    });
+    const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     // Set request/response interception for diagnostics
     let finalStatusCode = 200;
@@ -197,6 +393,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
         waitUntil: 'domcontentloaded',
         timeout: 30000
       });
+      await resolveCloudflareChallenge(page);
       await dismissGoogleConsent(page);
       testResult.checks.accessible = true;
     } catch (navError) {
@@ -299,25 +496,10 @@ async function domDataVerification(url, proxyUrl = null) {
     }
 
     browser = await chromium.launch(browserOptions);
-    const contextOptions = {};
-    if (proxyOptions) {
-      contextOptions.proxy = proxyOptions;
-    }
-    const context = await browser.newContext(contextOptions);
-    const page = await context.newPage();
-
-    // Block heavy assets to prevent timeouts
-    await page.route('**/*', (route) => {
-      const type = route.request().resourceType();
-      const blockedTypes = ['image', 'font', 'media'];
-      if (blockedTypes.includes(type)) {
-        route.abort();
-      } else {
-        route.continue();
-      }
-    });
+    const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await resolveCloudflareChallenge(page);
     await dismissGoogleConsent(page);
 
     // Wait for potential dynamic content
@@ -482,25 +664,10 @@ async function interactionMapping(url, proxyUrl = null) {
     }
 
     browser = await chromium.launch(browserOptions);
-    const contextOptions = {};
-    if (proxyOptions) {
-      contextOptions.proxy = proxyOptions;
-    }
-    const context = await browser.newContext(contextOptions);
-    const page = await context.newPage();
-
-    // Block heavy assets to prevent timeouts
-    await page.route('**/*', (route) => {
-      const type = route.request().resourceType();
-      const blockedTypes = ['image', 'font', 'media'];
-      if (blockedTypes.includes(type)) {
-        route.abort();
-      } else {
-        route.continue();
-      }
-    });
+    const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await resolveCloudflareChallenge(page);
     await dismissGoogleConsent(page);
 
     const html = await page.content();
@@ -658,25 +825,10 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
     }
 
     browser = await chromium.launch(browserOptions);
-    const contextOptions = {};
-    if (proxyOptions) {
-      contextOptions.proxy = proxyOptions;
-    }
-    const context = await browser.newContext(contextOptions);
-    const page = await context.newPage();
-
-    // Block heavy assets to prevent timeouts
-    await page.route('**/*', (route) => {
-      const type = route.request().resourceType();
-      const blockedTypes = ['image', 'font', 'media'];
-      if (blockedTypes.includes(type)) {
-        route.abort();
-      } else {
-        route.continue();
-      }
-    });
+    const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await resolveCloudflareChallenge(page);
     await dismissGoogleConsent(page);
     await page.waitForTimeout(2000);
 

@@ -347,13 +347,127 @@ export const UAE_AREAS_COORDS: Record<string, { lat: number; lng: number }> = {
   "مدينة أبوظبي": { lat: 24.4539, lng: 54.3773 }
 };
 
+export const GLOBAL_AREAS_COORDS: Record<string, { lat: number; lng: number }> = {
+  // Saudi Arabia
+  "Riyadh": { lat: 24.7136, lng: 46.6753 },
+  "الرياض": { lat: 24.7136, lng: 46.6753 },
+  "Jeddah": { lat: 21.5433, lng: 39.1728 },
+  "جدة": { lat: 21.5433, lng: 39.1728 },
+  "Saudi Arabia": { lat: 23.8859, lng: 45.0792 },
+  "المملكة العربية السعودية": { lat: 23.8859, lng: 45.0792 },
+  "السعودية": { lat: 23.8859, lng: 45.0792 },
+
+  // UK & Europe
+  "London": { lat: 51.5074, lng: -0.1278 },
+  "لندن": { lat: 51.5074, lng: -0.1278 },
+  "United Kingdom": { lat: 55.3781, lng: -3.4360 },
+  "المملكة المتحدة": { lat: 55.3781, lng: -3.4360 },
+  "بريطانيا": { lat: 55.3781, lng: -3.4360 },
+  "Paris": { lat: 48.8566, lng: 2.3522 },
+  "باريس": { lat: 48.8566, lng: 2.3522 },
+  "France": { lat: 46.2276, lng: 2.2137 },
+  "فرنسا": { lat: 46.2276, lng: 2.2137 },
+  "Berlin": { lat: 52.5200, lng: 13.4050 },
+  "برلين": { lat: 52.5200, lng: 13.4050 },
+  "Germany": { lat: 51.1657, lng: 10.4515 },
+  "ألمانيا": { lat: 51.1657, lng: 10.4515 },
+  "Geneva": { lat: 46.2044, lng: 6.1432 },
+  "جنيف": { lat: 46.2044, lng: 6.1432 },
+  "Zurich": { lat: 47.3769, lng: 8.5417 },
+  "زوريخ": { lat: 47.3769, lng: 8.5417 },
+  "Munich": { lat: 48.1351, lng: 11.5820 },
+  "ميونخ": { lat: 48.1351, lng: 11.5820 },
+  "Switzerland": { lat: 46.8182, lng: 8.2275 },
+  "سويسرا": { lat: 46.8182, lng: 8.2275 },
+
+  // North America
+  "New York": { lat: 40.7128, lng: -74.0060 },
+  "نيويورك": { lat: 40.7128, lng: -74.0060 },
+  "California": { lat: 36.7783, lng: -119.4179 },
+  "كاليفورنيا": { lat: 36.7783, lng: -119.4179 },
+  "United States": { lat: 37.0902, lng: -95.7129 },
+  "الولايات المتحدة": { lat: 37.0902, lng: -95.7129 },
+  "USA": { lat: 37.0902, lng: -95.7129 },
+  "Canada": { lat: 56.1304, lng: -106.3468 },
+  "كندا": { lat: 56.1304, lng: -106.3468 },
+  "Toronto": { lat: 43.6532, lng: -79.3832 },
+  "تورونتو": { lat: 43.6532, lng: -79.3832 },
+  "Montreal": { lat: 45.5017, lng: -73.5673 },
+  "مونتريال": { lat: 45.5017, lng: -73.5673 },
+  "Vancouver": { lat: 49.2827, lng: -123.1207 },
+  "فانكوفر": { lat: 49.2827, lng: -123.1207 },
+  "Ottawa": { lat: 45.4215, lng: -75.6972 },
+  "أوتاوا": { lat: 45.4215, lng: -75.6972 },
+  "Edmonton": { lat: 53.5461, lng: -113.4938 },
+  "إدمونتون": { lat: 53.5461, lng: -113.4938 },
+  "Quebec": { lat: 46.8139, lng: -71.2082 },
+  "كيبك": { lat: 46.8139, lng: -71.2082 },
+  "Québec": { lat: 46.8139, lng: -71.2082 },
+
+  // Gulf / Middle East
+  "Kuwait": { lat: 29.3759, lng: 47.9774 },
+  "الكويت": { lat: 29.3759, lng: 47.9774 },
+  "Qatar": { lat: 25.3548, lng: 51.1849 },
+  "قطر": { lat: 25.3548, lng: 51.1849 },
+  "Doha": { lat: 25.2854, lng: 51.5310 },
+  "الدوحة": { lat: 25.2854, lng: 51.5310 },
+  "Bahrain": { lat: 26.0667, lng: 50.5577 },
+  "البحرين": { lat: 26.0667, lng: 50.5577 },
+  "Manama": { lat: 26.2285, lng: 50.5860 },
+  "المنامة": { lat: 26.2285, lng: 50.5860 },
+  "Oman": { lat: 21.5126, lng: 55.9233 },
+  "عمان": { lat: 21.5126, lng: 55.9233 },
+  "Muscat": { lat: 23.5859, lng: 58.4059 },
+  "مسقط": { lat: 23.5859, lng: 58.4059 },
+  "Egypt": { lat: 26.8206, lng: 30.8025 },
+  "مصر": { lat: 26.8206, lng: 30.8025 },
+  "Cairo": { lat: 30.0444, lng: 31.2357 },
+  "القاهرة": { lat: 30.0444, lng: 31.2357 },
+  "Lebanon": { lat: 33.8547, lng: 35.8623 },
+  "لبنان": { lat: 33.8547, lng: 35.8623 },
+  "Beirut": { lat: 33.8938, lng: 35.5018 },
+  "بيروت": { lat: 33.8938, lng: 35.5018 },
+  "Jordan": { lat: 30.5852, lng: 36.2384 },
+  "الأردن": { lat: 30.5852, lng: 36.2384 },
+  "Amman": { lat: 31.9539, lng: 35.9106 },
+  "عمان (الأردن)": { lat: 31.9539, lng: 35.9106 },
+
+  // Asia & Russia
+  "India": { lat: 20.5937, lng: 78.9629 },
+  "الهند": { lat: 20.5937, lng: 78.9629 },
+  "Mumbai": { lat: 19.0760, lng: 72.8777 },
+  "بومباي": { lat: 19.0760, lng: 72.8777 },
+  "Russia": { lat: 61.5240, lng: 105.3188 },
+  "روسيا": { lat: 61.5240, lng: 105.3188 },
+  "Moscow": { lat: 55.7558, lng: 37.6173 },
+  "موسكو": { lat: 55.7558, lng: 37.6173 },
+  "China": { lat: 35.8617, lng: 104.1954 },
+  "الصين": { lat: 35.8617, lng: 104.1954 },
+  "Turkey": { lat: 38.9637, lng: 35.2433 },
+  "تركيا": { lat: 38.9637, lng: 35.2433 },
+  "Istanbul": { lat: 41.0082, lng: 28.9784 },
+  "إسطنبول": { lat: 41.0082, lng: 28.9784 },
+  "Pakistan": { lat: 30.3753, lng: 69.3451 },
+  "باكستان": { lat: 30.3753, lng: 69.3451 }
+};
+
 export function resolveCoords(location: string): { lat: number | null; lng: number | null } {
   const normalized = location?.trim() || "";
+  
+  // 1. Try UAE Areas first
   for (const [key, val] of Object.entries(UAE_AREAS_COORDS)) {
     if (normalized.toLowerCase().includes(key.toLowerCase())) {
       return val;
     }
   }
+
+  // 2. Try Global Areas next
+  for (const [key, val] of Object.entries(GLOBAL_AREAS_COORDS)) {
+    if (normalized.toLowerCase().includes(key.toLowerCase())) {
+      return val;
+    }
+  }
+
   return { lat: null, lng: null }; // Return null for unknown locations instead of defaulting to Abu Dhabi
 }
 

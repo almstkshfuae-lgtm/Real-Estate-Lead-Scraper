@@ -18,7 +18,15 @@ const ZOMBIE_AGE_MINUTES = 10;
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const url = new URL(request.url);
+  const querySecret = url.searchParams.get("secret");
+
+  const isCronAuth = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  const isScraperSecretAuth = (process.env.SCRAPER_SECRET && querySecret === process.env.SCRAPER_SECRET) || 
+                              (process.env.SCRAPER_SECRET && authHeader === `Bearer ${process.env.SCRAPER_SECRET}`);
+  const isDev = process.env.NODE_ENV !== "production";
+
+  if (!isCronAuth && !isScraperSecretAuth && !isDev) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

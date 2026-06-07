@@ -17,7 +17,12 @@ export function getCanonicalHeader(header: string): string | null {
   const normalized = header.toLowerCase().replace(/[\s\-_]/g, "");
 
   // 0. Social media / link check (to prevent matching standard columns and ensure routing to metadata)
+  const lowerHeader = header.toLowerCase().trim();
   if (
+    lowerHeader.includes("http://") ||
+    lowerHeader.includes("https://") ||
+    lowerHeader.startsWith("www.") ||
+    /\.(com|ae|org|net|co|io|me|gov|edu|info|us|ar|en)(\/|$)/i.test(lowerHeader) ||
     normalized.includes("linkedin") ||
     normalized.includes("facebook") ||
     normalized.includes("twitter") ||

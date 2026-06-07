@@ -60,9 +60,37 @@ export async function GET(
         return;
       }
 
+      // Passive self-healing watchdog check
+      const ZOMBIE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+      let initialRun = run;
+      if ((run.status === "PENDING" || run.status === "PROCESSING") &&
+          Date.now() - new Date(run.startedAt).getTime() > ZOMBIE_TIMEOUT_MS) {
+        console.warn(`[Watchdog] Passive SSE check: ScrapeRun ${id} has timed out on initial connection. Force-marking as FAILED.`);
+        try {
+          initialRun = await prisma.scrapeRun.update({
+            where: { id },
+            data: {
+              status: "FAILED",
+              completedAt: new Date()
+            },
+            select: {
+              id: true,
+              status: true,
+              leadsFound: true,
+              startedAt: true,
+              completedAt: true,
+              sources: true,
+              triggeredBy: true,
+            }
+          });
+        } catch (dbErr) {
+          console.error(`[Watchdog] Passive SSE check failed to update ScrapeRun ${id}:`, dbErr);
+        }
+      }
+
       // Check roles
       const isAdmin = session.role.toUpperCase() === "ADMIN";
-      if (!isAdmin && run.triggeredBy !== session.id) {
+      if (!isAdmin && initialRun.triggeredBy !== session.id) {
         sendError("Forbidden");
         controller.close();
         return;
@@ -179,7 +207,7 @@ export async function GET(
       };
 
       // Apply fallback check on initial fetch if it's already in terminal failed/empty state
-      let activeRun = await handleAgentFallback(run);
+      let activeRun = await handleAgentFallback(initialRun);
 
       // Parse sources
       let sourcesList = activeRun.sources;
@@ -297,8 +325,34 @@ export async function GET(
             return;
           }
 
+          let checkedRun = currentRun;
+          if ((currentRun.status === "PENDING" || currentRun.status === "PROCESSING") &&
+              Date.now() - new Date(currentRun.startedAt).getTime() > ZOMBIE_TIMEOUT_MS) {
+            console.warn(`[Watchdog] Passive SSE interval check: ScrapeRun ${id} has timed out. Force-marking as FAILED.`);
+            try {
+              checkedRun = await prisma.scrapeRun.update({
+                where: { id },
+                data: {
+                  status: "FAILED",
+                  completedAt: new Date()
+                },
+                select: {
+                  id: true,
+                  status: true,
+                  leadsFound: true,
+                  startedAt: true,
+                  completedAt: true,
+                  sources: true,
+                  triggeredBy: true,
+                }
+              });
+            } catch (dbErr) {
+              console.error(`[Watchdog] Passive SSE interval check failed to update ScrapeRun ${id}:`, dbErr);
+            }
+          }
+
           // Trigger fallback check on live state changes
-          const finalRun = await handleAgentFallback(currentRun);
+          const finalRun = await handleAgentFallback(checkedRun);
 
           let parsedSources = finalRun.sources;
           try {

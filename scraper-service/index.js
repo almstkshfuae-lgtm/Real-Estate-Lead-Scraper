@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_SCRAPER_SOURCES } from './default-sources.js';
-import { verifySourceCompletePipeline, technicalAccessTest } from './verification-pipeline.js';
+import { verifySourceCompletePipeline, technicalAccessTest, applyStealthOverrides, resolveCloudflareChallenge } from './verification-pipeline.js';
 import { validateProxyConnection, formatProxyValidationReport, verifyProxyEgress, maskProxyUrl } from './proxy-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -43,78 +43,6 @@ if (!SECRET || SECRET.trim() === '') {
 }
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY || '';
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
-
-// ─── Advanced Stealth Overrides ───────────────────────────────────────────────
-// Applied to every new page context to defeat Cloudflare/Turnstile bot detection.
-// Covers: webdriver flag, chrome runtime object, permissions API, plugins,
-// languages, WebGL vendor/renderer, screen properties, and hardware concurrency.
-export async function applyStealthOverrides(page) {
-  await page.addInitScript(() => {
-    // 1. Remove webdriver flag
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-
-    // 2. Simulate real Chrome runtime
-    window.chrome = {
-      app: {
-        isInstalled: false,
-        InstallState: { DISABLED: 'DISABLED', INSTALLED: 'INSTALLED', NOT_INSTALLED: 'NOT_INSTALLED' },
-        RunningState: { CANNOT_RUN: 'CANNOT_RUN', RUNNING: 'RUNNING', CAN_RUN: 'CAN_RUN' }
-      },
-      runtime: {
-        onConnect: { addListener: () => { } },
-        onMessage: { addListener: () => { } }
-      }
-    };
-
-    // 3. Fix permissions API (Cloudflare checks this)
-    const originalQuery = window.navigator.permissions.query.bind(navigator.permissions);
-    window.navigator.permissions.query = (parameters) =>
-      parameters.name === 'notifications'
-        ? Promise.resolve({ state: Notification.permission })
-        : originalQuery(parameters);
-
-    // 4. Simulate realistic plugin list
-    Object.defineProperty(navigator, 'plugins', {
-      get: () => {
-        const makePlugin = (name, desc, filename) =>
-          Object.create(Plugin.prototype, {
-            name: { value: name }, description: { value: desc }, filename: { value: filename }, length: { value: 1 }
-          });
-        const arr = [
-          makePlugin('Chrome PDF Plugin', 'Portable Document Format', 'internal-pdf-viewer'),
-          makePlugin('Chrome PDF Viewer', '', 'mhjfbmdgcfjbbpaeojofohoefgiehjai'),
-          makePlugin('Native Client', '', 'internal-nacl-plugin')
-        ];
-        arr.item = (i) => arr[i];
-        arr.namedItem = (name) => arr.find(p => p.name === name) || null;
-        arr.refresh = () => { };
-        return arr;
-      }
-    });
-
-    // 5. Languages
-    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'ar-AE', 'ar'] });
-
-    // 6. WebGL fingerprint masking
-    const getParameterProxied = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function (parameter) {
-      if (parameter === 37445) return 'Intel Inc.';       // UNMASKED_VENDOR_WEBGL
-      if (parameter === 37446) return 'Intel Iris OpenGL Engine'; // UNMASKED_RENDERER_WEBGL
-      return getParameterProxied.call(this, parameter);
-    };
-
-    // 7. Screen and hardware realism
-    Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
-    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
-    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
-    Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
-
-    // 8. Prevent iframe-based detection
-    Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
-      get: function () { return window; }
-    });
-  });
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Concurrency Queue — queues incoming jobs to run sequentially and prevent OOM
@@ -183,12 +111,12 @@ async function processQueue() {
 
     if (currentJob.jobDiagnostics.browserInstance) {
       console.warn(`[Watchdog] Closing active browser instance to reclaim memory...`);
-      try {
-        await currentJob.jobDiagnostics.browserInstance.close();
-        console.log(`[Watchdog] Active browser instance closed successfully.`);
-      } catch (err) {
-        console.error(`[Watchdog] Failed to close active browser instance:`, err.message);
-      }
+      Promise.race([
+        currentJob.jobDiagnostics.browserInstance.close(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+      ])
+        .then(() => console.log(`[Watchdog] Active browser instance closed successfully.`))
+        .catch((err) => console.error(`[Watchdog] Failed to close active browser instance:`, err.message));
     } else {
       console.warn(`[Watchdog] No active browser instance found to close.`);
     }
@@ -583,9 +511,65 @@ function generateMockLeadData(sourceKey, sourceName) {
 }
 
 /**
+ * Generate mock project data for testing real estate project sources
+ */
+function generateMockProjectData(sourceKey, sourceName) {
+  return [
+    {
+      projectName: 'Yas Gold Residences',
+      location: 'Yas Island',
+      developer: 'Aldar Properties',
+      startingPrice: 1500000,
+      handoverDate: 'Q4 2028',
+      propertyType: 'Apartment',
+      sourceUrl: 'https://example.com/yas-gold'
+    },
+    {
+      projectName: 'Saadiyat Grove Villas',
+      location: 'Saadiyat Island',
+      developer: 'Aldar Properties',
+      startingPrice: 6200000,
+      handoverDate: 'Q2 2029',
+      propertyType: 'Villa',
+      sourceUrl: 'https://example.com/saadiyat-grove'
+    },
+    {
+      projectName: 'Reem Heights Tower 2',
+      location: 'Al Reem Island',
+      developer: 'Mubadala',
+      startingPrice: 1200000,
+      handoverDate: 'Q1 2027',
+      propertyType: 'Apartment',
+      sourceUrl: 'https://example.com/reem-heights'
+    }
+  ];
+}
+
+/**
  * Generate mock source result for testing
  */
 function generateMockSourceResult(source, sourceKey) {
+  const isProjectSource = source.type === 'REAL_ESTATE_PROJECTS' || source.type === 'OFF_PLAN_DATA';
+
+  if (isProjectSource) {
+    const mockProjects = generateMockProjectData(sourceKey, source.name);
+    const mockContent = mockProjects
+      .map((proj) => `Project: ${proj.projectName}\nLocation: ${proj.location}\nDeveloper: ${proj.developer}\nPrice: AED ${proj.startingPrice}\nHandover: ${proj.handoverDate}\nType: ${proj.propertyType}\n`)
+      .join('\n---\n');
+
+    return {
+      url: source.url,
+      name: source.name,
+      type: source.type,
+      signals: source.signals,
+      title: `${source.name} - Mock Data`,
+      description: `Mock project data from ${source.name} (USE_MOCK_DATA mode)`,
+      content: mockContent,
+      mockData: true,
+      timestamp: new Date().toISOString()
+    };
+  }
+
   const mockContent = generateMockLeadData(sourceKey, source.name)
     .map((lead) => `Lead: ${lead.name}\nEmail: ${lead.email}\nPhone: ${lead.phone}\nBudget: ${lead.budget_aed}\nSignals: ${lead.signals.join(', ')}\n`)
     .join('\n---\n');
@@ -1281,9 +1265,22 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
 
   const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
 
+  const userAgent = getRandomDesktopUserAgent();
   const contextOptions = {
-    userAgent: getRandomDesktopUserAgent(),
-    viewport: { width: 1920, height: 1080 }
+    userAgent,
+    viewport: { width: 1920, height: 1080 },
+    extraHTTPHeaders: {
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-User': '?1',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Ch-Ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"'
+    }
   };
 
   // Prefer explicit DataImpulse env vars when provider is dataimpulse
@@ -1350,7 +1347,8 @@ async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyUrl = nu
     if (jobDiagnostics) {
       jobDiagnostics.currentPageUrl = startUrl;
     }
-    await page.goto(startUrl, { timeout: 15000, waitUntil: 'domcontentloaded' });
+    await page.goto(startUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+    await resolveCloudflareChallenge(page);
     await checkForBotBlock(page);
     await dismissGoogleConsent(page);
 
@@ -1639,7 +1637,9 @@ async function scrapePageRecursively(
         }
 
         try {
-          await page.goto(memberUrl, { timeout: 15000, waitUntil: 'domcontentloaded' });
+          await page.goto(memberUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+          await resolveCloudflareChallenge(page);
+          await checkForBotBlock(page);
           await page.waitForTimeout(getRandomDelay(1200, 2500));
           await simulateHumanBrowsing(page);
 
@@ -1659,12 +1659,18 @@ async function scrapePageRecursively(
           }
 
           // Return to listing page for the next member link
-          await page.goto(currentUrl, { timeout: 15000, waitUntil: 'domcontentloaded' });
+          await page.goto(currentUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+          await resolveCloudflareChallenge(page);
+          await checkForBotBlock(page);
           await page.waitForTimeout(getRandomDelay(800, 1500));
         } catch (memberErr) {
           console.warn(`[DeepCrawl] ⚠️ Failed to scrape member ${memberUrl}:`, memberErr.message);
           // Try to recover by going back to the listing page
-          try { await page.goto(currentUrl, { timeout: 15000, waitUntil: 'domcontentloaded' }); } catch { /* ignore */ }
+          try {
+            await page.goto(currentUrl, { timeout: 30000, waitUntil: 'domcontentloaded' });
+            await resolveCloudflareChallenge(page);
+            await checkForBotBlock(page);
+          } catch { /* ignore */ }
         }
       }
     }
@@ -2011,12 +2017,73 @@ Output ONLY a JSON array. No other text.`;
     'Ajman': { lat: 25.4052, lng: 55.5136 }, 'Ras Al Khaimah': { lat: 25.7953, lng: 55.9788 }
   };
 
+  const GLOBAL_COORDS = {
+    // Saudi Arabia
+    'Riyadh': { lat: 24.7136, lng: 46.6753 }, 'الرياض': { lat: 24.7136, lng: 46.6753 },
+    'Jeddah': { lat: 21.5433, lng: 39.1728 }, 'جدة': { lat: 21.5433, lng: 39.1728 },
+    'Saudi Arabia': { lat: 23.8859, lng: 45.0792 }, 'المملكة العربية السعودية': { lat: 23.8859, lng: 45.0792 }, 'السعودية': { lat: 23.8859, lng: 45.0792 },
+
+    // UK & Europe
+    'London': { lat: 51.5074, lng: -0.1278 }, 'لندن': { lat: 51.5074, lng: -0.1278 },
+    'United Kingdom': { lat: 55.3781, lng: -3.4360 }, 'المملكة المتحدة': { lat: 55.3781, lng: -3.4360 }, 'بريطانيا': { lat: 55.3781, lng: -3.4360 },
+    'Paris': { lat: 48.8566, lng: 2.3522 }, 'باريس': { lat: 48.8566, lng: 2.3522 },
+    'France': { lat: 46.2276, lng: 2.2137 }, 'فرنسا': { lat: 46.2276, lng: 2.2137 },
+    'Berlin': { lat: 52.5200, lng: 13.4050 }, 'برلين': { lat: 52.5200, lng: 13.4050 },
+    'Germany': { lat: 51.1657, lng: 10.4515 }, 'ألمانيا': { lat: 51.1657, lng: 10.4515 },
+    'Geneva': { lat: 46.2044, lng: 6.1432 }, 'جنيف': { lat: 46.2044, lng: 6.1432 },
+    'Zurich': { lat: 47.3769, lng: 8.5417 }, 'زوريخ': { lat: 47.3769, lng: 8.5417 },
+    'Munich': { lat: 48.1351, lng: 11.5820 }, 'ميونخ': { lat: 48.1351, lng: 11.5820 },
+    'Switzerland': { lat: 46.8182, lng: 8.2275 }, 'سويسرا': { lat: 46.8182, lng: 8.2275 },
+
+    // North America
+    'New York': { lat: 40.7128, lng: -74.0060 }, 'نيويورك': { lat: 40.7128, lng: -74.0060 },
+    'California': { lat: 36.7783, lng: -119.4179 }, 'كاليفورنيا': { lat: 36.7783, lng: -119.4179 },
+    'United States': { lat: 37.0902, lng: -95.7129 }, 'الولايات المتحدة': { lat: 37.0902, lng: -95.7129 }, 'USA': { lat: 37.0902, lng: -95.7129 },
+    'Canada': { lat: 56.1304, lng: -106.3468 }, 'كندا': { lat: 56.1304, lng: -106.3468 },
+    'Toronto': { lat: 43.6532, lng: -79.3832 }, 'تورونتو': { lat: 43.6532, lng: -79.3832 },
+    'Montreal': { lat: 45.5017, lng: -73.5673 }, 'مونتريال': { lat: 45.5017, lng: -73.5673 },
+    'Vancouver': { lat: 49.2827, lng: -123.1207 }, 'فانكوفر': { lat: 49.2827, lng: -123.1207 },
+    'Ottawa': { lat: 45.4215, lng: -75.6972 }, 'أوتاوا': { lat: 45.4215, lng: -75.6972 },
+    'Edmonton': { lat: 53.5461, lng: -113.4938 }, 'إدمونتون': { lat: 53.5461, lng: -113.4938 },
+    'Quebec': { lat: 46.8139, lng: -71.2082 }, 'كيبك': { lat: 46.8139, lng: -71.2082 },
+    'Québec': { lat: 46.8139, lng: -71.2082 },
+
+    // Gulf / Middle East
+    'Kuwait': { lat: 29.3759, lng: 47.9774 }, 'الكويت': { lat: 29.3759, lng: 47.9774 },
+    'Qatar': { lat: 25.3548, lng: 51.1849 }, 'قطر': { lat: 25.3548, lng: 51.1849 },
+    'Doha': { lat: 25.2854, lng: 51.5310 }, 'الدوحة': { lat: 25.2854, lng: 51.5310 },
+    'Bahrain': { lat: 26.0667, lng: 50.5577 }, 'البحرين': { lat: 26.0667, lng: 50.5577 },
+    'Manama': { lat: 26.2285, lng: 50.5860 }, 'المنامة': { lat: 26.2285, lng: 50.5860 },
+    'Oman': { lat: 21.5126, lng: 55.9233 }, 'عمان': { lat: 21.5126, lng: 55.9233 },
+    'Muscat': { lat: 23.5859, lng: 58.4059 }, 'مسقط': { lat: 23.5859, lng: 58.4059 },
+    'Egypt': { lat: 26.8206, lng: 30.8025 }, 'مصر': { lat: 26.8206, lng: 30.8025 },
+    'Cairo': { lat: 30.0444, lng: 31.2357 }, 'القاهرة': { lat: 30.0444, lng: 31.2357 },
+    'Lebanon': { lat: 33.8547, lng: 35.8623 }, 'لبنان': { lat: 33.8547, lng: 35.8623 },
+    'Beirut': { lat: 33.8938, lng: 35.5018 }, 'بيروت': { lat: 33.8938, lng: 35.5018 },
+    'Jordan': { lat: 30.5852, lng: 36.2384 }, 'الأردن': { lat: 30.5852, lng: 36.2384 },
+    'Amman': { lat: 31.9539, lng: 35.9106 }, 'عمان (الأردن)': { lat: 31.9539, lng: 35.9106 },
+
+    // Asia & Russia
+    'India': { lat: 20.5937, lng: 78.9629 }, 'الهند': { lat: 20.5937, lng: 78.9629 },
+    'Mumbai': { lat: 19.0760, lng: 72.8777 }, 'بومباي': { lat: 19.0760, lng: 72.8777 },
+    'Russia': { lat: 61.5240, lng: 105.3188 }, 'روسيا': { lat: 61.5240, lng: 105.3188 },
+    'Moscow': { lat: 55.7558, lng: 37.6173 }, 'موسكو': { lat: 55.7558, lng: 37.6173 },
+    'China': { lat: 35.8617, lng: 104.1954 }, 'الصين': { lat: 35.8617, lng: 104.1954 },
+    'Turkey': { lat: 38.9637, lng: 35.2433 }, 'تركيا': { lat: 38.9637, lng: 35.2433 },
+    'Istanbul': { lat: 41.0082, lng: 28.9784 }, 'إسطنبول': { lat: 41.0082, lng: 28.9784 },
+    'Pakistan': { lat: 30.3753, lng: 69.3451 }, 'باكستان': { lat: 30.3753, lng: 69.3451 }
+  };
+
   const resolveCoords = (loc) => {
-    const l = (loc || '').toLowerCase();
+    const l = (loc || '').toLowerCase().trim();
+    if (!l) return { lat: null, lng: null };
     for (const [key, val] of Object.entries(UAE_COORDS)) {
       if (l.includes(key.toLowerCase())) return val;
     }
-    return { lat: 24.4539, lng: 54.3773 }; // Abu Dhabi default
+    for (const [key, val] of Object.entries(GLOBAL_COORDS)) {
+      if (l.includes(key.toLowerCase())) return val;
+    }
+    return { lat: null, lng: null }; // Return null for unknown locations instead of defaulting to Abu Dhabi
   };
 
   const parseBudget = (val) => {
@@ -2063,6 +2130,100 @@ Output ONLY a JSON array. No other text.`;
 
   console.info(`[ScraperAI] Extracted ${enrichedLeads.length} leads from ${scrapedContent.name}`);
   return enrichedLeads;
+}
+
+/**
+ * Call Gemini API from Node.js to extract and enrich projects from scraped content.
+ * Bypasses leads extraction prompt entirely.
+ *
+ * @param {{ url, name, type, signals, title, content }} scrapedContent
+ * @returns {Promise<Array>} enrichedProjects
+ */
+async function callGeminiForProjects(scrapedContent) {
+  const apiKey = await getGoogleAiApiKey();
+  if (!apiKey || apiKey.startsWith('YOUR_')) {
+    console.warn('[ScraperAI] GOOGLE_AI_API_KEY not configured — skipping AI project enrichment.');
+    return [];
+  }
+
+  // Truncate content to configurable length (default 50,000 characters)
+  const maxInputChars = process.env.SCRAPER_MAX_INPUT_CHARS ? parseInt(process.env.SCRAPER_MAX_INPUT_CHARS, 10) : 50000;
+  const cleanContent = (scrapedContent.content || '').substring(0, maxInputChars);
+
+  // DOM vital check — skip pages with no content
+  if (cleanContent.length < 20) {
+    console.warn(`[ScraperAI] Source ${scrapedContent.name} skipped — insufficient content for projects AI extraction.`);
+    return [];
+  }
+
+  const systemPrompt = `You are an expert Real Estate Data Extractor specializing in extracting development projects and properties.
+ABSOLUTE RULE: Extract ONLY real estate project and property data. DO NOT extract human names, contacts, or buyer leads.
+Extract any real estate project, off-plan development, building project, or residential community mentioned in the text.
+
+REQUIRED FIELDS FOR EACH PROJECT:
+- projectName (String): Name of the project/building.
+- location (String): Exactly matching UAE areas like "Yas Island", "Saadiyat Island", "Al Reem Island", "Dubai Marina", or a specific global/international city name if applicable. Default to "Abu Dhabi" if unknown.
+- developer (String or null): Name of the developer/company behind the project if mentioned.
+- startingPrice (Number or null): Minimum starting price in AED (convert to plain number, remove symbols and commas, e.g. 1800000).
+- handoverDate (String or null): Expected delivery/completion date (e.g., "Q4 2028").
+- propertyType (String or null): Type of property, e.g., "Apartment", "Villa", "Townhouse".
+- sourceUrl (String): Use "${scrapedContent.url}"
+
+Output ONLY a JSON array of objects. No other text.`;
+
+  const userPrompt = `Extract projects:\nPage Title: ${scrapedContent.title}\nSource: ${scrapedContent.name}\nType: ${scrapedContent.type}\nContent:\n${cleanContent}`;
+
+  const requestBody = {
+    contents: [{ parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+    generationConfig: { temperature: 0.0, maxOutputTokens: 4096, topP: 0.95, topK: 40 }
+  };
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  let rawText = '';
+  try {
+    rawText = await withRetryJS(async () => {
+      const resp = await axios.post(endpoint, requestBody, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 60000
+      });
+      const data = resp.data;
+      const candidate = data?.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+      return parts.map(p => p.text || '').join('');
+    }, 6, 2000);
+  } catch (err) {
+    console.error(`[ScraperAI] Gemini projects call failed for source ${scrapedContent.name}:`, err.message);
+    return [];
+  }
+
+  if (!rawText) return [];
+
+  const projects = safeParseJsonJS(rawText, []);
+  if (!Array.isArray(projects)) return [];
+
+  return projects.map(p => {
+    // Basic price normalization
+    let price = null;
+    if (p.startingPrice != null) {
+      if (typeof p.startingPrice === 'number') {
+        price = isNaN(p.startingPrice) ? null : p.startingPrice;
+      } else {
+        const parsed = parseFloat(String(p.startingPrice).replace(/aed|usd|[\$,]/gi, '').trim());
+        price = isNaN(parsed) ? null : parsed;
+      }
+    }
+
+    return {
+      projectName: p.projectName || p.name || 'Unknown Project',
+      location: p.location || 'Abu Dhabi',
+      developer: p.developer || null,
+      startingPrice: price,
+      handoverDate: p.handoverDate || null,
+      propertyType: p.propertyType || null,
+      sourceUrl: p.sourceUrl || scrapedContent.url
+    };
+  });
 }
 
 /**
@@ -2177,24 +2338,44 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
 
         // ── AI enrichment happens HERE on Railway ──
         let enrichedLeads = [];
-        try {
-          enrichedLeads = await callGeminiForLeads(content, criteria || {});
-          console.info(`[ScraperAI] ${sourceKey}: ${enrichedLeads.length} leads enriched locally.`);
-        } catch (aiErr) {
-          console.error(`[ScraperAI] Enrichment failed for ${sourceKey}:`, aiErr.message);
+        let enrichedProjects = [];
+        const sourceObj = sourceMap[sourceKey];
+        const isProjectSource = sourceObj && (sourceObj.type === 'REAL_ESTATE_PROJECTS' || sourceObj.type === 'OFF_PLAN_DATA');
+
+        if (isProjectSource) {
+          try {
+            enrichedProjects = await callGeminiForProjects(content);
+            console.info(`[ScraperAI] ${sourceKey}: ${enrichedProjects.length} projects enriched locally.`);
+          } catch (aiErr) {
+            console.error(`[ScraperAI] Project enrichment failed for ${sourceKey}:`, aiErr.message);
+          }
+        } else {
+          try {
+            enrichedLeads = await callGeminiForLeads(content, criteria || {});
+            console.info(`[ScraperAI] ${sourceKey}: ${enrichedLeads.length} leads enriched locally.`);
+          } catch (aiErr) {
+            console.error(`[ScraperAI] Lead enrichment failed for ${sourceKey}:`, aiErr.message);
+          }
         }
 
-        // Post pre-enriched leads to webhook — webhook is now a pure DB writer
+        // Post pre-enriched results to webhook — webhook is now a pure DB writer
         if (webhookUrl && runId) {
-          console.log(`[Webhook] Posting ${enrichedLeads.length} pre-enriched leads for ${sourceKey} to: ${webhookUrl}`);
+          const webhookPayload = {
+            secret: SECRET,
+            runId: runId,
+            sourceKey: sourceKey,
+            selectorIssues: uniqueIssues
+          };
+          if (isProjectSource) {
+            webhookPayload.enrichedProjects = enrichedProjects;
+            console.log(`[Webhook] Posting ${enrichedProjects.length} pre-enriched projects for ${sourceKey} to: ${webhookUrl}`);
+          } else {
+            webhookPayload.enrichedLeads = enrichedLeads;
+            console.log(`[Webhook] Posting ${enrichedLeads.length} pre-enriched leads for ${sourceKey} to: ${webhookUrl}`);
+          }
+
           try {
-            await axios.post(webhookUrl, {
-              secret: SECRET,
-              runId: runId,
-              sourceKey: sourceKey,
-              enrichedLeads: enrichedLeads, // ← pre-enriched, no AI needed in webhook
-              selectorIssues: uniqueIssues
-            }, { timeout: 30000 });
+            await axios.post(webhookUrl, webhookPayload, { timeout: 30000 });
           } catch (webhookErr) {
             console.error(maskProxyUrl(`[Webhook] Failed to send results for ${sourceKey}: ${webhookErr.message}`));
           }
@@ -2248,7 +2429,13 @@ async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhookUrl = n
     throw globalError;
   } finally {
     if (browser) {
-      await browser.close();
+      console.log('[Scraper] Closing browser...');
+      Promise.race([
+        browser.close(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+      ])
+        .then(() => console.log('[Scraper] Browser closed successfully.'))
+        .catch(err => console.error('[Scraper] Error closing browser:', err.message));
     }
   }
 }
@@ -2690,6 +2877,97 @@ app.post('/reject-source', async (req, res) => {
   }
 });
 
+async function startActiveDbWatchdog() {
+  const WATCHDOG_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+  const ZOMBIE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
+  setInterval(async () => {
+    try {
+      const cutoff = new Date(Date.now() - ZOMBIE_TIMEOUT_MS);
+      const zombieRuns = await prisma.scrapeRun.findMany({
+        where: {
+          status: { in: ['PENDING', 'PROCESSING'] },
+          startedAt: { lt: cutoff }
+        },
+        select: {
+          id: true,
+          triggeredBy: true,
+          status: true,
+          startedAt: true
+        }
+      });
+
+      if (zombieRuns.length > 0) {
+        console.log(`[ActiveWatchdog] Found ${zombieRuns.length} database zombie runs:`, zombieRuns.map(r => r.id));
+
+        for (const run of zombieRuns) {
+          // Mark as FAILED in DB
+          try {
+            await prisma.scrapeRun.update({
+              where: { id: run.id },
+              data: {
+                status: 'FAILED',
+                completedAt: new Date()
+              }
+            });
+            console.log(`[ActiveWatchdog] Force-marked run ${run.id} as FAILED in DB.`);
+          } catch (dbErr) {
+            console.error(`[ActiveWatchdog] Failed to update run ${run.id} in DB:`, dbErr.message);
+          }
+
+          // Create an error notification for the agent/triggeredBy user
+          try {
+            await prisma.notification.create({
+              data: {
+                agentId: run.triggeredBy,
+                title: 'Scraper Error: Timeout in Scrape Run',
+                body: `The scrape run was force-killed because it exceeded the maximum allowed duration of 10 minutes.`,
+                type: 'error',
+                data: JSON.stringify({ runId: run.id })
+              }
+            });
+            console.log(`[ActiveWatchdog] Created error notification for user ${run.triggeredBy}.`);
+          } catch (notifErr) {
+            console.error(`[ActiveWatchdog] Failed to create notification for run ${run.id}:`, notifErr.message);
+          }
+
+          // Cancel any active/pending jobs matching this runId in the service's memory queue
+          const activeQueueIndex = scrapeQueue.findIndex(job => job.runId === run.id);
+          if (activeQueueIndex !== -1) {
+            console.warn(`[ActiveWatchdog] Cancelling stuck queue job for runId ${run.id}`);
+            const stuckJob = scrapeQueue[activeQueueIndex];
+
+            // If this is the currently processing job, force-kill its browser
+            if (activeQueueIndex === 0 && queueProcessing) {
+              if (stuckJob.jobDiagnostics && stuckJob.jobDiagnostics.browserInstance) {
+                console.warn(`[ActiveWatchdog] Force-closing browser instance for current active job ${run.id}`);
+                const browserToClose = stuckJob.jobDiagnostics.browserInstance;
+                Promise.race([
+                  browserToClose.close(),
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+                ])
+                  .then(() => console.log(`[ActiveWatchdog] Stuck browser instance closed.`))
+                  .catch(err => console.error(`[ActiveWatchdog] Stuck browser instance close failed:`, err.message));
+              }
+              // Advance active jobs counter and process the next queue item
+              activeScrapeJobs = Math.max(0, activeScrapeJobs - 1);
+              scrapeQueue.splice(activeQueueIndex, 1);
+              queueProcessing = false;
+              processQueue().catch(err => console.error('[ActiveWatchdog] Queue advancement error:', err));
+            } else {
+              // Just remove from queue if it's pending
+              scrapeQueue.splice(activeQueueIndex, 1);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[ActiveWatchdog] Error in active DB watchdog interval:', err.message);
+    }
+  }, WATCHDOG_INTERVAL_MS);
+  console.log('🛡️  Active Database Watchdog initialized (runs every 2 minutes)');
+}
+
 async function startServer() {
   try {
     // Force seeding on startup to ensure all default sources are present and updated in DB
@@ -2698,6 +2976,13 @@ async function startServer() {
       await seedDefaultSources();
     } catch (seedErr) {
       console.error('Seeding default sources failed:', seedErr.message);
+    }
+
+    // Initialize the background active database watchdog
+    try {
+      await startActiveDbWatchdog();
+    } catch (watchdogErr) {
+      console.error('Failed to start active DB watchdog:', watchdogErr.message);
     }
 
     const sourceMap = await getSourceConfigMap();

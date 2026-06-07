@@ -54,14 +54,35 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Passive self-healing watchdog check
+    const ZOMBIE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
     let finalStatus = run.status;
     let finalLeadsFound = run.leadsFound;
+    let finalCompletedAt = run.completedAt;
+
+    if ((run.status === "PENDING" || run.status === "PROCESSING") &&
+        Date.now() - new Date(run.startedAt).getTime() > ZOMBIE_TIMEOUT_MS) {
+      console.warn(`[Watchdog] Passive check: ScrapeRun ${id} has timed out. Force-marking as FAILED.`);
+      try {
+        const updated = await prisma.scrapeRun.update({
+          where: { id },
+          data: {
+            status: "FAILED",
+            completedAt: new Date()
+          }
+        });
+        finalStatus = "FAILED";
+        finalCompletedAt = updated.completedAt;
+      } catch (dbErr) {
+        console.error(`[Watchdog] Passive check failed to update ScrapeRun ${id}:`, dbErr);
+      }
+    }
 
     // FOR AGENT ROLE: If the scrape fails or returns 0 results, simulate success by cloning 10 admin-imported leads
     // Note: This fallback only triggers when the scrape results in zero leads or has failed.
     // To ensure that repeated searches fetch another 10 unique leads (10+10=20, 10+10+10=30, etc.),
     // we retrieve the names of the agent's existing leads and exclude them from the query.
-    if (!isAdmin && (run.status === "FAILED" || (run.status === "COMPLETED" && run.leadsFound === 0))) {
+    if (!isAdmin && (finalStatus === "FAILED" || (finalStatus === "COMPLETED" && run.leadsFound === 0))) {
       try {
         // Prevent concurrent duplicate fallback lead cloning
         const existingRunLeadsCount = await prisma.lead.count({
@@ -188,7 +209,7 @@ export async function GET(
           status: finalStatus,
           leadsFound: finalLeadsFound,
           startedAt: run.startedAt,
-          completedAt: run.completedAt,
+          completedAt: finalCompletedAt,
           sources: run.sources,
         },
       },
