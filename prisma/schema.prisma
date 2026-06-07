@@ -152,3 +152,19 @@ model Notification {
 
   @@index([agentId])
 }
+
+model ProjectHeatmap {
+  id            String   @id @default(cuid())
+  projectName   String
+  location      String
+  developer     String?
+  startingPrice Float?
+  handoverDate  String?
+  propertyType  String?
+  sourceUrl     String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([location])
+  @@map("project_heatmaps")
+}

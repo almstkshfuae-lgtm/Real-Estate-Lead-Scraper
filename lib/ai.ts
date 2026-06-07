@@ -317,11 +317,15 @@ export const UAE_AREAS_COORDS: Record<string, { lat: number; lng: number }> = {
   "Deira": { lat: 25.2697, lng: 55.3095 },
   "Bur Dubai": { lat: 25.2532, lng: 55.2956 },
   "JVC": { lat: 25.0657, lng: 55.2105 },
-  "Yas Island": { lat: 24.4672, lng: 54.6031 },
-  "Al Reem Island": { lat: 24.4975, lng: 54.4186 },
-  "Saadiyat Island": { lat: 24.5404, lng: 54.4416 },
+  "Yas Island": { lat: 24.4965, lng: 54.6036 },
+  "جزيرة ياس": { lat: 24.4965, lng: 54.6036 },
+  "Al Reem Island": { lat: 24.4943, lng: 54.4069 },
+  "جزيرة الريم": { lat: 24.4943, lng: 54.4069 },
+  "Saadiyat Island": { lat: 24.5401, lng: 54.4354 },
+  "جزيرة السعديات": { lat: 24.5401, lng: 54.4354 },
   "Khalidiyah": { lat: 24.4755, lng: 54.3557 },
-  "Al Raha Beach": { lat: 24.4293, lng: 54.5697 },
+  "Al Raha Beach": { lat: 24.4365, lng: 54.5752 },
+  "شاطئ الراحة": { lat: 24.4365, lng: 54.5752 },
   "Corniche": { lat: 24.4638, lng: 54.3444 },
   "Sharjah City": { lat: 25.3463, lng: 55.4209 },
   "Al Nahda": { lat: 25.3007, lng: 55.4177 },
@@ -331,7 +335,16 @@ export const UAE_AREAS_COORDS: Record<string, { lat: number; lng: number }> = {
   "Fujairah": { lat: 25.1288, lng: 56.3265 },
   "Dubai": { lat: 25.2048, lng: 55.2708 },
   "Abu Dhabi": { lat: 24.4539, lng: 54.3773 },
-  "Umm Al Quwain": { lat: 25.5647, lng: 55.5534 }
+  "Umm Al Quwain": { lat: 25.5647, lng: 55.5534 },
+  "Al Hudayriyat Island": { lat: 24.4259, lng: 54.3235 },
+  "جزيرة الحديريات": { lat: 24.4259, lng: 54.3235 },
+  "Fahid Island": { lat: 24.5126, lng: 54.6080 },
+  "جزيرة فاهد": { lat: 24.5126, lng: 54.6080 },
+  "Yas Bay": { lat: 24.4578, lng: 54.5985 },
+  "Al Maryah Island": { lat: 24.5020, lng: 54.3895 },
+  "جزيرة المارية": { lat: 24.5020, lng: 54.3895 },
+  "Abu Dhabi City": { lat: 24.4539, lng: 54.3773 },
+  "مدينة أبوظبي": { lat: 24.4539, lng: 54.3773 }
 };
 
 export function resolveCoords(location: string): { lat: number | null; lng: number | null } {
@@ -346,46 +359,17 @@ export function resolveCoords(location: string): { lat: number | null; lng: numb
 
 export function normalizeLocation(loc: string): string {
   const normalized = (loc || "").trim();
-  if (!normalized) return "Abu Dhabi";
+  if (!normalized) return "";
 
   const lower = normalized.toLowerCase();
 
-  if (lower.includes("ياس") || lower.includes("yas")) return "Yas Island";
-  if (lower.includes("ريم") || lower.includes("reem")) return "Al Reem Island";
-  if (lower.includes("سعديات") || lower.includes("saadiyat")) return "Saadiyat Island";
-  if (lower.includes("خالدية") || lower.includes("khalidiyah") || lower.includes("khalidiya")) return "Khalidiyah";
-  if (lower.includes("راحه") || lower.includes("raha")) return "Al Raha Beach";
-  if (lower.includes("كورنيش") || lower.includes("corniche")) return "Corniche";
-  if (lower.includes("مارينا") || lower.includes("marina")) return "Dubai Marina";
-  if (lower.includes("نخلة") || lower.includes("palm")) return "Palm Jumeirah";
-  if (lower.includes("وسط المدينة") || lower.includes("downtown")) return "Downtown Dubai";
-  if (lower.includes("خليج الأعمال") || lower.includes("business bay")) return "Business Bay";
-  if (lower.includes("جميرا") || lower.includes("jumeirah")) return "Jumeirah";
-  if (lower.includes("العالمي") || lower.includes("difc")) return "DIFC";
-  if (lower.includes("ممشى جي بي آر") || lower.includes("jbr")) return "JBR";
-  if (lower.includes("المرابع") || lower.includes("ranches")) return "Arabian Ranches";
-  if (lower.includes("البرشاء") || lower.includes("barsha")) return "Al Barsha";
-  if (lower.includes("مردف") || lower.includes("mirdif")) return "Mirdif";
-  if (lower.includes("ديرة") || lower.includes("deira")) return "Deira";
-  if (lower.includes("بر دبي") || lower.includes("bur dubai")) return "Bur Dubai";
-  if (lower.includes("قرية جميرا") || lower.includes("jvc")) return "JVC";
-  if (lower.includes("شارقة") || lower.includes("sharjah")) return "Sharjah City";
-  if (lower.includes("نهدة") || lower.includes("nahda")) return "Al Nahda";
-  if (lower.includes("خان") || lower.includes("khan")) return "Al Khan";
-  if (lower.includes("عجمان") || lower.includes("ajman")) return "Ajman";
-  if (lower.includes("خيمة") || lower.includes("khaimah") || lower.includes("rak")) return "Ras Al Khaimah";
-  if (lower.includes("فجيرة") || lower.includes("fujairah")) return "Fujairah";
-  if (lower.includes("دبي") || lower.includes("dubai")) return "Dubai";
-  if (lower.includes("أبوظبي") || lower.includes("abu dhabi") || lower.includes("abu_dhabi")) return "Abu Dhabi";
-  if (lower.includes("أم القيوين") || lower.includes("quwain") || lower.includes("uaq")) return "Umm Al Quwain";
-
   for (const key of Object.keys(UAE_AREAS_COORDS)) {
     if (lower.includes(key.toLowerCase())) {
-      return key;
+      return key; // Returns the exact area/island key to match the map configuration
     }
   }
 
-  return normalized; // Return the original name if not a recognized UAE location
+  return normalized;
 }
 
 export function parseBudgetToFloat(val: any): number | null {
@@ -1430,6 +1414,27 @@ export async function generateGeminiChatStream(
       }
     }
   });
+}
+
+export async function extractProjectData(text: string): Promise<any[]> {
+  const content = await generateGeminiText(
+    `You are an expert Real Estate Data Extractor. 
+    ABSOLUTE RULE: Extract ONLY real estate project and property data. DO NOT extract human names or leads.
+    
+    REQUIRED FIELDS FOR EACH PROJECT:
+    - projectName (String): Name of the project/building.
+    - location (String): Exactly matching areas like "Yas Island", "Saadiyat Island", "Al Reem Island", or specific UAE location name.
+    - developer (String or null): Name of the developer if mentioned.
+    - startingPrice (Number or null): Minimum price in AED (convert to plain number, remove symbols and commas, e.g. 1800000).
+    - handoverDate (String or null): Expected delivery date (e.g., "Q4 2028").
+    - propertyType (String or null): e.g. "Apartment", "Villa", "Townhouse".
+    
+    Return a JSON array of objects.`,
+    `Extract projects from this text: ${text}`,
+    2048
+  );
+
+  return safeParseJson(content, []);
 }
 
 export { generateGeminiText };

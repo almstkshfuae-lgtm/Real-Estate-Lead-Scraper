@@ -52,6 +52,17 @@ const leadSchema = z.object({
   persona: z.string().optional().nullable(),
 });
 
+// Schema for individual project validation
+const projectSchema = z.object({
+  projectName: z.string().trim().min(1, "Project name is required"),
+  location: z.string().trim().min(1, "Location is required"),
+  developer: z.string().optional().nullable(),
+  startingPrice: z.number().optional().nullable(),
+  handoverDate: z.string().optional().nullable(),
+  propertyType: z.string().optional().nullable(),
+  sourceUrl: z.string().optional().nullable(),
+});
+
 // Schema for webhook request payload
 const webhookPayloadSchema = z.object({
   secret: z.string(),
@@ -62,6 +73,7 @@ const webhookPayloadSchema = z.object({
   isFailedSignal: z.boolean().optional().nullable(),
   error: z.any().optional().nullable(),
   enrichedLeads: z.array(leadSchema).optional().nullable(),
+  enrichedProjects: z.array(projectSchema).optional().nullable(),
   selectorIssues: z.array(z.string()).optional().nullable(),
 });
 
@@ -76,7 +88,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid payload format", details: validation.error.format() }, { status: 400 });
     }
 
-    const { secret, runId, sourceKey, enrichedLeads, isStartedSignal, isCompletedSignal, isFailedSignal, error, selectorIssues } = validation.data;
+    const { secret, runId, sourceKey, enrichedLeads, enrichedProjects, isStartedSignal, isCompletedSignal, isFailedSignal, error, selectorIssues } = validation.data;
 
     let systemSecret = (await getSecret('scraperSecret')) || process.env.SCRAPER_SECRET;
     console.log("[Webhook Debug] systemSecret resolved (DB/env):", !!systemSecret, "NODE_ENV:", process.env.NODE_ENV);
@@ -204,6 +216,92 @@ export async function POST(request: NextRequest) {
       } catch (err: any) {
         console.error(`[Webhook] Failed to process selector issues for ${sourceKey}:`, err?.message || err);
       }
+    }
+
+    // Check source type
+    let sourceType = "";
+    let sourceUrl = "";
+    if (sourceKey) {
+      try {
+        const sourceConfig = await prisma.sourceConfig.findUnique({
+          where: { key: sourceKey }
+        });
+        sourceType = sourceConfig?.type || "";
+        sourceUrl = sourceConfig?.url || "";
+      } catch (e) {
+        console.error("[Webhook] Error fetching source config:", e);
+      }
+    }
+
+    const isProjectSource = sourceType === "REAL_ESTATE_PROJECTS" || sourceType === "OFF_PLAN_DATA";
+
+    if (isProjectSource) {
+      const projectsPayload = Array.isArray(enrichedProjects) ? enrichedProjects :
+        (Array.isArray(enrichedLeads) ? enrichedLeads : []);
+
+      if (projectsPayload.length === 0) {
+        console.info(`[Webhook] Project Source ${sourceKey}: 0 projects received.`);
+        return NextResponse.json({
+          success: true,
+          source: sourceKey,
+          projectsProcessed: 0,
+          skipped: true,
+          reason: "No projects in payload"
+        });
+      }
+
+      console.info(`[Webhook] Persisting ${projectsPayload.length} projects for source: ${sourceKey} in run: ${runId}`);
+
+      let newProjectsCount = 0;
+      for (const proj of projectsPayload) {
+        const p = proj as any;
+        const projectName = p.projectName || p.name;
+        if (!projectName) {
+          console.warn(`[Webhook] Skipping malformed project (missing name):`, proj);
+          continue;
+        }
+
+        const location = p.location || "Abu Dhabi";
+        const developer = p.developer || p.company || null;
+        const startingPrice = p.startingPrice !== undefined ? p.startingPrice :
+          (p.budgetMin !== undefined ? p.budgetMin : null);
+        const handoverDate = p.handoverDate || p.role || null;
+        const propertyType = p.propertyType || p.sourceType || null;
+        const projSourceUrl = p.sourceUrl || sourceUrl || sourceKey || "";
+
+        try {
+          await prisma.projectHeatmap.create({
+            data: {
+              projectName,
+              location,
+              developer,
+              startingPrice: startingPrice ? parseFloat(String(startingPrice)) : null,
+              handoverDate,
+              propertyType,
+              sourceUrl: projSourceUrl
+            }
+          });
+          newProjectsCount++;
+        } catch (err: any) {
+          console.error(`[Webhook] DB insert error for project: ${projectName}`, err?.message || err);
+        }
+      }
+
+      // Increment leadsFound counter
+      await prisma.scrapeRun.update({
+        where: { id: runId },
+        data: {
+          leadsFound: {
+            increment: newProjectsCount
+          }
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        source: sourceKey,
+        projectsProcessed: newProjectsCount
+      });
     }
 
     // Accept both old (scrapedData) and new (enrichedLeads) payload shapes for
