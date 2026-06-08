@@ -218,7 +218,7 @@ interface GeoMapProps {
   projects?: any[];
   language: string;
   activeLayer: "markers" | "heatmap";
-  onSelectLead: (lead: MapLead) => void;
+  onAction: (lead: MapLead) => void;
   geofenceActive: boolean;
   onGeofenceDrawn: (bounds: { north: number; south: number; east: number; west: number }) => void;
 }
@@ -228,7 +228,7 @@ function GeoMap({
   projects = [],
   language,
   activeLayer,
-  onSelectLead,
+  onAction,
   geofenceActive,
   onGeofenceDrawn,
 }: GeoMapProps) {
@@ -267,10 +267,10 @@ function GeoMap({
         shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
       });
 
-      // Create bounds for Greater MENA / World fallback area
+      // Create bounds for World
       const maxBounds = L.latLngBounds(
-        L.latLng(-10, -30), // South-West
-        L.latLng(70, 150)   // North-East
+        L.latLng(-90, -180), // South-West
+        L.latLng(90, 180)   // North-East
       );
 
       const map = L.map(mapRef.current!, {
@@ -406,34 +406,72 @@ function GeoMap({
             marker.bindPopup(`
               <div ${dirAttr} style="
                 font-family: ${fontFamily};
-                min-width: 200px;
+                min-width: 240px;
                 padding: 4px;
               ">
-                <div style="font-weight: 700; font-size: 14px; color: #111827; margin-bottom: 4px;">${displayName}</div>
-                <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">${lead.company}</div>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                  <div style="font-weight: 800; font-size: 15px; color: #111827; margin-bottom: 2px;">${displayName}</div>
+                  <div style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; background: ${scoreColor}; flex-shrink: 0;">${lead.score}</div>
+                </div>
+                <div style="font-size: 12px; color: #6B7280; margin-bottom: 12px; font-weight: 500;">${lead.company}</div>
+                
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
                   <span style="
                     padding: 2px 8px;
-                    border-radius: 4px;
+                    border-radius: 6px;
                     font-size: 11px;
-                    font-weight: 600;
-                    background: ${tierColor}22;
+                    font-weight: 700;
+                    background: ${tierColor}15;
                     color: ${tierColor};
                   ">T${lead.tier}</span>
                   <span style="
                     padding: 2px 8px;
-                    border-radius: 4px;
+                    border-radius: 6px;
                     font-size: 11px;
                     font-weight: 600;
-                    background: ${scoreColor}22;
-                    color: ${scoreColor};
-                  ">Score: ${lead.score}</span>
+                    background: #F3F4F6;
+                    color: #4B5563;
+                  ">${lead.status}</span>
                 </div>
-                <div style="font-size: 11px; color: #9CA3AF;">${lead.location}</div>
-              </div>
-            `, { maxWidth: 280 });
+                
+                <div style="font-size: 11px; color: #6B7280; display: flex; align-items: center; gap: 4px; margin-bottom: 16px;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                  ${lead.location}
+                </div>
 
-            marker.on("click", () => onSelectLead(lead));
+                <button class="view-profile-btn" style="
+                  width: 100%;
+                  padding: 8px;
+                  background: #185FA5;
+                  color: white;
+                  border: none;
+                  border-radius: 8px;
+                  font-weight: bold;
+                  font-size: 12px;
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 6px;
+                  transition: opacity 0.2s;
+                " onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  ${language === 'ar' ? 'عرض الملف الكامل' : 'View Full Profile'}
+                </button>
+              </div>
+            `, { maxWidth: 300, className: "custom-lead-popup" });
+
+            marker.on('popupopen', (e) => {
+              const popupNode = e.popup.getElement();
+              const btn = popupNode?.querySelector('.view-profile-btn');
+              if (btn) {
+                // Must explicitly add event listener to the native DOM element inside Leaflet
+                (btn as HTMLElement).onclick = () => {
+                  onAction(lead);
+                };
+              }
+            });
+
             marker.addTo(map);
             markersRef.current.push(marker);
 

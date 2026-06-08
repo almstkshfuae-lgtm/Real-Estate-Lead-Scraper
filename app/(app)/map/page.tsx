@@ -23,7 +23,6 @@ import { useScrapeRunStatus } from "@/hooks/useScrapeRunStatus";
 import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
 import MapStats from "@/components/map/MapStats";
-import MapLeadPanel from "@/components/map/MapLeadPanel";
 import LeadSidebar from "@/components/leads/LeadSidebar";
 import type { Lead } from "@/components/leads/LeadTable";
 import type { MapLead } from "@/components/map/GeoMap";
@@ -51,7 +50,6 @@ export default function MapPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLayer, setActiveLayer] = useState<LayerType>("markers");
-  const [selectedLead, setSelectedLead] = useState<MapLead | null>(null);
   const [sidebarLead, setSidebarLead] = useState<Lead | null>(null);
   const [geofenceActive, setGeofenceActive] = useState(false);
   const [geofencedLeads, setGeofencedLeads] = useState<MapLead[]>([]);
@@ -280,7 +278,7 @@ export default function MapPage() {
             projects={projects}
             language={i18n.language}
             activeLayer={activeLayer}
-            onSelectLead={(lead) => setSelectedLead(lead)}
+            onAction={(lead) => setSidebarLead(lead as unknown as Lead)}
             geofenceActive={geofenceActive}
             onGeofenceDrawn={handleGeofenceDrawn}
           />
@@ -492,15 +490,6 @@ export default function MapPage() {
             <div className="absolute inset-0 z-10 pointer-events-none rounded-none border-4 border-dashed border-[#185FA5]/50 bg-[#185FA5]/5 animate-pulse" />
           )}
 
-          {/* Floating Lead Panel */}
-          {selectedLead && (
-            <MapLeadPanel
-              lead={selectedLead}
-              onClose={() => setSelectedLead(null)}
-              onAction={(lead) => setSidebarLead(lead as unknown as Lead)}
-            />
-          )}
-
           {/* Full Lead Sidebar */}
           <LeadSidebar 
             lead={sidebarLead} 
@@ -533,7 +522,7 @@ export default function MapPage() {
                   {geofencedLeads.map((lead) => (
                     <button
                       key={lead.id}
-                      onClick={() => setSelectedLead(lead)}
+                      onClick={() => setSidebarLead(lead as unknown as Lead)}
                       className="w-full text-start p-2 rounded-lg border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-primary-subtle)] transition-colors"
                     >
                       <div className="flex items-center gap-3">

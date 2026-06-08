@@ -262,147 +262,153 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-          {/* Left Column */}
-          <div className="space-y-8">
-            {/* Target Keywords */}
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
-                <Search className="w-4 h-4" />
-                {t('search.keywordsLabel', 'Target Keywords')}
-              </label>
-              <input
-                type="text"
-                placeholder={t('search.keywordsPlaceholder', 'e.g., luxury, penthouses, DIFC, investor')}
-                value={keywords}
-                onChange={(e) => setKeywords(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
-              />
-              <p className="text-[10px] text-[var(--color-text-secondary)]">
-                {t('search.keywordsDesc', 'Filter pre-enriched leads to match any of these comma-separated keywords.')}
-              </p>
-            </div>
-
-            {/* Property Types */}
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
-                <Building2 className="w-4 h-4" />
-                {t('search.propertyType')}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {types.map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => toggleType(type.id)}
-                    className={`filter-btn ${propertyTypes.includes(type.id) ? "active" : ""
-                      }`}
-                  >
-                    {type.label}
-                  </button>
-                ))}
+        <div className="space-y-6">
+          {/* Section 1: Target Profile */}
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-6 flex items-center gap-2">
+              <Search className="w-5 h-5 text-[var(--color-primary)]" />
+              {t('search.section.targetProfile', 'Target Profile & Budget')}
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Target Keywords */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider block">
+                  {t('search.keywordsLabel', 'Target Keywords')}
+                </label>
+                <input
+                  type="text"
+                  placeholder={t('search.keywordsPlaceholder', 'e.g., luxury, penthouses, DIFC, investor')}
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                />
+                <p className="text-[10px] text-[var(--color-text-secondary)]">
+                  {t('search.keywordsDesc', 'Filter pre-enriched leads to match any of these comma-separated keywords.')}
+                </p>
               </div>
-            </div>
 
-            {/* Budget Range */}
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
-                <DollarSign className="w-4 h-4" />
-                {t('search.budget')}
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Min</p>
-                  <input
-                    type="number"
-                    value={budgetMin}
-                    onChange={(e) => setBudgetMin(Number(e.target.value))}
-                    className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
-                  />
+              {/* Budget Range */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider block flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4" />
+                  {t('search.budget')}
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Min</p>
+                    <input
+                      type="number"
+                      value={budgetMin}
+                      onChange={(e) => setBudgetMin(Number(e.target.value))}
+                      className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Max</p>
+                    <input
+                      type="number"
+                      value={budgetMax}
+                      onChange={(e) => setBudgetMax(Number(e.target.value))}
+                      className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Max</p>
-                  <input
-                    type="number"
-                    value={budgetMax}
-                    onChange={(e) => setBudgetMax(Number(e.target.value))}
-                    className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Emirates */}
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
-                <MapPin className="w-4 h-4" />
-                {t('search.emirates')}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {emirateOptions.map(emirate => (
-                  <button
-                    key={emirate}
-                    onClick={() => toggleEmirate(emirate)}
-                    className={`emirate-pill ${emirates.includes(emirate) ? "active" : ""
-                      }`}
-                  >
-                    {emirate}
-                  </button>
-                ))}
               </div>
             </div>
           </div>
 
-          {/* Right Column */}
-          <div className="space-y-8">
-            {/* Toggles */}
-            <div className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider">
-                <Zap className="w-4 h-4" />
-                {t('search.options')}
-              </label>
+          {/* Section 2: Property Details */}
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-6 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-[var(--color-primary)]" />
+              {t('search.section.propertyDetails', 'Location & Property Types')}
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Property Types */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider block">
+                  {t('search.propertyType')}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {types.map(type => (
+                    <button
+                      key={type.id}
+                      onClick={() => toggleType(type.id)}
+                      className={`filter-btn ${propertyTypes.includes(type.id) ? "active" : ""}`}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <div className="space-y-4">
-                <button
-                  onClick={() => setRelocated(!relocated)}
-                  className={`toggle-card ${relocated ? "active-success" : ""
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`toggle-icon-container ${relocated ? 'active-success' : ''}`}>
-                      <Info className="w-4 h-4" />
-                    </div>
-                    <div className="text-start">
-                      <p className="text-sm font-bold toggle-title">{t('search.relocated')}</p>
-                      <p className="text-[10px] text-[var(--color-text-secondary)]">{t('search.relocatedDesc')}</p>
-                    </div>
-                  </div>
-                  <div className={`toggle-switch-track ${relocated ? 'active-success' : ''}`}>
-                    <div className={`toggle-switch-thumb ${relocated ? 'active' : 'inactive'}`}></div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setExcludeRental(!excludeRental)}
-                  className={`toggle-card ${excludeRental ? "active-primary" : ""
-                    }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`toggle-icon-container ${excludeRental ? 'active-primary' : ''}`}>
-                      <Trash2 className="w-4 h-4" />
-                    </div>
-                    <div className="text-start">
-                      <p className="text-sm font-bold toggle-title">{t('search.excludeRental')}</p>
-                      <p className="text-[10px] text-[var(--color-text-secondary)]">{t('search.excludeRentalDesc')}</p>
-                    </div>
-                  </div>
-                  <div className={`toggle-switch-track ${excludeRental ? 'active-primary' : ''}`}>
-                    <div className={`toggle-switch-thumb ${excludeRental ? 'active' : 'inactive'}`}></div>
-                  </div>
-                </button>
+              {/* Emirates */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-[var(--color-text-primary)] uppercase tracking-wider block flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4" />
+                  {t('search.emirates')}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {emirateOptions.map(emirate => (
+                    <button
+                      key={emirate}
+                      onClick={() => toggleEmirate(emirate)}
+                      className={`emirate-pill ${emirates.includes(emirate) ? "active" : ""}`}
+                    >
+                      {emirate}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+          </div>
 
-            {/* Summary Box removed per user request */}
+          {/* Section 3: Advanced Filters */}
+          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-6 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-purple-500" />
+              {t('search.options', 'Advanced Logic')}
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => setRelocated(!relocated)}
+                className={`toggle-card ${relocated ? "active-success" : ""}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`toggle-icon-container ${relocated ? 'active-success' : ''}`}>
+                    <Info className="w-4 h-4" />
+                  </div>
+                  <div className="text-start">
+                    <p className="text-sm font-bold toggle-title">{t('search.relocated')}</p>
+                    <p className="text-[10px] text-[var(--color-text-secondary)]">{t('search.relocatedDesc')}</p>
+                  </div>
+                </div>
+                <div className={`toggle-switch-track ${relocated ? 'active-success' : ''}`}>
+                  <div className={`toggle-switch-thumb ${relocated ? 'active' : 'inactive'}`}></div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setExcludeRental(!excludeRental)}
+                className={`toggle-card ${excludeRental ? "active-primary" : ""}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`toggle-icon-container ${excludeRental ? 'active-primary' : ''}`}>
+                    <Trash2 className="w-4 h-4" />
+                  </div>
+                  <div className="text-start">
+                    <p className="text-sm font-bold toggle-title">{t('search.excludeRental')}</p>
+                    <p className="text-[10px] text-[var(--color-text-secondary)]">{t('search.excludeRentalDesc')}</p>
+                  </div>
+                </div>
+                <div className={`toggle-switch-track ${excludeRental ? 'active-primary' : ''}`}>
+                  <div className={`toggle-switch-thumb ${excludeRental ? 'active' : 'inactive'}`}></div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
 
