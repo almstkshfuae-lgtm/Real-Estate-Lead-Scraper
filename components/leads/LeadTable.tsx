@@ -316,10 +316,12 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
                 <td className="px-6 py-4">
                   <div className="space-y-1.5">
                     <TierBadge tier={lead.tier} />
-                    <div className="text-[10px] text-[var(--color-text-secondary)] flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-[var(--color-text-disabled)]"></span>
-                      {lead.source}
-                    </div>
+                    {lead.source !== "Manual Import" && (
+                      <div className="text-[10px] text-[var(--color-text-secondary)] flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-[var(--color-text-disabled)]"></span>
+                        {lead.source}
+                      </div>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4">

@@ -28,7 +28,9 @@ export async function PATCH(
       budgetMin,
       budgetMax,
       status,
-      notes
+      notes,
+      tier,
+      source
     } = body;
 
     const lead = await prisma.lead.findUnique({
@@ -42,7 +44,7 @@ export async function PATCH(
     // Non-admins cannot edit core lead info fields
     const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
     if (isNonAdmin) {
-      const editFields = [name, email, phone, company, role, location, score, budgetMin, budgetMax];
+      const editFields = [name, email, phone, company, role, location, score, budgetMin, budgetMax, tier, source];
       const hasRestrictedEdit = editFields.some(field => field !== undefined);
       if (hasRestrictedEdit) {
         return NextResponse.json({ error: "Only admins are allowed to edit lead details." }, { status: 403 });
@@ -125,7 +127,8 @@ export async function PATCH(
           longitude: lng
         }),
         ...(parsedScore !== undefined && { score: isNaN(parsedScore) ? 50 : parsedScore }),
-        ...(computedTier !== undefined && { tier: computedTier }),
+        ...(tier !== undefined ? { tier: parseInt(tier, 10) } : computedTier !== undefined ? { tier: computedTier } : {}),
+        ...(source !== undefined && { source: source.trim() }),
         ...(budgetMin !== undefined && { budgetMin: budgetMin !== "" && budgetMin !== null ? parseFloat(budgetMin) : null }),
         ...(budgetMax !== undefined && { budgetMax: budgetMax !== "" && budgetMax !== null ? parseFloat(budgetMax) : null }),
         ...(status !== undefined && { status }),

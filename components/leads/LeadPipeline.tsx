@@ -162,9 +162,11 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
                           </div>
 
                           <div className="flex items-center justify-between pt-3 border-t border-[var(--color-border)]/50">
-                            <div className="text-[10px] text-[var(--color-text-disabled)]">
-                              {lead.source}
-                            </div>
+                            {lead.source !== "Manual Import" && (
+                              <div className="text-[10px] text-[var(--color-text-disabled)]">
+                                {lead.source}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

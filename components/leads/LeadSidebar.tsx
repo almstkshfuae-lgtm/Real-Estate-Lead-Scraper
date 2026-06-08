@@ -60,6 +60,8 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
     score: 50,
     budgetMin: "",
     budgetMax: "",
+    tier: 3,
+    source: "",
   });
 
   useEffect(() => {
@@ -81,6 +83,8 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
         score: lead.score ?? 50,
         budgetMin: lead.budgetMin?.toString() || "",
         budgetMax: lead.budgetMax?.toString() || "",
+        tier: lead.tier ?? 3,
+        source: lead.source || "",
       });
       setIsEditing(false);
 
@@ -394,6 +398,29 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
                       max="100"
                       value={editForm.score}
                       onChange={(e) => setEditForm({ ...editForm, score: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.tier", "Tier")}</label>
+                    <select
+                      value={editForm.tier}
+                      onChange={(e) => setEditForm({ ...editForm, tier: parseInt(e.target.value, 10) })}
+                      className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    >
+                      <option value={1}>{t("leads.tiers.t1", "T1 — Elite")}</option>
+                      <option value={2}>{t("leads.tiers.t2", "T2 — Premium")}</option>
+                      <option value={3}>{t("leads.tiers.t3", "T3 — Standard")}</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5 text-start">
+                    <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.source", "Source")}</label>
+                    <input
+                      type="text"
+                      value={editForm.source}
+                      onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
                       className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
                     />
                   </div>
