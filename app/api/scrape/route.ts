@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionWithDBVerify } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getScraperClient } from "@/lib/scraper-client";
+import { getScraperClient, getWebhookUrl } from "@/lib/scraper-client";
 
 export async function POST(request: NextRequest) {
   try {
@@ -71,11 +71,7 @@ export async function POST(request: NextRequest) {
     });
 
     const scraperClient = await getScraperClient();
-    let origin = request.nextUrl.origin;
-    if (origin.includes('localhost')) {
-      origin = origin.replace('localhost', '127.0.0.1');
-    }
-    const webhookUrl = `${origin}/api/scrape/webhook`;
+    const webhookUrl = getWebhookUrl(request.nextUrl.origin);
 
     console.log(`[Scraper] Dispatching async scrape run ${scrapeRun.id} to microservice. Webhook: ${webhookUrl}`);
 
@@ -89,15 +85,10 @@ export async function POST(request: NextRequest) {
         data: { status: "FAILED" }
       });
 
-      if (role === 'AGENT') {
-        return NextResponse.json({
-          message: 'HNWI lead scraping started (fallback mode)',
-          runId: scrapeRun.id,
-          sources: requestedSources
-        });
-      }
-
-      return NextResponse.json({ error: "Scraper service is unavailable or failed: " + triggerError.message }, { status: 503 });
+      return NextResponse.json(
+        { error: "Scraper service is unavailable or failed: " + triggerError.message },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json({

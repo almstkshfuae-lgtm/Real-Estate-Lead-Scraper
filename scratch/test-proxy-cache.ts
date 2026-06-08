@@ -1,0 +1,33 @@
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env' });
+
+import { prisma } from '../lib/prisma.js';
+
+console.log('--- TESTING PRISMA PROXY CACHING AND REFERENCE EQUALITY ---');
+
+const userProxy1 = prisma.user;
+const userProxy2 = prisma.user;
+
+console.log(`userProxy1 === userProxy2: ${userProxy1 === userProxy2} (Expected: true)`);
+
+const leadProxy1 = prisma.lead;
+const leadProxy2 = prisma.lead;
+
+console.log(`leadProxy1 === leadProxy2: ${leadProxy1 === leadProxy2} (Expected: true)`);
+
+const userFind1 = prisma.user.findMany;
+const userFind2 = prisma.user.findMany;
+
+console.log(`userFind1 === userFind2: ${userFind1 === userFind2} (Expected: true)`);
+
+const raw = (prisma as any).$raw;
+console.log(`raw.user.findMany === raw.user.findMany: ${raw.user.findMany === raw.user.findMany}`);
+
+
+const topLevelMethod1 = prisma.$transaction;
+const topLevelMethod2 = prisma.$transaction;
+
+console.log(`topLevelMethod1 === topLevelMethod2: ${topLevelMethod1 === topLevelMethod2} (Expected: true)`);
+
+console.log('--- TEST FINISHED ---');

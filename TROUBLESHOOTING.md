@@ -346,7 +346,7 @@ mysql -u <username> -p<password> -h localhost
 3. **Promise.all Concurrent Starvation**: Executing parallel queries (`leads` and `count`) with `Promise.all` triggers simultaneous connection pool handshakes, causing race conditions and fail-fast collapses if database connections are cold/reconnecting.
 
 **Solution**:
-1. **Hardened Proxy**: The `lib/prisma.ts` proxy intercepts all Prisma connection codes (starting with `P1`, plus pool timeout `P2024`) and handles common TCP network error strings. It terminates the bad socket, waits `200ms` for TCP recycling, and automatically retries the query exactly once.
+1. **Hardened Proxy**: The `lib/prisma.ts` proxy intercepts all Prisma connection codes (starting with `P1`, plus pool timeout `P2024`) and handles common TCP network error strings. It terminates the bad socket, waits `200ms` for TCP recycling, automatically retries the query exactly once, and utilizes WeakMap/Map-based caching of model and method proxies to eliminate memory leaks and GC overhead under high traffic.
 2. **Dynamic URL Fallback**: The client strips empty/whitespace `DATABASE_URL` values and re-injects the resolved public database URL back into the environment (`process.env.DATABASE_URL`) to satisfy Prisma requirements.
 3. **Sequential Query Execution**: In the API endpoints (e.g. `app/api/leads/route.ts`), we run the query steps sequentially instead of via `Promise.all`. This allows the first query to warm up the database connection pool, preventing connection handshake conflicts.
 

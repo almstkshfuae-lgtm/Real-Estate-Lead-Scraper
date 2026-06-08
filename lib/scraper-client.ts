@@ -260,5 +260,41 @@ export function getScraperClient(): Promise<ScraperClient> {
   return scraperClientPromise;
 }
 
+export function getWebhookUrl(requestOrigin: string): string {
+  // 1. Explicit full webhook URL override
+  if (process.env.WEBHOOK_URL) {
+    if (process.env.WEBHOOK_URL.includes('/api/scrape/webhook')) {
+      return process.env.WEBHOOK_URL;
+    }
+    // If it's just the base URL, append the path
+    const base = process.env.WEBHOOK_URL.replace(/\/$/, '');
+    return `${base}/api/scrape/webhook`;
+  }
+
+  // 2. Base URL override
+  let origin = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || requestOrigin;
+
+  // 3. Safe localhost/loopback to 127.0.0.1 replacement preserving protocol and port
+  try {
+    const urlObj = new URL(origin);
+    const hostname = urlObj.hostname;
+    if (hostname === 'localhost' || hostname === '[::1]' || hostname === '0.0.0.0' || hostname === '::1') {
+      urlObj.hostname = '127.0.0.1';
+      origin = urlObj.origin;
+    }
+  } catch (e) {
+    // Basic fallback replacement if URL parsing fails
+    if (origin.includes('localhost')) {
+      origin = origin.replace('localhost', '127.0.0.1');
+    } else if (origin.includes('[::1]')) {
+      origin = origin.replace('[::1]', '127.0.0.1');
+    } else if (origin.includes('::1')) {
+      origin = origin.replace('::1', '127.0.0.1');
+    }
+  }
+
+  return `${origin}/api/scrape/webhook`;
+}
+
 export { ScraperClient };
 export type { ScraperResponse, ScrapedContent, ScraperConfig };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateGeminiText, getAIConfig } from "@/lib/ai";
+import { signalsToString } from "@/lib/signals";
 
 // Allow up to 30s — Gemini API calls can take 10-15s on cold start
 export const maxDuration = 30;
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
         : `You are an elite UAE real estate sales assistant specializing in high-net-worth client engagement. Write highly personalized, professional property pitch emails in English. Style: concise, data-driven, luxury-focused. CRITICAL: The lead is a high-profile global investor who may reside anywhere in the world (e.g., Canada, Europe). The "Preferred Area" is their target investment zone in the UAE, NOT their residence. Never assume or write that they currently reside in the UAE or the target area; instead, pitch the UAE opportunity as a premium addition to their international portfolio.
 STRICTLY FORBIDDEN to use cliches like "Hope this email finds you well", "We are pleased to...", or starting with "Dear". Start the pitch directly with a compelling business-focused hook (e.g., "Given your leadership at...", "As a global investor expanding your portfolio..."). Never include specific prices unless given. Avoid generic phrases. Output only the pitch text in English, no subject line, no labels.`;
 
-    const signals = Array.isArray(lead.signals) ? lead.signals.join(", ") : lead.signals || "N/A";
+    const signals = signalsToString(lead.signals);
 
     const nameVal = lang === "ar" ? (lead.nameAr || lead.name) : lead.name;
     const companyVal = lang === "ar" ? (lead.companyAr || lead.company) : lead.company;

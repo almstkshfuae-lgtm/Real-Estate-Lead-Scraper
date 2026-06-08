@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateGeminiText, deduplicateSignals } from "@/lib/ai";
+import { signalsToString } from "@/lib/signals";
+import { parseAIJson, AIJsonParseError } from "@/lib/ai-json";
 
 // Predefined news signals for UAE high-profile individuals (simulated)
 const UAE_SIGNALS_DB = [
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
     const prompt = `You are a UAE real estate intelligence analyst. Extract investment signals from the following news snippets about a lead.
 
 Lead: ${lead.name}, ${lead.role} at ${lead.company}
-Current signals: ${Array.isArray(lead.signals) ? lead.signals.join(", ") : lead.signals}
+Current signals: ${signalsToString(lead.signals)}
 
 News intelligence:
 ${newsContext}
@@ -44,7 +46,6 @@ ${lang === "ar" ? "أجب باللغة العربية للملخص، لكن ال
 Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<intelligence summary>", "confidenceScore": <0-100>, "newsSnippets": ["<snippet 1>", "<snippet 2>"]}`;
 
     const responseText = await generateGeminiText("", prompt, 4096);
-    const trimmedResponse = responseText?.trim() || "{}";
 
     let parsed: {
       signals: string[];
@@ -54,10 +55,13 @@ Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<i
     };
 
     try {
-      const jsonMatch = trimmedResponse.match(/\{[\s\S]*\}/);
-      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(trimmedResponse);
-    } catch {
-      return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
+      parsed = parseAIJson<typeof parsed>(responseText ?? "");
+    } catch (err) {
+      if (err instanceof AIJsonParseError) {
+        console.error("[AI Signals] JSON parse failed:", err.message, "| snippet:", err.rawSnippet);
+        return NextResponse.json({ error: "AI returned an unstructured response. Please retry." }, { status: 502 });
+      }
+      throw err;
     }
 
     return NextResponse.json({

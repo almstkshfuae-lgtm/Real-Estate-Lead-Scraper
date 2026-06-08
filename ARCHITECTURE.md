@@ -136,6 +136,18 @@ model Lead {
 
 ---
 
+## 🛡️ Database Connection Proxy & Resilient Reconnection
+
+To mitigate transient connection drops and "Concurrent Reconnect Storms" (especially under serverless/concurrent environment constraints against Railway's TCP proxies), a custom resilient Proxy layer wraps the Prisma Client in [prisma.ts](file:///c:/projects/Real-Estate-Lead-Scraper/lib/prisma.ts):
+
+- **Thundering Herd Mitigation**: Utilizes a single global `reconnectLock` Promise. When concurrent database queries fail due to connection errors, only the first query triggers the reconnection sequence. All subsequent queries await this same Promise rather than spawning separate connection attempts.
+- **Dynamic Exponential Backoff**: The reconnection routine utilizes a global `reconnectAttempts` counter to dynamically calculate delays ($100ms \times 2^{attempt}$, capped at $1000ms$) with added random jitter.
+- **Self-Healing & Reset**: 
+  - On connection failure, the proxy increments the attempt counter to delay subsequent reconnects further, protecting the DB from overload.
+  - On any successful connection or successful query execution, the attempt counter is immediately reset to `0`, ensuring that future transient drops start at the minimum base latency.
+
+---
+
 ## 🛠️ Operations & Maintenance
 
 ### 1. Local Health Verification

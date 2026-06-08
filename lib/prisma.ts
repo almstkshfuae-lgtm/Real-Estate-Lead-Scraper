@@ -126,6 +126,7 @@ function checkConnectionError(error: any): boolean {
  * before they retry their original query.
  */
 let reconnectLock: Promise<void> | null = null;
+let reconnectAttempts = 0;
 
 async function reconnectWithBackoff(attempt = 0): Promise<void> {
   // Exponential backoff: 100ms, 200ms, 400ms... capped at 1000ms + random jitter
@@ -146,11 +147,17 @@ async function reconnectWithBackoff(attempt = 0): Promise<void> {
   try {
     await rawPrisma.$connect();
     console.warn('[Prisma Proxy] Reconnect successful.');
+    reconnectAttempts = 0;
   } catch (reconnectError) {
     console.error('[Prisma Proxy] Reconnect failed:', reconnectError);
+    reconnectAttempts++;
     // Do not throw — let the caller's retry handle the next failure
   }
 }
+
+// WeakMaps and Maps to cache Proxy instances and wrapped functions to prevent memory leaks and GC overhead
+const proxyCache = new WeakMap<object, any>();
+const topLevelMethodCache = new Map<string | symbol, Function>();
 
 // 100% Resilient Prisma Connection Proxy
 // Single-retry policy with global reconnect lock to prevent thundering herd
@@ -164,61 +171,89 @@ export const prisma = new Proxy(rawPrisma, {
 
     // If it's a Prisma model (e.g. user, lead, chatMessage) or a relation namespace
     if (value && typeof value === 'object' && !('then' in value)) {
-      return new Proxy(value, {
-        get(modelTarget, modelProp) {
-          const method = Reflect.get(modelTarget, modelProp);
-          if (typeof method === 'function') {
-            return async function (...args: any[]) {
-              try {
-                return await method.apply(modelTarget, args);
-              } catch (error: any) {
-                if (!checkConnectionError(error)) {
-                  throw error;
-                }
+      let cachedProxy = proxyCache.get(value);
+      if (!cachedProxy) {
+        const modelMethodCache = new Map<string | symbol, Function>();
+        cachedProxy = new Proxy(value, {
+          get(modelTarget, modelProp) {
+            const method = Reflect.get(modelTarget, modelProp);
+            if (typeof method === 'function') {
+              let cachedMethod = modelMethodCache.get(modelProp);
+              if (!cachedMethod) {
+                cachedMethod = async function (...args: any[]) {
+                  try {
+                    const currentMethod = Reflect.get(modelTarget, modelProp);
+                    const res = await currentMethod.apply(modelTarget, args);
+                    reconnectAttempts = 0;
+                    return res;
+                  } catch (error: any) {
+                    if (!checkConnectionError(error)) {
+                      throw error;
+                    }
 
-                console.warn('[Prisma Proxy] Connection error detected on model method. Acquiring reconnect lock...');
+                    console.warn('[Prisma Proxy] Connection error detected on model method. Acquiring reconnect lock...');
 
-                // If no reconnect is in progress, start one. Otherwise, reuse the existing Promise.
-                if (!reconnectLock) {
-                  reconnectLock = reconnectWithBackoff(0).finally(() => {
-                    reconnectLock = null;
-                  });
-                }
+                    // If no reconnect is in progress, start one. Otherwise, reuse the existing Promise.
+                    if (!reconnectLock) {
+                      reconnectLock = reconnectWithBackoff(reconnectAttempts).finally(() => {
+                        reconnectLock = null;
+                      });
+                    }
 
-                // All concurrent callers wait for the single shared reconnect to complete
-                await reconnectLock;
+                    // All concurrent callers wait for the single shared reconnect to complete
+                    await reconnectLock;
 
-                // Single retry after reconnect
-                return await method.apply(modelTarget, args);
+                    // Single retry after reconnect
+                    const currentMethodAfterReconnect = Reflect.get(modelTarget, modelProp);
+                    const retryRes = await currentMethodAfterReconnect.apply(modelTarget, args);
+                    reconnectAttempts = 0;
+                    return retryRes;
+                  }
+                };
+                modelMethodCache.set(modelProp, cachedMethod);
               }
-            };
+              return cachedMethod;
+            }
+            return method;
           }
-          return method;
-        }
-      });
+        });
+        proxyCache.set(value, cachedProxy);
+      }
+      return cachedProxy;
     }
 
     if (typeof value === 'function') {
-      return async function (...args: any[]) {
-        try {
-          return await value.apply(target, args);
-        } catch (error: any) {
-          if (!checkConnectionError(error)) {
-            throw error;
+      let cachedMethod = topLevelMethodCache.get(prop);
+      if (!cachedMethod) {
+        cachedMethod = async function (...args: any[]) {
+          try {
+            const currentMethod = Reflect.get(target, prop);
+            const res = await currentMethod.apply(target, args);
+            reconnectAttempts = 0;
+            return res;
+          } catch (error: any) {
+            if (!checkConnectionError(error)) {
+              throw error;
+            }
+
+            console.warn('[Prisma Proxy] Connection error detected on top-level method. Acquiring reconnect lock...');
+
+            if (!reconnectLock) {
+              reconnectLock = reconnectWithBackoff(reconnectAttempts).finally(() => {
+                reconnectLock = null;
+              });
+            }
+
+            await reconnectLock;
+            const currentMethodAfterReconnect = Reflect.get(target, prop);
+            const retryRes = await currentMethodAfterReconnect.apply(target, args);
+            reconnectAttempts = 0;
+            return retryRes;
           }
-
-          console.warn('[Prisma Proxy] Connection error detected on top-level method. Acquiring reconnect lock...');
-
-          if (!reconnectLock) {
-            reconnectLock = reconnectWithBackoff(0).finally(() => {
-              reconnectLock = null;
-            });
-          }
-
-          await reconnectLock;
-          return await value.apply(target, args);
-        }
-      };
+        };
+        topLevelMethodCache.set(prop, cachedMethod);
+      }
+      return cachedMethod;
     }
 
     return value;

@@ -1,6 +1,6 @@
 async function runTests() {
     console.log('====== LEADPULSE API INTEGRATION TEST ======');
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    const baseUrl = 'http://localhost:3000';
     // Test 1: Accessing a protected endpoint without authentication
     console.log('\n[Test 1] Fetching /api/leads without authentication...');
     try {
@@ -254,4 +254,4 @@ async function runTests() {
     console.log('\n====== ALL API INTEGRATION TESTS COMPLETED! ======');
 }
 runTests().catch(console.error);
-export { };
+export {};

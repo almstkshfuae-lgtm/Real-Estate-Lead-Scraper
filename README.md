@@ -275,6 +275,10 @@ WHATSAPP_PHONE_NUMBER_ID=
 # Scraper
 SCRAPER_SERVICE_URL=
 SCRAPER_SECRET=
+
+# Webhook & Local testing overrides
+APP_URL=
+WEBHOOK_URL=
 ```
 
 ---

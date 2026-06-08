@@ -19,15 +19,32 @@ async function main() {
     };
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
-    console.log("Navigating to adgm.com...");
+    // Log console logs from the page
+    page.on('console', msg => {
+        console.log(`[Browser Console] ${msg.type()}: ${msg.text()}`);
+    });
+    // Log uncaught page exceptions
+    page.on('pageerror', err => {
+        console.error(`[Browser PageError] ${err.message}`);
+    });
+    // Log failed network requests
+    page.on('requestfailed', request => {
+        var _a;
+        console.warn(`[Browser RequestFailed] ${request.url()} - ${((_a = request.failure()) === null || _a === void 0 ? void 0 : _a.errorText) || 'failed'}`);
+    });
+    console.log("Navigating to google maps search...");
     try {
-        const response = await page.goto('https://www.adgm.com', { timeout: 30000, waitUntil: 'domcontentloaded' });
+        const response = await page.goto('https://www.google.com/maps/search/real+estate+developer+in+dubai', { timeout: 45000, waitUntil: 'domcontentloaded' });
         console.log("Response Status:", response === null || response === void 0 ? void 0 : response.status());
         console.log("Page Title:", await page.title());
         console.log("Page URL:", page.url());
         const content = await page.content();
         console.log("Content length:", content.length);
-        console.log("Snippet:", content.substring(0, 500));
+        console.log("Snippet:", content.substring(0, 1000));
+        // Save screenshot
+        const screenshotPath = 'C:/Users/ceo/.gemini/antigravity-ide/brain/c371fb04-ae4d-4f34-8f1a-f4e3d2256e58/googlemaps.png';
+        await page.screenshot({ path: screenshotPath });
+        console.log("Screenshot saved to:", screenshotPath);
     }
     catch (err) {
         console.error("Navigation error:", err.message);

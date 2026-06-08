@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { generatePersonaAnalysis } from "@/lib/ai";
 export async function GET(request, { params }) {
+    var _a;
     try {
         const session = await getSession();
         if (!session) {
@@ -18,7 +19,7 @@ export async function GET(request, { params }) {
             return NextResponse.json({ error: "Lead not found" }, { status: 404 });
         }
         // Agents can only access their own leads
-        if (session.role !== 'ADMIN' && lead.agentId !== session.id) {
+        if (((_a = session.role) === null || _a === void 0 ? void 0 : _a.toUpperCase()) !== 'ADMIN' && lead.agentId !== session.id) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
         const persona = await generatePersonaAnalysis(lead, lang);

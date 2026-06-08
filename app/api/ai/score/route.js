@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { generateGeminiText } from "@/lib/ai";
 import prisma from "@/lib/prisma";
+import { signalsToString } from "@/lib/signals";
+import { parseAIJson, AIJsonParseError } from "@/lib/ai-json";
 export async function POST(req) {
     try {
         const body = await req.json();
@@ -12,9 +14,7 @@ export async function POST(req) {
         if (!lead) {
             return NextResponse.json({ error: "Lead not found" }, { status: 404 });
         }
-        const signals = Array.isArray(lead.signals)
-            ? lead.signals.join(", ")
-            : JSON.stringify(lead.signals);
+        const signals = signalsToString(lead.signals);
         const prompt = `You are a UAE real estate lead scoring AI. Analyze the following lead and output a refined score from 0-100 and brief justification.
 
 Lead Profile:
@@ -45,18 +45,19 @@ STABILITY CONSTRAINTS:
 
 Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "reasoning": "<1-2 sentence justification>", "recommendations": ["<action 1>", "<action 2>"]}`;
         const responseText = await generateGeminiText("", prompt, 4096);
-        const trimmedResponse = (responseText === null || responseText === void 0 ? void 0 : responseText.trim()) || "{}";
         let parsed;
         try {
-            // Extract JSON even if wrapped in markdown code blocks
-            const jsonMatch = trimmedResponse.match(/\{[\s\S]*\}/);
-            parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(trimmedResponse);
+            parsed = parseAIJson(responseText !== null && responseText !== void 0 ? responseText : "");
         }
-        catch {
-            return NextResponse.json({ error: "Invalid AI response format" }, { status: 502 });
+        catch (err) {
+            if (err instanceof AIJsonParseError) {
+                console.error("[AI Score] JSON parse failed:", err.message, "| snippet:", err.rawSnippet);
+                return NextResponse.json({ error: "AI returned an unstructured response. Please retry." }, { status: 502 });
+            }
+            throw err; // re-throw unexpected errors
         }
         // Apply the refined score to the database
-        const newScore = Math.max(0, Math.min(100, Math.round(parsed.refinedScore)));
+        const newScore = Math.max(0, Math.min(100, Math.round(Number(parsed.refinedScore) || 0)));
         await prisma.lead.update({
             where: { id: String(leadId) },
             data: { score: newScore },

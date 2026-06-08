@@ -12,8 +12,21 @@ async function main() {
             const lowerCompany = (lead.company || "").toLowerCase();
             const lowerPersona = (lead.persona || "").toLowerCase();
             const lowerSource = (lead.source || "").toLowerCase();
-            if (lowerCompany.includes("dubai") || lowerPersona.includes("dubai") || lowerSource.includes("dubai")) {
-                sourceLoc = "Dubai";
+            const lowerNotes = (lead.notes || "").toLowerCase();
+            const searchTerms = [
+                "london", "canada", "toronto", "montreal", "vancouver", "ottawa", "edmonton", "quebec", "québec",
+                "riyadh", "jeddah", "saudi", "kuwait", "qatar", "doha", "bahrain", "manama", "oman", "muscat",
+                "egypt", "cairo", "lebanon", "beirut", "jordan", "amman", "india", "mumbai", "russia", "moscow",
+                "china", "turkey", "istanbul", "pakistan", "dubai"
+            ];
+            for (const term of searchTerms) {
+                if (lowerCompany.includes(term) || lowerPersona.includes(term) || lowerSource.includes(term) || lowerNotes.includes(term)) {
+                    // Capitalize first letter of term for presentation
+                    sourceLoc = term.charAt(0).toUpperCase() + term.slice(1);
+                    if (term === "québec")
+                        sourceLoc = "Québec";
+                    break;
+                }
             }
         }
         const normalizedLoc = normalizeLocation(sourceLoc);

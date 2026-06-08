@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import Papa from "papaparse";
 import ExcelJS from "exceljs";
 import { put } from "@vercel/blob";
+import { parseSignals } from "@/lib/signals";
 
 export async function GET(request: Request) {
   try {
@@ -58,8 +59,7 @@ export async function GET(request: Request) {
       "Tier": `T${lead.tier}`,
       "Score": lead.score,
       "Status": lead.status.toUpperCase(),
-      "Signals": Array.isArray(lead.signals) ? lead.signals.join(", ") : 
-                (typeof lead.signals === 'string' ? JSON.parse(lead.signals).join(", ") : ""),
+      "Signals": parseSignals(lead.signals).join(", "),
       "Created At": lead.createdAt.toISOString(),
       "Notes": lead.notes || ""
     }));
