@@ -275,10 +275,10 @@ function GeoMap({
 
       const map = L.map(mapRef.current!, {
         center: [25.2048, 55.2708],
-        zoom: 9,
-        minZoom: 3,
+        zoom: 3,
+        minZoom: 2,
         maxBounds: maxBounds,
-        maxBoundsViscosity: 1.0,
+        maxBoundsViscosity: 0.5,
         zoomControl: false,
         attributionControl: true,
       });
@@ -331,222 +331,97 @@ function GeoMap({
       }
 
       if (activeLayer === "markers") {
-        // Group leads by location cluster
-        const clusterMap: Record<string, MapLead[]> = {};
-        leads.forEach((lead) => {
-          const key = lead.location || "Unknown";
-          if (!clusterMap[key]) clusterMap[key] = [];
-          clusterMap[key].push(lead);
-        });
+        // Render every single lead as its own marker, applying a random jitter to prevent perfect overlap
+        leads.forEach((lead, index) => {
+          const baseCoords = getCoords(lead.location || "Unknown", lead.id);
+          if (!baseCoords) return;
 
-        Object.entries(clusterMap).forEach(([location, clusterLeads]) => {
-          const baseCoords = getCoords(location);
-          if (!baseCoords) return; // Skip clusters with unresolvable location
+          const tierColor = getTierColor(lead.tier);
+          const scoreColor = getScoreColor(lead.score);
 
-          if (clusterLeads.length === 1) {
-            // Single lead marker
-            const lead = clusterLeads[0];
-            const tierColor = getTierColor(lead.tier);
-            const scoreColor = getScoreColor(lead.score);
-
-            const icon = L.divIcon({
-              className: "",
-              html: `
+          const icon = L.divIcon({
+            className: "",
+            html: `
+              <div style="position: relative; width: 44px; height: 44px;">
                 <div style="
-                  position: relative;
-                  width: 44px;
-                  height: 44px;
-                ">
-                  <div style="
-                    position: absolute;
-                    inset: 0;
-                    border-radius: 50%;
-                    background: ${tierColor}22;
-                    border: 2px solid ${tierColor};
-                    animation: pulse-map 2s infinite;
-                  "></div>
-                  <div style="
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 50%;
-                    background: ${tierColor};
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: white;
-                    box-shadow: 0 2px 8px ${tierColor}66;
-                    cursor: pointer;
-                    font-family: ${language === 'ar' ? "'Cairo', 'Tajawal', system-ui" : "'Inter', sans-serif"};
-                  ">${lead.score}</div>
-                </div>
-              `,
-              iconSize: [44, 44],
-              iconAnchor: [22, 22],
-            });
-
-            const dbLat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : null;
-            const dbLng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : null;
-            const fallbackCoords = (dbLat === null || dbLng === null) ? getCoords(location, lead.id) : null;
-            const lat = dbLat ?? fallbackCoords?.lat ?? null;
-            const lng = dbLng ?? fallbackCoords?.lng ?? null;
-            if (lat === null || lng === null) return; // Skip leads with unresolvable coordinates
-            const marker = L.marker([lat, lng], { icon });
-
-            const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
-            const signals = Array.isArray(lead.signals) ? lead.signals : [];
-            const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
-            const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
-
-            marker.bindPopup(`
-              <div ${dirAttr} style="
-                font-family: ${fontFamily};
-                min-width: 240px;
-                padding: 4px;
-              ">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-                  <div style="font-weight: 800; font-size: 15px; color: #111827; margin-bottom: 2px;">${displayName}</div>
-                  <div style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; background: ${scoreColor}; flex-shrink: 0;">${lead.score}</div>
-                </div>
-                <div style="font-size: 12px; color: #6B7280; margin-bottom: 12px; font-weight: 500;">${lead.company}</div>
-                
-                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
-                  <span style="
-                    padding: 2px 8px;
-                    border-radius: 6px;
-                    font-size: 11px;
-                    font-weight: 700;
-                    background: ${tierColor}15;
-                    color: ${tierColor};
-                  ">T${lead.tier}</span>
-                  <span style="
-                    padding: 2px 8px;
-                    border-radius: 6px;
-                    font-size: 11px;
-                    font-weight: 600;
-                    background: #F3F4F6;
-                    color: #4B5563;
-                  ">${lead.status}</span>
-                </div>
-                
-                <div style="font-size: 11px; color: #6B7280; display: flex; align-items: center; gap: 4px; margin-bottom: 16px;">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                  ${lead.location}
-                </div>
-
-                <button class="view-profile-btn" style="
-                  width: 100%;
-                  padding: 8px;
-                  background: #185FA5;
-                  color: white;
-                  border: none;
-                  border-radius: 8px;
-                  font-weight: bold;
-                  font-size: 12px;
-                  cursor: pointer;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  gap: 6px;
-                  transition: opacity 0.2s;
-                " onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  ${language === 'ar' ? 'عرض الملف الكامل' : 'View Full Profile'}
-                </button>
-              </div>
-            `, { maxWidth: 300, className: "custom-lead-popup" });
-
-            marker.on('popupopen', (e) => {
-              const popupNode = e.popup.getElement();
-              const btn = popupNode?.querySelector('.view-profile-btn');
-              if (btn) {
-                // Must explicitly add event listener to the native DOM element inside Leaflet
-                (btn as HTMLElement).onclick = () => {
-                  onAction(lead);
-                };
-              }
-            });
-
-            marker.addTo(map);
-            markersRef.current.push(marker);
-
-          } else {
-            // Cluster marker
-            const topTier = Math.min(...clusterLeads.map((l) => l.tier));
-            const tierColor = getTierColor(topTier);
-            const avgScore = Math.round(clusterLeads.reduce((s, l) => s + l.score, 0) / clusterLeads.length);
-
-            const icon = L.divIcon({
-              className: "",
-              html: `
+                  position: absolute; inset: 0; border-radius: 50%;
+                  background: ${tierColor}22; border: 2px solid ${tierColor};
+                  animation: pulse-map 2s infinite;
+                "></div>
                 <div style="
-                  position: relative;
-                  width: 56px;
-                  height: 56px;
-                ">
-                  <div style="
-                    position: absolute;
-                    inset: 0;
-                    border-radius: 50%;
-                    background: ${tierColor}15;
-                    border: 2px solid ${tierColor}66;
-                  "></div>
-                  <div style="
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    width: 42px;
-                    height: 42px;
-                    border-radius: 50%;
-                    background: ${tierColor};
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    box-shadow: 0 4px 12px ${tierColor}44;
-                    cursor: pointer;
-                  ">
-                    <div style="font-size: 14px; font-weight: 800; font-family: ${language === 'ar' ? "'Cairo', 'Tajawal'" : "'Inter'"}, sans-serif; line-height:1;">${clusterLeads.length}</div>
-                    <div style="font-size: 9px; font-weight: 500; opacity: 0.85; font-family: ${language === 'ar' ? "'Cairo', 'Tajawal'" : "'Inter'"}, sans-serif;">${language === 'ar' ? 'عميل' : 'leads'}</div>
-                  </div>
-                </div>
-              `,
-              iconSize: [56, 56],
-              iconAnchor: [28, 28],
-            });
-
-            const marker = L.marker([baseCoords.lat, baseCoords.lng], { icon });
-            const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
-            const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
-
-            marker.bindPopup(`
-              <div ${dirAttr} style="font-family: ${fontFamily}; padding: 4px; min-width: 200px;">
-                <div style="font-weight: 700; font-size: 13px; color: #111827; margin-bottom: 2px;">${location}</div>
-                <div style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">${clusterLeads.length} ${language === 'ar' ? 'عميل · متوسط التقييم' : 'leads · Avg Score'} ${avgScore}</div>
-                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                  ${clusterLeads.slice(0, 5).map(l => `
-                    <span style="
-                      font-size: 11px;
-                      padding: 2px 6px;
-                      background: #F0F2F5;
-                      border-radius: 4px;
-                      color: #374151;
-                    ">${l.name}</span>
-                  `).join("")}
-                  ${clusterLeads.length > 5 ? `<span style="font-size: 11px; color: #9CA3AF;">+${clusterLeads.length - 5} more</span>` : ""}
-                </div>
+                  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                  width: 32px; height: 32px; border-radius: 50%; background: ${tierColor};
+                  display: flex; align-items: center; justify-content: center;
+                  font-size: 11px; font-weight: 700; color: white;
+                  box-shadow: 0 2px 8px ${tierColor}66; cursor: pointer;
+                  font-family: ${language === 'ar' ? "'Cairo', 'Tajawal', system-ui" : "'Inter', sans-serif"};
+                ">${lead.score}</div>
               </div>
-            `, { maxWidth: 280 });
-            marker.addTo(map);
-            markersRef.current.push(marker);
+            `,
+            iconSize: [44, 44],
+            iconAnchor: [22, 22],
+          });
+
+          // Jitter to spread overlapping leads in the same location
+          const jitterLat = (Math.random() - 0.5) * 0.05;
+          const jitterLng = (Math.random() - 0.5) * 0.05;
+
+          const dbLat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : null;
+          const dbLng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : null;
+
+          let lat = dbLat ?? baseCoords.lat;
+          let lng = dbLng ?? baseCoords.lng;
+
+          // Apply jitter only if they are using the fallback baseCoords
+          if (dbLat === null || dbLng === null) {
+            lat += jitterLat;
+            lng += jitterLng;
           }
+
+          const marker = L.marker([lat, lng], { icon });
+
+          const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
+          const signals = Array.isArray(lead.signals) ? lead.signals : [];
+          const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
+          const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
+
+          marker.bindPopup(`
+            <div ${dirAttr} style="font-family: ${fontFamily}; min-width: 240px; padding: 4px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                <div style="font-weight: 800; font-size: 15px; color: #111827; margin-bottom: 2px;">${displayName}</div>
+                <div style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; background: ${scoreColor}; flex-shrink: 0;">${lead.score}</div>
+              </div>
+              <div style="font-size: 12px; color: #6B7280; margin-bottom: 12px; font-weight: 500;">${lead.company}</div>
+              
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: ${tierColor}15; color: ${tierColor};">T${lead.tier}</span>
+                <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #F3F4F6; color: #4B5563;">${lead.status}</span>
+              </div>
+              
+              <div style="font-size: 11px; color: #6B7280; display: flex; align-items: center; gap: 4px; margin-bottom: 16px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                ${lead.location}
+              </div>
+
+              <button class="view-profile-btn" style="width: 100%; padding: 8px; background: #185FA5; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                ${language === 'ar' ? 'عرض الملف الكامل' : 'View Full Profile'}
+              </button>
+            </div>
+          `, { maxWidth: 300, className: "custom-lead-popup" });
+
+          marker.on('popupopen', (e) => {
+            const popupNode = e.popup.getElement();
+            const btn = popupNode?.querySelector('.view-profile-btn');
+            if (btn) {
+              (btn as HTMLElement).onclick = () => {
+                onAction(lead);
+              };
+            }
+          });
+
+          marker.addTo(map);
+          markersRef.current.push(marker);
         });
       } else if (activeLayer === "heatmap") {
         const heatGroup = L.layerGroup();
