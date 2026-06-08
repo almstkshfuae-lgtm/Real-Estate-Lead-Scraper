@@ -36,7 +36,7 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
     try {
       setLoading(true);
       const { searchTerm, statusFilter, tierFilter, scrapeRunId } = filters;
-      let url = `/api/leads?search=${encodeURIComponent(searchTerm)}&limit=200`;
+      let url = `/api/leads?search=${encodeURIComponent(searchTerm)}&limit=500`;
       if (statusFilter) url += `&status=${statusFilter}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (scrapeRunId) url += `&scrapeRunId=${scrapeRunId}`;

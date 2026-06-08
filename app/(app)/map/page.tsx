@@ -78,7 +78,7 @@ export default function MapPage() {
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     try {
-      let url = `/api/leads?limit=200&minimal=true&scoreMin=${debouncedScoreMin}`;
+      let url = `/api/leads?limit=1000&minimal=true&scoreMin=${debouncedScoreMin}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (statusFilter) url += `&status=${statusFilter}`;
 
@@ -120,7 +120,7 @@ export default function MapPage() {
       setLoading(true);
 
       try {
-        let url = `/api/leads?limit=200&minimal=true&north=${bounds.north}&south=${bounds.south}&east=${bounds.east}&west=${bounds.west}`;
+        let url = `/api/leads?limit=1000&minimal=true&north=${bounds.north}&south=${bounds.south}&east=${bounds.east}&west=${bounds.west}`;
         if (tierFilter) url += `&tier=${tierFilter}`;
         if (statusFilter) url += `&status=${statusFilter}`;
         if (debouncedScoreMin) url += `&scoreMin=${debouncedScoreMin}`;
@@ -158,7 +158,7 @@ export default function MapPage() {
 
   const handleTargetedScrape = async () => {
     if (!geofenceBounds) return;
-    
+
     setLoading(true);
     try {
       const res = await fetch("/api/scrape", {
@@ -179,11 +179,11 @@ export default function MapPage() {
 
       if (!res.ok) throw new Error("Scrape trigger failed");
       const data = await safeJson(res);
-      
+
       if (data.runId) {
         setActiveRunId(data.runId);
       }
-      
+
       const { toast } = await import("sonner");
       toast.success(t("search.scrapeStarted", "Scrape job started successfully. Tracking progress..."));
     } catch (err) {
@@ -235,15 +235,15 @@ export default function MapPage() {
               {isPolling
                 ? t("search.scrapeInProgress", "Scraping in progress...")
                 : runStatus === "COMPLETED"
-                ? t("search.scrapeComplete", "Scraping complete!")
-                : t("search.scrapeFailed", "Scraping failed")}
+                  ? t("search.scrapeComplete", "Scraping complete!")
+                  : t("search.scrapeFailed", "Scraping failed")}
             </h3>
             <p className="text-sm text-[var(--color-text-secondary)] mt-1">
               {isPolling
                 ? t("search.scrapeWait", "Please wait while we extract data from the targeted zone. It may take a few minutes.")
                 : runStatus === "COMPLETED"
-                ? t("search.scrapeFound", "We found {{count}} leads.", { count: leadsFound })
-                : t("search.scrapeErrorDesc", "An error occurred during the scrape job.")}
+                  ? t("search.scrapeFound", "We found {{count}} leads.", { count: leadsFound })
+                  : t("search.scrapeErrorDesc", "An error occurred during the scrape job.")}
             </p>
           </div>
 
@@ -271,7 +271,7 @@ export default function MapPage() {
 
       {/* Main Container */}
       <div className="flex-1 relative flex overflow-hidden">
-        
+
         {/* Map Area */}
         <div className="flex-1 relative h-full">
           {/* Map */}
@@ -289,58 +289,58 @@ export default function MapPage() {
           {/* Floating UI OVER the map */}
           {/* 1. Header / Filters (Top Left) */}
           <div className="absolute top-4 inset-inline-start-4 z-[900] flex flex-col gap-3 pointer-events-none max-w-[280px] sm:max-w-sm">
-             <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-white/50 pointer-events-auto">
-                <h1 className="text-xl font-black text-[var(--color-text-primary)] leading-tight mb-1">
-                  {t("map.title", "Geo-Intelligence Map")}
-                </h1>
-                <p className="text-[var(--color-text-secondary)] text-xs mb-3 font-medium">
-                  {t("map.subtitle", "Visualize lead clusters and demand signals across the UAE.")}
-                </p>
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-xl border border-white/50 pointer-events-auto">
+              <h1 className="text-xl font-black text-[var(--color-text-primary)] leading-tight mb-1">
+                {t("map.title", "Geo-Intelligence Map")}
+              </h1>
+              <p className="text-[var(--color-text-secondary)] text-xs mb-3 font-medium">
+                {t("map.subtitle", "Visualize lead clusters and demand signals across the UAE.")}
+              </p>
 
-                {/* Filters */}
-                <div className="flex flex-col gap-2 pt-3 border-t border-[var(--color-border)]">
-                  <div className="flex gap-2">
-                    <select
-                      value={tierFilter}
-                      onChange={(e) => setTierFilter(e.target.value ? Number(e.target.value) : "")}
-                      className="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-lg text-xs font-bold bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
-                    >
-                      <option value="">{t("leads.tiers.all", "All Tiers")}</option>
-                      <option value="1">{t("leads.tiers.t1", "T1 — Elite")}</option>
-                      <option value="2">{t("leads.tiers.t2", "T2 — Premium")}</option>
-                      <option value="3">{t("leads.tiers.t3", "T3 — Standard")}</option>
-                    </select>
+              {/* Filters */}
+              <div className="flex flex-col gap-2 pt-3 border-t border-[var(--color-border)]">
+                <div className="flex gap-2">
+                  <select
+                    value={tierFilter}
+                    onChange={(e) => setTierFilter(e.target.value ? Number(e.target.value) : "")}
+                    className="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-lg text-xs font-bold bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                  >
+                    <option value="">{t("leads.tiers.all", "All Tiers")}</option>
+                    <option value="1">{t("leads.tiers.t1", "T1 — Elite")}</option>
+                    <option value="2">{t("leads.tiers.t2", "T2 — Premium")}</option>
+                    <option value="3">{t("leads.tiers.t3", "T3 — Standard")}</option>
+                  </select>
 
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-lg text-xs font-bold bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
-                    >
-                      <option value="">{t("leads.status.all", "All Statuses")}</option>
-                      <option value="new">{t("leads.status.new", "New")}</option>
-                      <option value="contacted">{t("leads.status.contacted", "Contacted")}</option>
-                      <option value="qualified">{t("leads.status.qualified", "Qualified")}</option>
-                      <option value="proposal">{t("leads.status.proposal", "Proposal")}</option>
-                      <option value="closed">{t("leads.status.closed", "Closed")}</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider whitespace-nowrap">
-                      {t("map.filter.minScore", "Min Score")}: {scoreMin}
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={95}
-                      step={5}
-                      value={scoreMin}
-                      onChange={(e) => setScoreMin(Number(e.target.value))}
-                      className="w-full accent-[#185FA5]"
-                    />
-                  </div>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="flex-1 px-2 py-1.5 border border-[var(--color-border)] rounded-lg text-xs font-bold bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                  >
+                    <option value="">{t("leads.status.all", "All Statuses")}</option>
+                    <option value="new">{t("leads.status.new", "New")}</option>
+                    <option value="contacted">{t("leads.status.contacted", "Contacted")}</option>
+                    <option value="qualified">{t("leads.status.qualified", "Qualified")}</option>
+                    <option value="proposal">{t("leads.status.proposal", "Proposal")}</option>
+                    <option value="closed">{t("leads.status.closed", "Closed")}</option>
+                  </select>
                 </div>
-             </div>
+
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider whitespace-nowrap">
+                    {t("map.filter.minScore", "Min Score")}: {scoreMin}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={95}
+                    step={5}
+                    value={scoreMin}
+                    onChange={(e) => setScoreMin(Number(e.target.value))}
+                    className="w-full accent-[#185FA5]"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* 2. Controls (Top Right) */}
@@ -352,11 +352,10 @@ export default function MapPage() {
                   key={layer.id}
                   onClick={() => setActiveLayer(layer.id)}
                   title={layer.desc}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                    activeLayer === layer.id
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeLayer === layer.id
                       ? "bg-[var(--color-bg-card)] shadow-sm text-[var(--color-primary)]"
                       : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                  }`}
+                    }`}
                 >
                   <layer.icon className="w-4 h-4" />
                   <span className="hidden sm:inline">{layer.label}</span>
@@ -371,11 +370,10 @@ export default function MapPage() {
                   clearGeofence();
                   setGeofenceActive((v) => !v);
                 }}
-                className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all shadow-lg border ${
-                  geofenceActive
+                className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all shadow-lg border ${geofenceActive
                     ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-[var(--color-primary)]/20"
                     : "bg-white/95 backdrop-blur-md text-[var(--color-text-primary)] border-white/50 hover:bg-white"
-                }`}
+                  }`}
                 title={geofenceActive ? t("map.drawing", "Drawing Zone...") : t("map.drawZone", "Draw Zone")}
               >
                 <Crosshair className="w-4 h-4" />
@@ -424,7 +422,7 @@ export default function MapPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="w-px h-8 bg-[var(--color-border)] hidden sm:block" />
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -494,15 +492,15 @@ export default function MapPage() {
           )}
 
           {/* Full Lead Sidebar */}
-          <LeadSidebar 
-            lead={sidebarLead} 
-            onClose={() => setSidebarLead(null)} 
+          <LeadSidebar
+            lead={sidebarLead}
+            onClose={() => setSidebarLead(null)}
           />
 
           {/* Full Project Sidebar */}
-          <ProjectSidebar 
-            project={sidebarProject} 
-            onClose={() => setSidebarProject(null)} 
+          <ProjectSidebar
+            project={sidebarProject}
+            onClose={() => setSidebarProject(null)}
           />
         </div>
 
@@ -542,8 +540,8 @@ export default function MapPage() {
                               lead.score >= 90
                                 ? "#1D9E75"
                                 : lead.score >= 75
-                                ? "#BA7517"
-                                : "#A32D2D",
+                                  ? "#BA7517"
+                                  : "#A32D2D",
                           }}
                         >
                           {lead.score}

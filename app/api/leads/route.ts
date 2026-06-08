@@ -153,7 +153,7 @@ export async function GET(request: Request) {
     const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
 
     // Adjust limit dynamically based on payload size
-    let finalLimit = minimal ? Math.min(500, limit) : Math.min(100, limit);
+    let finalLimit = minimal ? Math.min(1000, limit) : Math.min(500, limit);
     if (isNonAdmin) {
       finalLimit = Math.min(10, finalLimit);
     }
