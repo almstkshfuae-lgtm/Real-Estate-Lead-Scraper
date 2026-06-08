@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
 import MapStats from "@/components/map/MapStats";
 import LeadSidebar from "@/components/leads/LeadSidebar";
+import ProjectSidebar from "@/components/map/ProjectSidebar";
 import type { Lead } from "@/components/leads/LeadTable";
 import type { MapLead } from "@/components/map/GeoMap";
 
@@ -51,6 +52,7 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [activeLayer, setActiveLayer] = useState<LayerType>("markers");
   const [sidebarLead, setSidebarLead] = useState<Lead | null>(null);
+  const [sidebarProject, setSidebarProject] = useState<any | null>(null);
   const [geofenceActive, setGeofenceActive] = useState(false);
   const [geofencedLeads, setGeofencedLeads] = useState<MapLead[]>([]);
   const [geofenceBounds, setGeofenceBounds] = useState<{
@@ -279,6 +281,7 @@ export default function MapPage() {
             language={i18n.language}
             activeLayer={activeLayer}
             onAction={(lead) => setSidebarLead(lead as unknown as Lead)}
+            onProjectAction={(proj) => setSidebarProject(proj)}
             geofenceActive={geofenceActive}
             onGeofenceDrawn={handleGeofenceDrawn}
           />
@@ -494,6 +497,12 @@ export default function MapPage() {
           <LeadSidebar 
             lead={sidebarLead} 
             onClose={() => setSidebarLead(null)} 
+          />
+
+          {/* Full Project Sidebar */}
+          <ProjectSidebar 
+            project={sidebarProject} 
+            onClose={() => setSidebarProject(null)} 
           />
         </div>
 

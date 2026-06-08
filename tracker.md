@@ -220,6 +220,9 @@
 - [x] **Domain Data Separation** — Separated logic paths for leads (investors) and projects (real estate developments) in scraper-service/index.js. Configured type checks, added callGeminiForProjects extraction route, updated mock data routing, and customized webhook payload mapping.
 - [x] **Anti-Bot Resilience** — Integrated a programmatic Cloudflare Turnstile/JS challenge solver (`resolveCloudflareChallenge`) and advanced header masking across the crawler and all 4 stage verification pipeline pages. Removed known automation signature check markers (such as the iframe `contentWindow` prototype override) to improve reliability when scraping protected sites like `abudhabioffplan.ae`.
 - [x] **Priority CSV Import Header Mapping** — Added priority URL/Link matching checks at the start of getCanonicalHeader in both frontend and backend (matching protocols, www., and common domain extensions like .com, .ae, etc.) to prevent URLs containing phone or contact keywords from being incorrectly mapped as standard phone columns.
+- [x] **Project Heatmap Interactivity** — Enabled full interactivity for project cards on the map, including detailed sidebar viewing, inline editing, and deletion synced with backend APIs.
+- [x] **Map Geographic Precision** — Fixed RTL-induced Leaflet marker offset issues by enforcing LTR on the map container and stabilizing custom project card dimensions for precise coordinate anchoring.
+- [x] **Contact Info RTL Formatting** — Enforced LTR direction on phone numbers and email addresses across the UI to prevent mixed-character rendering bugs in Arabic mode.
 
 
 

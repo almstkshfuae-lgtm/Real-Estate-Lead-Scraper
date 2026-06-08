@@ -219,6 +219,7 @@ interface GeoMapProps {
   language: string;
   activeLayer: "markers" | "heatmap";
   onAction: (lead: MapLead) => void;
+  onProjectAction?: (project: any) => void;
   geofenceActive: boolean;
   onGeofenceDrawn: (bounds: { north: number; south: number; east: number; west: number }) => void;
 }
@@ -229,6 +230,7 @@ function GeoMap({
   language,
   activeLayer,
   onAction,
+  onProjectAction,
   geofenceActive,
   onGeofenceDrawn,
 }: GeoMapProps) {
@@ -446,6 +448,7 @@ function GeoMap({
             className: "custom-project-card",
             html: `
               <div style="
+                width: 160px;
                 background: white;
                 border: 1px solid #E5E7EB;
                 border-radius: 8px;
@@ -454,13 +457,12 @@ function GeoMap({
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                white-space: nowrap;
                 position: relative;
                 cursor: pointer;
                 transition: transform 0.2s;
               " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 11px; font-weight: 800; color: #111827; margin-bottom: 2px;">${projectName}</div>
-                <div style="font-size: 12px; font-weight: 700; color: #1D9E75; background: #D1FAE5; padding: 2px 6px; border-radius: 4px;">${priceText}</div>
+                <div style="width: 100%; font-size: 11px; font-weight: 800; color: #111827; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;">${projectName}</div>
+                <div style="font-size: 12px; font-weight: 700; color: #1D9E75; background: #D1FAE5; padding: 2px 6px; border-radius: 4px; white-space: nowrap;">${priceText}</div>
                 <div style="
                   position: absolute;
                   bottom: -6px;
@@ -474,8 +476,8 @@ function GeoMap({
                 "></div>
               </div>
             `,
-            iconSize: [120, 48],
-            iconAnchor: [60, 48],
+            iconSize: [160, 50],
+            iconAnchor: [80, 50],
           });
 
           const marker = L.marker([lat, lng], { icon, zIndexOffset: 1000 });
@@ -516,9 +518,24 @@ function GeoMap({
                   </div>
                   <div style="color: #059669; font-weight: 600; background: #D1FAE5; padding: 2px 6px; border-radius: 4px;">${proj.handover || 'TBA'}</div>
                 </div>
+
+                <button class="view-project-btn" style="width: 100%; padding: 8px; margin-top: 12px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  ${language === 'ar' ? 'عرض التفاصيل' : 'View Details'}
+                </button>
               </div>
             </div>
           `, { maxWidth: 300, className: "custom-project-popup" });
+
+          marker.on('popupopen', (e: any) => {
+            const popupNode = e.popup.getElement();
+            const btn = popupNode?.querySelector('.view-project-btn');
+            if (btn && onProjectAction) {
+              (btn as HTMLElement).onclick = () => {
+                onProjectAction(proj);
+              };
+            }
+          });
 
           heatGroup.addLayer(marker);
         });
@@ -638,6 +655,7 @@ function GeoMap({
       `}</style>
       <div
         ref={mapRef}
+        dir="ltr"
         className="w-full h-full rounded-2xl overflow-hidden"
         style={{ minHeight: "500px" }}
       />

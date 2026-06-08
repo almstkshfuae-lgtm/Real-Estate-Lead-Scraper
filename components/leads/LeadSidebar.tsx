@@ -272,7 +272,7 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
   const currentScore = scoreResult?.refinedScore ?? lead.score;
 
   return (
-    <div className="fixed inset-y-0 inset-inline-end-0 w-full sm:max-w-md bg-[var(--color-bg-card)] shadow-2xl border-inline-start border-[var(--color-border)] z-50 flex flex-col transition-all duration-300 animate-in slide-in-from-inline-end">
+    <div className="fixed inset-y-0 inset-inline-end-0 w-full sm:max-w-md bg-[var(--color-bg-card)] shadow-2xl border-inline-start border-[var(--color-border)] z-[1000] flex flex-col transition-all duration-300 animate-in slide-in-from-inline-end">
       {/* Header */}
       <div className="p-6 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-bg-surface)]/50">
         <div className="flex items-center gap-3">
@@ -465,7 +465,7 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
                     <div key={label} className="flex items-center justify-between p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/30">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center`}><Icon className="w-4 h-4" /></div>
-                        <span className="text-sm font-medium text-[var(--color-text-primary)]">{value || t("common.notAvailable")}</span>
+                        <span dir="ltr" className="text-sm font-medium text-[var(--color-text-primary)] inline-block text-start text-left">{value || t("common.notAvailable")}</span>
                       </div>
                       {value && (
                         <button onClick={() => copyToClipboard(value, label)} className="p-1.5 rounded-md hover:bg-[var(--color-bg-card)] text-[var(--color-text-disabled)] hover:text-[var(--color-primary)] transition-all">
