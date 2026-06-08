@@ -226,6 +226,7 @@
 - [x] **Hardened: signals Json field normalisation** — Created `lib/signals.ts` with `parseSignals()` / `signalsToString()` helpers. Replaced all ad-hoc `Array.isArray / JSON.stringify / JSON.parse` patterns across `api/ai/score`, `api/ai/pitch`, `api/ai/signals`, and `api/export` routes. Eliminates 500 crashes caused by null, nested-object, or double-serialised signals values from Prisma MySQL Json type.
 - [x] **Hardened: robust AI JSON response parsing** — Created `lib/ai-json.ts` with `parseAIJson()` / `AIJsonParseError`. Replaced the greedy `/\{[\s\S]*\}/` regex in `api/ai/score` and `api/ai/signals` with a 3-layer cascade: (1) strip markdown fences, (2) direct `JSON.parse`, (3) character-level balanced-brace scanner (non-greedy, stops at first complete `{…}` block). Prevents repeated 502 errors when the model wraps reasoning text in curly braces or emits multi-block output.
 - [x] **Hardened: Prisma Proxy caching** — Implement WeakMap caching of model and method proxies in `lib/prisma.ts` and `lib/prisma.js` to eliminate memory leaks and GC overhead under high traffic.
+- [x] **Map Project Creation** — Enabled super admin users (role === "admin") to add new projects with geographic details directly from the map page interface.
 
 
 

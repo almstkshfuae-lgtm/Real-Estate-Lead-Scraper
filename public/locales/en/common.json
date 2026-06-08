@@ -198,6 +198,25 @@
     },
     "viewDetails": "View Full Profile"
   },
+  "projects": {
+    "addProject": "Add Project",
+    "addNewProject": "Add New Project",
+    "uploading": "Uploading...",
+    "uploadImage": "Upload Image",
+    "imageHint": "Recommended size: 800x400px. JPG or PNG.",
+    "fields": {
+      "image": "Project Image",
+      "noImage": "No image",
+      "name": "Project Name",
+      "developer": "Developer",
+      "location": "Location",
+      "handover": "Handover Date",
+      "price": "Starting Price (AED)",
+      "area": "Area (Sqft)",
+      "latitude": "Latitude",
+      "longitude": "Longitude"
+    }
+  },
   "campaigns": {
     "title": "Campaign Manager",
     "subtitle": "Manage Bitrix24 campaigns and automated outreach.",

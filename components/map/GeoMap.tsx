@@ -222,6 +222,8 @@ interface GeoMapProps {
   onProjectAction?: (project: any) => void;
   geofenceActive: boolean;
   onGeofenceDrawn: (bounds: { north: number; south: number; east: number; west: number }) => void;
+  isAdmin?: boolean;
+  onAddProjectClick?: (lat: number, lng: number) => void;
 }
 
 function GeoMap({
@@ -233,6 +235,8 @@ function GeoMap({
   onProjectAction,
   geofenceActive,
   onGeofenceDrawn,
+  isAdmin = false,
+  onAddProjectClick,
 }: GeoMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -635,6 +639,64 @@ function GeoMap({
       map.getContainer().style.cursor = "";
     };
   }, [geofenceActive, onGeofenceDrawn]);
+
+  // Map click handler for adding projects (Admin on Heatmap layer)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (activeLayer !== "heatmap" || !isAdmin || geofenceActive) {
+      return;
+    }
+
+    const handleMapClick = async (e: any) => {
+      const L = (await import("leaflet")).default;
+      
+      const isAr = language === "ar";
+      const fontFamily = isAr ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
+      
+      const popupContent = L.DomUtil.create("div", "add-project-map-popup");
+      popupContent.innerHTML = `
+        <div style="font-family: ${fontFamily}; text-align: center; padding: 4px; min-width: 160px;">
+          <p style="font-size: 13px; font-weight: bold; color: #111827; margin: 0 0 6px 0;">
+            ${isAr ? 'إضافة مشروع هنا؟' : 'Add project here?'}
+          </p>
+          <p style="font-size: 11px; color: #6B7280; margin: 0 0 10px 0;">
+            ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}
+          </p>
+          <button class="add-proj-here-btn" style="
+            background: #185FA5; color: white; border: none; padding: 6px 12px;
+            font-size: 12px; font-weight: bold; border-radius: 6px; cursor: pointer;
+            width: 100%; transition: background-color 0.2s;
+          " onmouseover="this.style.backgroundColor='#0f4a82'" onmouseout="this.style.backgroundColor='#185FA5'">
+            ${isAr ? 'إضافة مشروع جديد' : 'Add New Project'}
+          </button>
+        </div>
+      `;
+
+      const popup = L.popup()
+        .setLatLng(e.latlng)
+        .setContent(popupContent)
+        .openOn(map);
+
+      // Listen for button click
+      const btn = popupContent.querySelector(".add-proj-here-btn");
+      if (btn) {
+        (btn as HTMLButtonElement).onclick = () => {
+          map.closePopup();
+          if (onAddProjectClick) {
+            onAddProjectClick(e.latlng.lat, e.latlng.lng);
+          }
+        };
+      }
+    };
+
+    map.on("click", handleMapClick);
+
+    return () => {
+      map.off("click", handleMapClick);
+    };
+  }, [activeLayer, isAdmin, geofenceActive, language, onAddProjectClick]);
 
   return (
     <>

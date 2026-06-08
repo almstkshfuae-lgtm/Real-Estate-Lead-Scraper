@@ -17,7 +17,9 @@ import {
   Loader2,
   TrendingUp,
   ZapOff,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Upload
 } from "lucide-react";
 import { useScrapeRunStatus } from "@/hooks/useScrapeRunStatus";
 import { toast } from "sonner";
@@ -67,6 +69,136 @@ export default function MapPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [scoreMin, setScoreMin] = useState<number>(0);
   const [debouncedScoreMin, setDebouncedScoreMin] = useState<number>(0);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newProject, setNewProject] = useState({
+    projectName: "",
+    location: "",
+    developer: "",
+    startingPrice: "",
+    handoverDate: "",
+    propertyType: "",
+    areaSqft: "",
+    lat: "",
+    lng: "",
+    imageUrl: "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user && data.user.role.toUpperCase() === "ADMIN") {
+            setIsAdmin(true);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load session:", err);
+      }
+    };
+    fetchSession();
+  }, []);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewProject(prev => ({ ...prev, imageUrl: data.url }));
+        toast.success(isRtl ? "تم تحميل الصورة بنجاح" : "Image uploaded successfully");
+      } else {
+        toast.error(data.error || "Upload failed");
+      }
+    } catch (err) {
+      console.error("Upload failed", err);
+      toast.error("Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSaveProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const payload = {
+        projectName: newProject.projectName,
+        location: newProject.location,
+        developer: newProject.developer || null,
+        startingPrice: newProject.startingPrice ? Number(newProject.startingPrice) : null,
+        areaSqft: newProject.areaSqft ? Number(newProject.areaSqft) : null,
+        handoverDate: newProject.handoverDate || null,
+        propertyType: newProject.propertyType || null,
+        latitude: newProject.lat ? Number(newProject.lat) : null,
+        longitude: newProject.lng ? Number(newProject.lng) : null,
+        imageUrl: newProject.imageUrl || null,
+      };
+
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to create project");
+      }
+
+      toast.success(isRtl ? "تم إضافة المشروع بنجاح" : "Project added successfully");
+      setIsAddModalOpen(false);
+      // Reset form
+      setNewProject({
+        projectName: "",
+        location: "",
+        developer: "",
+        startingPrice: "",
+        handoverDate: "",
+        propertyType: "",
+        areaSqft: "",
+        lat: "",
+        lng: "",
+        imageUrl: "",
+      });
+      // Refresh projects on the map
+      fetchLeads();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save project");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddProjectAt = (lat: number, lng: number) => {
+    setNewProject({
+      projectName: "",
+      location: "",
+      developer: "",
+      startingPrice: "",
+      handoverDate: "",
+      propertyType: "",
+      areaSqft: "",
+      lat: lat.toFixed(6),
+      lng: lng.toFixed(6),
+      imageUrl: "",
+    });
+    setIsAddModalOpen(true);
+  };
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -284,6 +416,8 @@ export default function MapPage() {
             onProjectAction={(proj) => setSidebarProject(proj)}
             geofenceActive={geofenceActive}
             onGeofenceDrawn={handleGeofenceDrawn}
+            isAdmin={isAdmin}
+            onAddProjectClick={handleAddProjectAt}
           />
 
           {/* Floating UI OVER the map */}
@@ -365,6 +499,31 @@ export default function MapPage() {
 
             {/* Actions */}
             <div className="flex items-center gap-2 pointer-events-auto">
+              {activeLayer === "heatmap" && isAdmin && (
+                <button
+                  onClick={() => {
+                    setNewProject({
+                      projectName: "",
+                      location: "",
+                      developer: "",
+                      startingPrice: "",
+                      handoverDate: "",
+                      propertyType: "",
+                      areaSqft: "",
+                      lat: "",
+                      lng: "",
+                      imageUrl: "",
+                    });
+                    setIsAddModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--color-primary)] text-white rounded-xl shadow-lg hover:bg-opacity-95 transition-all text-xs font-bold pointer-events-auto h-10"
+                  title={t("projects.addProject", "Add Project")}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{t("projects.addProject", "Add Project")}</span>
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   clearGeofence();
@@ -502,6 +661,165 @@ export default function MapPage() {
             project={sidebarProject}
             onClose={() => setSidebarProject(null)}
           />
+
+          {/* Add Project Modal */}
+          {isAddModalOpen && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div 
+                className="bg-[var(--color-bg-card)] rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-start"
+                dir={isRtl ? "rtl" : "ltr"}
+              >
+                <div className="p-5 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-bg-surface)]">
+                  <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
+                    {t("projects.addNewProject", "Add New Project")}
+                  </h2>
+                  <button 
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] p-1 text-lg font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                <form onSubmit={handleSaveProject} className="p-5 overflow-y-auto flex-1 space-y-5">
+                  {/* Image Upload Section */}
+                  <div>
+                    <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wider">
+                      {t("projects.fields.image", "Project Image")}
+                    </label>
+                    <div className="flex items-center gap-4">
+                      {newProject.imageUrl ? (
+                        <div className="relative w-32 h-24 rounded-lg overflow-hidden border border-[var(--color-border)] shadow-sm">
+                          <img src={newProject.imageUrl} alt="Project" className="object-cover w-full h-full" />
+                        </div>
+                      ) : (
+                        <div className="w-32 h-24 rounded-lg bg-[var(--color-bg-surface)] border-2 border-dashed border-[var(--color-border)] flex flex-col items-center justify-center gap-1 text-[var(--color-text-secondary)]">
+                          <span className="text-[10px] font-medium">{t("projects.fields.noImage", "No image")}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex-1">
+                        <label className="relative cursor-pointer flex items-center gap-2 px-4 py-2 bg-[var(--color-bg-surface)] hover:bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl text-sm font-bold transition-all w-fit shadow-sm">
+                          {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                          <span>{isUploading ? t("projects.uploading", "Uploading...") : t("projects.uploadImage", "Upload Image")}</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={handleImageUpload} 
+                            className="hidden" 
+                            disabled={isUploading}
+                          />
+                        </label>
+                        <p className="text-xs text-[var(--color-text-secondary)] mt-2">
+                          {t("projects.imageHint", "Recommended size: 800x400px. JPG or PNG.")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.name", "Project Name")} *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newProject.projectName}
+                        onChange={(e) => setNewProject({ ...newProject, projectName: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.developer", "Developer")}</label>
+                      <input
+                        type="text"
+                        value={newProject.developer}
+                        onChange={(e) => setNewProject({ ...newProject, developer: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.location", "Location")} *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newProject.location}
+                        onChange={(e) => setNewProject({ ...newProject, location: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.handover", "Handover Date")}</label>
+                      <input
+                        type="text"
+                        value={newProject.handoverDate}
+                        onChange={(e) => setNewProject({ ...newProject, handoverDate: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                        placeholder="e.g. Q4 2026"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.price", "Starting Price (AED)")}</label>
+                      <input
+                        type="number"
+                        value={newProject.startingPrice}
+                        onChange={(e) => setNewProject({ ...newProject, startingPrice: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.area", "Area (Sqft)")}</label>
+                      <input
+                        type="number"
+                        value={newProject.areaSqft}
+                        onChange={(e) => setNewProject({ ...newProject, areaSqft: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.latitude", "Latitude")} *</label>
+                      <input
+                        type="number"
+                        step="any"
+                        required
+                        value={newProject.lat}
+                        onChange={(e) => setNewProject({ ...newProject, lat: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[var(--color-text-secondary)] mb-1 uppercase tracking-wider">{t("projects.fields.longitude", "Longitude")} *</label>
+                      <input
+                        type="number"
+                        step="any"
+                        required
+                        value={newProject.lng}
+                        onChange={(e) => setNewProject({ ...newProject, lng: e.target.value })}
+                        className="w-full px-3 py-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 border-t border-[var(--color-border)] flex justify-end gap-3 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddModalOpen(false)}
+                      className="px-4 py-2 bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] rounded-xl text-sm font-bold border border-[var(--color-border)] hover:bg-[var(--color-bg-card)] transition-colors"
+                    >
+                      {t("common.cancel", "Cancel")}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="flex items-center gap-2 px-6 py-2 bg-[var(--color-primary)] text-white rounded-xl text-sm font-bold hover:bg-opacity-90 transition-all shadow-md disabled:opacity-50"
+                    >
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {t("common.saveChanges", "Save Project")}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Stats Sidebar (Right Edge) - Integrated */}

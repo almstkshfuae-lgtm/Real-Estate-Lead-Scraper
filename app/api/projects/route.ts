@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
+    const session = await getSession();
+    if (!session || session.role.toUpperCase() !== "ADMIN") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const data = await req.json();
     
     // Convert empty strings to null or correct types where needed

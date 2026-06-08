@@ -198,6 +198,25 @@
     },
     "viewDetails": "عرض الملف الشخصي الكامل"
   },
+  "projects": {
+    "addProject": "إضافة مشروع",
+    "addNewProject": "إضافة مشروع جديد",
+    "uploading": "جاري التحميل...",
+    "uploadImage": "تحميل صورة",
+    "imageHint": "المقاس الموصى به: 800x400 بكسل. صيغة JPG أو PNG.",
+    "fields": {
+      "image": "صورة المشروع",
+      "noImage": "لا توجد صورة",
+      "name": "اسم المشروع",
+      "developer": "المطور",
+      "location": "الموقع",
+      "handover": "تاريخ التسليم",
+      "price": "السعر المبدئي (درهم)",
+      "area": "المساحة (قدم مربع)",
+      "latitude": "خط العرض",
+      "longitude": "خط الطول"
+    }
+  },
   "campaigns": {
     "title": "مدير الحملات",
     "subtitle": "إدارة حملات Bitrix24 والتواصل الآلي.",
