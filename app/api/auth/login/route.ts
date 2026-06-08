@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
       role: user.role,
       name: user.name,
       nameAr: user.nameAr,
+      language: user.language,
+      theme: user.theme,
     });
 
     const response = NextResponse.json(
@@ -54,6 +56,14 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+    });
+
+    response.cookies.set('i18next', user.language, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
       path: '/',
     });
 

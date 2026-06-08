@@ -118,11 +118,21 @@ export async function PUT(request: NextRequest) {
       role: updatedUser.role,
       name: updatedUser.name,
       nameAr: updatedUser.nameAr,
+      language: updatedUser.language,
+      theme: updatedUser.theme,
     });
 
     const response = NextResponse.json({ success: true, user: updatedUser }, { status: 200 });
     response.cookies.set('auth_token', token, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    response.cookies.set('i18next', updatedUser.language, {
+      httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7,

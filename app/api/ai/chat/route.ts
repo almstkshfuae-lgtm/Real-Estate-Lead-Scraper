@@ -65,7 +65,15 @@ export async function GET() {
   });
 
   return new Response(JSON.stringify(
-    history.map((message) => ({ role: message.role as "user" | "assistant", content: message.content }))
+    history.map((message: any) => {
+      const isArabic = /[\u0600-\u06FF]/.test(message.content);
+      return {
+        role: message.role as "user" | "assistant",
+        content: message.content,
+        dir: isArabic ? "rtl" : "ltr",
+        lang: isArabic ? "ar" : "en",
+      };
+    })
   ), {
     headers: { "Content-Type": "application/json" },
   });
@@ -193,7 +201,12 @@ export async function POST(req: NextRequest) {
           }
 
           accumulatedText += value;
-          const data = JSON.stringify({ delta: value });
+          const isAr = /[\u0600-\u06FF]/.test(accumulatedText);
+          const data = JSON.stringify({
+            delta: value,
+            dir: isAr ? "rtl" : "ltr",
+            lang: isAr ? "ar" : "en",
+          });
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
         } catch (err: any) {
           if (req.signal.aborted || err.name === 'AbortError') {

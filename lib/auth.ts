@@ -23,6 +23,8 @@ export type AuthUser = {
   role: string;
   name?: string;
   nameAr?: string | null;
+  language?: string;
+  theme?: string;
 };
 
 export async function createToken(user: AuthUser) {

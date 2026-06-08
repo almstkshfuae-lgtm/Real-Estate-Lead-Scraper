@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Send, Loader2, Bot, User, Sparkles, Trash2, Copy, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Message = { role: "user" | "assistant"; content: string; id: string };
+type Message = { role: "user" | "assistant"; content: string; id: string; dir?: "rtl" | "ltr"; lang?: "ar" | "en" };
 
 const SUGGESTED_PROMPTS_EN = [
   "What are the top investment areas in Dubai right now?",
@@ -39,11 +39,16 @@ export default function AIChatPanel({ context }: { context?: string }) {
         if (res.ok) {
           const history = await res.json();
           if (Array.isArray(history)) {
-            setMessages(history.map((message) => ({
-              role: message.role,
-              content: message.content,
-              id: `${message.role}-${Date.now()}-${Math.random()}`,
-            })));
+            setMessages(history.map((message) => {
+              const isArabic = /[\u0600-\u06FF]/.test(message.content);
+              return {
+                role: message.role,
+                content: message.content,
+                id: `${message.role}-${Date.now()}-${Math.random()}`,
+                dir: message.dir || (isArabic ? "rtl" : "ltr"),
+                lang: message.lang || (isArabic ? "ar" : "en"),
+              };
+            }));
           }
         }
       } catch {
@@ -61,13 +66,26 @@ export default function AIChatPanel({ context }: { context?: string }) {
     if (!content || loading) return;
     setInput("");
 
-    const userMsg: Message = { role: "user", content, id: Date.now().toString() };
+    const isUserMsgArabic = /[\u0600-\u06FF]/.test(content);
+    const userMsg: Message = {
+      role: "user",
+      content,
+      id: Date.now().toString(),
+      dir: isUserMsgArabic ? "rtl" : "ltr",
+      lang: isUserMsgArabic ? "ar" : "en",
+    };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setLoading(true);
 
     const assistantId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, { role: "assistant", content: "", id: assistantId }]);
+    setMessages((prev) => [...prev, {
+      role: "assistant",
+      content: "",
+      id: assistantId,
+      dir: "ltr",
+      lang: "en",
+    }]);
 
     try {
       const res = await fetch("/api/ai/chat", {
@@ -111,8 +129,14 @@ export default function AIChatPanel({ context }: { context?: string }) {
             const parsed = JSON.parse(data);
             if (parsed.delta) {
               accumulated += parsed.delta;
+              const isAr = /[\u0600-\u06FF]/.test(accumulated);
               setMessages((prev) =>
-                prev.map((m) => m.id === assistantId ? { ...m, content: accumulated } : m)
+                prev.map((m) => m.id === assistantId ? {
+                  ...m,
+                  content: accumulated,
+                  dir: parsed.dir || (isAr ? "rtl" : "ltr"),
+                  lang: parsed.lang || (isAr ? "ar" : "en"),
+                } : m)
               );
             }
           } catch { /* skip malformed */ }
@@ -201,11 +225,15 @@ export default function AIChatPanel({ context }: { context?: string }) {
                 </div>
               )}
               <div className={`group relative max-w-[80%] ${msg.role === "user" ? "order-first" : ""}`}>
-                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                  msg.role === "user"
-                    ? "bg-[var(--color-primary)] text-white rounded-br-sm"
-                    : "bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-bl-sm"
-                }`}>
+                <div
+                  dir={msg.dir}
+                  lang={msg.lang}
+                  className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap text-start ${
+                    msg.role === "user"
+                      ? "bg-[var(--color-primary)] text-white rounded-br-sm"
+                      : "bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-bl-sm"
+                  }`}
+                >
                   {msg.content || (loading && msg.role === "assistant" ? (
                     <span className="flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />

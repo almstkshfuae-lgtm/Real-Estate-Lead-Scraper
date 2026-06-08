@@ -74,9 +74,21 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
     }
   };
 
-  const toggleLanguage = () => {
+  const toggleLanguage = async () => {
     const nextLang = i18n.language === "en" ? "ar" : "en";
     i18n.changeLanguage(nextLang);
+    try {
+      const res = await fetch("/api/auth/language", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: nextLang }),
+      });
+      if (res.ok) {
+        router.refresh();
+      }
+    } catch (err) {
+      console.error("Failed to sync language preference with backend:", err);
+    }
   };
 
   const isRtl = i18n.language === "ar";

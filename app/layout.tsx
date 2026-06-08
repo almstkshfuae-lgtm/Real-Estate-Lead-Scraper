@@ -41,15 +41,34 @@ export const viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  let lang = cookieStore.get('i18next')?.value;
+
+  if (!lang) {
+    const token = cookieStore.get('auth_token')?.value;
+    if (token) {
+      const payload = await verifyToken(token);
+      if (payload && payload.language) {
+        lang = payload.language;
+      }
+    }
+  }
+
+  lang = lang || 'en';
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+
   return (
-    <html className={`${inter.variable} ${cairo.variable}`}>
-      <body className="font-inter antialiased">
-        <I18nProvider>
+    <html lang={lang} dir={dir} className={`${inter.variable} ${cairo.variable}`}>
+      <body className={`antialiased ${lang === 'ar' ? 'font-cairo' : 'font-inter'}`}>
+        <I18nProvider initialLang={lang}>
           {children}
           <NotificationListener />
           <SWRegister />
