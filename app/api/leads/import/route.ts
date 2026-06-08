@@ -231,6 +231,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const isAdmin = session.role?.toUpperCase() === 'ADMIN';
+
     const body = await request.json();
     const { leads: rawLeads } = body;
 
@@ -297,16 +299,21 @@ export async function POST(request: Request) {
           continue;
         }
 
-        // ── 4. Deduplication by (name, company) for this agent ─────────────
+        // ── 4. Deduplication by (name, company) ─────────────
         // Only deduplicate on unique business identity, not on contact info,
         // since the same phone might appear in two different contacts.
+        const whereUnique: any = {
+          name,
+          company,
+        };
+        
+        if (!isAdmin) {
+          whereUnique.source = "Manual Import";
+          whereUnique.agentId = session.id;
+        }
+
         const existingByUnique = await prisma.lead.findFirst({
-          where: {
-            name,
-            company,
-            source: "Manual Import",
-            agentId: session.id,
-          },
+          where: whereUnique,
         });
 
         if (existingByUnique) {
@@ -343,8 +350,12 @@ export async function POST(request: Request) {
 
         // ── 5. Soft-deduplicate by email only (not phone — phones can be shared) ─
         if (email) {
+          const whereEmail: any = { email };
+          if (!isAdmin) {
+            whereEmail.agentId = session.id;
+          }
           const existingByEmail = await prisma.lead.findFirst({
-            where: { email, agentId: session.id },
+            where: whereEmail,
           });
           if (existingByEmail) {
             skippedCount++;

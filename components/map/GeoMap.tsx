@@ -549,30 +549,100 @@ function GeoMap({
           heatGroup.addLayer(circle);
         });
 
-        // 2. Plot Real Estate Project supply/price density
+        // 2. Plot Real Estate Projects
         projects.forEach((proj) => {
-          const coords = getCoords(proj.location, proj.id);
-          if (!coords) return; // Skip projects with unresolvable location
-          
-          const price = typeof proj.startingPrice === "number" && !isNaN(proj.startingPrice) ? proj.startingPrice : 0;
-          const priceMultiplier = price > 0
-            ? 1.0 + Math.min(2.0, price / 5000000)
-            : 1.0;
-            
-          const intensity = Math.max(0.15, Math.min(1, priceMultiplier / 3.0));
-          const radius = 18000 + 24000 * intensity;
-          const alpha = 0.12 + intensity * 0.20;
-          const color = intensity > 0.6 ? "#A32D2D" : intensity > 0.3 ? "#BA7517" : "#185FA5";
-          
-          const circle = L.circle([coords.lat, coords.lng], {
-            radius,
-            color: "transparent",
-            fillColor: color,
-            fillOpacity: alpha,
-            interactive: false,
+          const lat = proj.lat ?? proj.latitude;
+          const lng = proj.lng ?? proj.longitude;
+          if (!lat || !lng) return;
+
+          const formatPrice = (price: number) => {
+             if (price >= 1000000) return (price / 1000000).toFixed(1) + 'M';
+             if (price >= 1000) return (price / 1000).toFixed(0) + 'K';
+             return price.toString();
+          };
+
+          const icon = L.divIcon({
+            className: "",
+            html: `
+              <div style="
+                position: relative;
+                width: 36px;
+                height: 36px;
+              ">
+                <div style="
+                  position: absolute;
+                  inset: 0;
+                  border-radius: 50%;
+                  background: #185FA522;
+                  border: 2px solid #185FA5;
+                  animation: pulse-map 2s infinite;
+                "></div>
+                <div style="
+                  position: absolute;
+                  top: 50%;
+                  left: 50%;
+                  transform: translate(-50%, -50%);
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 50%;
+                  background: #185FA5;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: white;
+                  box-shadow: 0 2px 8px #185FA566;
+                ">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
+                </div>
+              </div>
+            `,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
           });
+
+          const marker = L.marker([lat, lng], { icon });
+
+          const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
+          const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
           
-          heatGroup.addLayer(circle);
+          marker.bindPopup(`
+            <div ${dirAttr} style="
+              font-family: ${fontFamily};
+              min-width: 240px;
+              padding: 0;
+            ">
+              ${proj.imageUrl ? `
+                <div style="width: 100%; height: 140px; border-radius: 8px 8px 0 0; overflow: hidden; margin-bottom: 12px; background: #F3F4F6;">
+                  <img src="${proj.imageUrl}" alt="${proj.projectName || proj.name || 'Project'}" style="width: 100%; height: 100%; object-fit: cover;" />
+                </div>
+              ` : ''}
+              <div style="padding: ${proj.imageUrl ? '0 12px 12px 12px' : '8px'};">
+                <div style="font-weight: 800; font-size: 15px; color: #111827; margin-bottom: 2px;">${proj.projectName || proj.name || 'Project'}</div>
+                <div style="font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">${proj.developer || 'Developer'}</div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                  <div style="background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #F1F5F9;">
+                    <div style="font-size: 10px; color: #64748B;">Starting Price</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #0F172A;">AED ${formatPrice(proj.startingPrice || 0)}</div>
+                  </div>
+                  <div style="background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #F1F5F9;">
+                    <div style="font-size: 10px; color: #64748B;">Area (Sqft)</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${proj.areaSqft || proj.area || '-'}</div>
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+                  <div style="color: #64748B; display: flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                    ${proj.location || 'UAE'}
+                  </div>
+                  <div style="color: #059669; font-weight: 600; background: #D1FAE5; padding: 2px 6px; border-radius: 4px;">${proj.handover || 'TBA'}</div>
+                </div>
+              </div>
+            </div>
+          `, { maxWidth: 300, className: "custom-project-popup" });
+
+          heatGroup.addLayer(marker);
         });
 
         heatGroup.addTo(map);

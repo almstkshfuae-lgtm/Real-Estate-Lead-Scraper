@@ -39,6 +39,25 @@ const SOURCE_NAMES: Record<string, string> = {
   propertymonitor: 'Property Monitor',
 };
 
+const SOURCE_CATEGORIES = [
+  {
+    title: 'Government & Regulatory',
+    sources: ['adec', 'ded', 'gazette']
+  },
+  {
+    title: 'Free Zones & Business',
+    sources: ['adgm', 'difc', 'alhabtoor']
+  },
+  {
+    title: 'Clubs & Associations',
+    sources: ['artsclub', 'rotary', 'dhabianequi']
+  },
+  {
+    title: 'Real Estate & Media',
+    sources: ['propertymonitor', 'whatson']
+  }
+];
+
 const DEFAULT_SCRAPE_SOURCES = [
   'adec',
   'rotary',
@@ -419,35 +438,44 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {DEFAULT_SCRAPE_SOURCES.map((sourceKey) => {
-                  const isChecked = activeSources.includes(sourceKey);
-                  return (
-                    <label
-                      key={sourceKey}
-                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isChecked
-                        ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800'
-                        : 'border-[var(--color-border)] bg-[var(--color-bg-surface)]/20 hover:border-[var(--color-text-disabled)]'
-                        }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          setActiveSources((prev) =>
-                            prev.includes(sourceKey)
-                              ? prev.filter((k) => k !== sourceKey)
-                              : [...prev, sourceKey]
-                          );
-                        }}
-                        className="rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
-                      />
-                      <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                        {SOURCE_NAMES[sourceKey] || sourceKey}
-                      </span>
-                    </label>
-                  );
-                })}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {SOURCE_CATEGORIES.map((category) => (
+                  <div key={category.title} className="p-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/20 space-y-4 shadow-sm">
+                    <h4 className="text-sm font-bold text-[var(--color-text-primary)] pb-2 border-b border-[var(--color-border)]/50">
+                      {category.title}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {category.sources.map((sourceKey) => {
+                        const isChecked = activeSources.includes(sourceKey);
+                        return (
+                          <label
+                            key={sourceKey}
+                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isChecked
+                              ? 'bg-[var(--color-primary-subtle)] border-[var(--color-primary)] text-[var(--color-primary)]'
+                              : 'border-[var(--color-border)] bg-[var(--color-bg-card)] hover:border-[var(--color-text-disabled)]'
+                              }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setActiveSources((prev) =>
+                                  prev.includes(sourceKey)
+                                    ? prev.filter((k) => k !== sourceKey)
+                                    : [...prev, sourceKey]
+                                );
+                              }}
+                              className="rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                            />
+                            <span className="text-xs font-bold text-[var(--color-text-primary)]">
+                              {SOURCE_NAMES[sourceKey] || sourceKey}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

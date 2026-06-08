@@ -1,23 +1,30 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const projects = await prisma.projectHeatmap.findMany({
-      select: {
-        id: true,
-        projectName: true,
-        location: true,
-        startingPrice: true,
-        propertyType: true,
-      },
+      orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json({ projects });
-  } catch (error: any) {
-    console.error("[Projects API] Error:", error?.message || error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+
+    // Map the database fields to the frontend expected format (lat/lng)
+    // although the frontend should accept latitude/longitude, let's keep it compatible
+    const formattedProjects = projects.map(p => ({
+      id: p.id,
+      projectName: p.projectName,
+      location: p.location,
+      developer: p.developer,
+      startingPrice: p.startingPrice,
+      areaSqft: p.areaSqft,
+      handover: p.handoverDate,
+      lat: p.latitude,
+      lng: p.longitude,
+      imageUrl: p.imageUrl,
+    }));
+
+    return NextResponse.json({ projects: formattedProjects });
+  } catch (error) {
+    console.error("Failed to fetch projects:", error);
+    return NextResponse.json({ projects: [] });
   }
 }

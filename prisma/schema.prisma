@@ -161,7 +161,11 @@ model ProjectHeatmap {
   startingPrice Float?
   handoverDate  String?
   propertyType  String?
-  sourceUrl     String   @db.Text
+  areaSqft      Int?
+  latitude      Float?
+  longitude     Float?
+  imageUrl      String?  @db.Text
+  sourceUrl     String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
