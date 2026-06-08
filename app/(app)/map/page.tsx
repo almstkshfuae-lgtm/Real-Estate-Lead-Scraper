@@ -204,9 +204,9 @@ export default function MapPage() {
     },
     {
       id: "heatmap",
-      label: t("map.layer.heatmap", "Demand Heatmap"),
+      label: t("map.layer.heatmap", "Real Estate Projects"),
       icon: Thermometer,
-      desc: t("map.layer.heatmapDesc", "Visualize demand intensity across UAE"),
+      desc: t("map.layer.heatmapDesc", "View all active real estate projects"),
     },
   ];
 
@@ -452,24 +452,10 @@ export default function MapPage() {
             {activeLayer === "heatmap" ? (
               <div className="w-64 rounded-2xl border border-white/40 bg-white/95 p-4 shadow-xl backdrop-blur pointer-events-auto">
                 <div className="text-[var(--color-text-primary)] text-[10px] font-bold uppercase tracking-widest mb-2">
-                  {t("map.heatmapLegend.title", "Demand Heatmap")}
+                  {t("map.heatmapLegend.title", "Real Estate Projects")}
                 </div>
-                <div className="space-y-2 text-[var(--color-text-secondary)] text-xs mb-3 font-medium">
-                  <div>{t("map.heatmapLegend.description", "Map demand intensity across the UAE using lead score and priority source tier.")}</div>
-                </div>
-                <div className="space-y-2 text-[var(--color-text-secondary)] text-xs font-bold">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#A32D2D] flex-shrink-0" />
-                    {t("map.heatmapLegend.high", "High demand")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#BA7517] flex-shrink-0" />
-                    {t("map.heatmapLegend.medium", "Medium demand")}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#185FA5] flex-shrink-0" />
-                    {t("map.heatmapLegend.low", "Low demand")}
-                  </div>
+                <div className="space-y-2 text-[var(--color-text-secondary)] text-xs font-medium">
+                  <div>{t("map.heatmapLegend.description", "Explore premium real estate projects and developments across the UAE.")}</div>
                 </div>
               </div>
             ) : (

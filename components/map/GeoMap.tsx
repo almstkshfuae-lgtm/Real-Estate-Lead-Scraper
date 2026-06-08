@@ -150,7 +150,7 @@ function stableHash(input: string) {
 
 function getCoords(location: string, seed: string = ""): { lat: number; lng: number } | null {
   const normalized = location?.trim() || "";
-  
+
   // 1. Try UAE Areas first
   for (const [key, val] of Object.entries(UAE_AREAS)) {
     if (normalized.toLowerCase().includes(key.toLowerCase())) {
@@ -397,12 +397,12 @@ function GeoMap({
             const lng = dbLng ?? fallbackCoords?.lng ?? null;
             if (lat === null || lng === null) return; // Skip leads with unresolvable coordinates
             const marker = L.marker([lat, lng], { icon });
-            
+
             const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
             const signals = Array.isArray(lead.signals) ? lead.signals : [];
             const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
             const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
-            
+
             marker.bindPopup(`
               <div ${dirAttr} style="
                 font-family: ${fontFamily};
@@ -487,7 +487,7 @@ function GeoMap({
             const marker = L.marker([baseCoords.lat, baseCoords.lng], { icon });
             const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
             const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
-            
+
             marker.bindPopup(`
               <div ${dirAttr} style="font-family: ${fontFamily}; padding: 4px; min-width: 200px;">
                 <div style="font-weight: 700; font-size: 13px; color: #111827; margin-bottom: 2px;">${location}</div>
@@ -513,98 +513,63 @@ function GeoMap({
       } else if (activeLayer === "heatmap") {
         const heatGroup = L.layerGroup();
 
-        // 1. Plot Lead demand intensity
-        leads.forEach((lead) => {
-          const dbLat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : null;
-          const dbLng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : null;
-          const fallbackCoords = (dbLat === null || dbLng === null) ? getCoords(lead.location, lead.id) : null;
-          const lat = dbLat ?? fallbackCoords?.lat ?? null;
-          const lng = dbLng ?? fallbackCoords?.lng ?? null;
-          if (lat === null || lng === null) return; // Skip leads with unresolvable coordinates
-          
-          const bMax = typeof lead.budgetMax === "number" && !isNaN(lead.budgetMax) ? lead.budgetMax : 0;
-          const bMin = typeof lead.budgetMin === "number" && !isNaN(lead.budgetMin) ? lead.budgetMin : 0;
-          const maxBudgetVal = Math.max(bMax, bMin);
-          
-          const budgetMultiplier = maxBudgetVal > 0 
-            ? 1.0 + Math.min(1.5, maxBudgetVal / 10000000) 
-            : 1.0;
-
-          const tierWeight = lead.tier === 1 ? 3 : lead.tier === 2 ? 2 : 1;
-          const rawWeight = (lead.score / 100) * tierWeight * budgetMultiplier;
-          const intensity = Math.max(0.12, Math.min(1, rawWeight / 7.5));
-          
-          const radius = 16000 + 22000 * intensity;
-          const alpha = 0.16 + intensity * 0.24;
-          const color = intensity > 0.7 ? "#A32D2D" : intensity > 0.4 ? "#BA7517" : "#185FA5";
-
-          const circle = L.circle([lat, lng], {
-            radius,
-            color: "transparent",
-            fillColor: color,
-            fillOpacity: alpha,
-            interactive: false,
-          });
-
-          heatGroup.addLayer(circle);
-        });
-
-        // 2. Plot Real Estate Projects
+        // 1. Plot Real Estate Projects directly as detailed cards
         projects.forEach((proj) => {
           const lat = proj.lat ?? proj.latitude;
           const lng = proj.lng ?? proj.longitude;
           if (!lat || !lng) return;
 
           const formatPrice = (price: number) => {
-             if (price >= 1000000) return (price / 1000000).toFixed(1) + 'M';
-             if (price >= 1000) return (price / 1000).toFixed(0) + 'K';
-             return price.toString();
+            if (price >= 1000000) return (price / 1000000).toFixed(1) + 'M';
+            if (price >= 1000) return (price / 1000).toFixed(0) + 'K';
+            return price.toString();
           };
 
+          const priceText = proj.startingPrice ? `AED ${formatPrice(proj.startingPrice)}` : 'TBA';
+          const projectName = proj.projectName || proj.name || 'Project';
+
+          // A beautiful rectangular card that displays the project details
           const icon = L.divIcon({
-            className: "",
+            className: "custom-project-card",
             html: `
               <div style="
+                background: white;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 6px 10px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                white-space: nowrap;
                 position: relative;
-                width: 36px;
-                height: 36px;
-              ">
+                cursor: pointer;
+                transition: transform 0.2s;
+              " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-size: 11px; font-weight: 800; color: #111827; margin-bottom: 2px;">${projectName}</div>
+                <div style="font-size: 12px; font-weight: 700; color: #1D9E75; background: #D1FAE5; padding: 2px 6px; border-radius: 4px;">${priceText}</div>
                 <div style="
                   position: absolute;
-                  inset: 0;
-                  border-radius: 50%;
-                  background: #185FA522;
-                  border: 2px solid #185FA5;
-                  animation: pulse-map 2s infinite;
-                "></div>
-                <div style="
-                  position: absolute;
-                  top: 50%;
+                  bottom: -6px;
                   left: 50%;
-                  transform: translate(-50%, -50%);
-                  width: 24px;
-                  height: 24px;
-                  border-radius: 50%;
-                  background: #185FA5;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  color: white;
-                  box-shadow: 0 2px 8px #185FA566;
-                ">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
-                </div>
+                  transform: translateX(-50%);
+                  width: 0; 
+                  height: 0; 
+                  border-left: 6px solid transparent;
+                  border-right: 6px solid transparent;
+                  border-top: 6px solid white;
+                "></div>
               </div>
             `,
-            iconSize: [36, 36],
-            iconAnchor: [18, 18],
+            iconSize: [120, 48],
+            iconAnchor: [60, 48],
           });
 
-          const marker = L.marker([lat, lng], { icon });
+          const marker = L.marker([lat, lng], { icon, zIndexOffset: 1000 });
 
           const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
           const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
-          
+
           marker.bindPopup(`
             <div ${dirAttr} style="
               font-family: ${fontFamily};
