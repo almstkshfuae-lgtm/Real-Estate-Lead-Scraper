@@ -39,12 +39,12 @@ async function main() {
     // 3. Trigger Scrape
     try {
         const scraperClient = new ScraperClient({
-            baseUrl: 'http://localhost:3002',
+            baseUrl: 'http://127.0.0.1:3002',
             secret: '96c92e16c2bc5f40c5724ad3bceef2fa39909e4bb136656d4a8309984f828684'
         });
-        const webhookUrl = 'http://localhost:3001/api/scrape/webhook'; // Local webhook endpoint
+        const webhookUrl = 'http://127.0.0.1:3001/api/scrape/webhook'; // Local webhook endpoint
         const sources = ['google-maps', 'yellow-pages'];
-        const criteria = { emirates: ['Dubai'], signals: ['Real Estate'] };
+        const criteria = { emirates: ['Dubai'], signals: ['Real Estate'], useMockData: true };
         console.log(`Triggering scrape for sources: ${sources.join(', ')}...`);
         console.log(`With criteria: ${JSON.stringify(criteria)}`);
         const result = await scraperClient.scrapeMultipleSources(sources, webhookUrl, scrapeRun.id, criteria);

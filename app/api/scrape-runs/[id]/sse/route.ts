@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { cleanPhone } from "../../../leads/import/route";
+import { cleanPhone } from "@/lib/sanitizer";
 
 export const dynamic = "force-dynamic";
 

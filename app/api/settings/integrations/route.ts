@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionWithDBVerify, parsePreferences, normalizePreferences } from "@/lib/auth";
+import { encrypt } from "@/lib/crypto";
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +27,9 @@ export async function GET(request: Request) {
       scraperServiceUrl: "",
       scraperSecret: "",
       proxyServiceUrl: "",
-      proxyApiKey: ""
+      proxyApiKey: "",
+      uaeComplianceMode: false,
+      globalRateLimitDelay: 3000
     };
 
     let prefs: any = {};
@@ -39,10 +42,19 @@ export async function GET(request: Request) {
     }
     
     const savedIntegrations = prefs.integrations || {};
+
+    // Helper to mask configured credentials
+    const maskField = (val: string) => {
+      return (val && val.trim() !== "") ? "********" : "";
+    };
+
     const integrations = {
       ...defaultPrefs,
       ...savedIntegrations,
-      googleAiApiKey: savedIntegrations.googleAiApiKey || ""
+      googleAiApiKey: maskField(savedIntegrations.googleAiApiKey),
+      bitrixToken: maskField(savedIntegrations.bitrixToken),
+      whatsappToken: maskField(savedIntegrations.whatsappToken),
+      smtpPass: maskField(savedIntegrations.smtpPass)
     };
 
     return NextResponse.json({ integrations }, { status: 200 });
@@ -67,7 +79,34 @@ export async function POST(request: Request) {
     });
 
     const existingPrefs = parsePreferences((currentUser as any)?.preferences);
-    const newPrefs = { ...existingPrefs, integrations };
+    const existingIntegrations = existingPrefs.integrations || {};
+
+    // Encrypt new plaintext values; preserve existing encrypted values if masked with stars
+    const processField = (newVal: string, oldVal: string) => {
+      const trimmed = (newVal || "").trim();
+      if (trimmed === "" || trimmed.startsWith("***")) {
+        if (trimmed.startsWith("***")) {
+          return oldVal || "";
+        }
+        return "";
+      }
+      return encrypt(trimmed);
+    };
+
+    const googleAiApiKey = processField(integrations.googleAiApiKey, existingIntegrations.googleAiApiKey);
+    const bitrixToken = processField(integrations.bitrixToken, existingIntegrations.bitrixToken);
+    const whatsappToken = processField(integrations.whatsappToken, existingIntegrations.whatsappToken);
+    const smtpPass = processField(integrations.smtpPass, existingIntegrations.smtpPass);
+
+    const updatedIntegrations = {
+      ...integrations,
+      googleAiApiKey,
+      bitrixToken,
+      whatsappToken,
+      smtpPass
+    };
+
+    const newPrefs = { ...existingPrefs, integrations: updatedIntegrations };
 
     await prisma.user.update({
       where: { id: session.id },
@@ -81,3 +120,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+

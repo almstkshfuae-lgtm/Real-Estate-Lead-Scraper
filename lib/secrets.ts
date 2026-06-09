@@ -1,5 +1,6 @@
 import prisma from "./prisma";
 import { getEnvVar } from "./env";
+import { decrypt } from "./crypto";
 
 export async function getSecret(keyName: string): Promise<string> {
   try {
@@ -20,7 +21,7 @@ export async function getSecret(keyName: string): Promise<string> {
       
       const val = prefs.integrations?.[keyName];
       if (val && val.trim() !== "" && !val.includes("****")) {
-        return val;
+        return decrypt(val);
       }
     }
   } catch (err) {
@@ -41,3 +42,4 @@ export async function getSecret(keyName: string): Promise<string> {
 
   return envMap[keyName] || "";
 }
+

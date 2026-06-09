@@ -87,6 +87,77 @@ class ScraperClient {
     return { controller, timeoutId };
   }
 
+  private sanitizeUrl(url: string): string {
+    try {
+      const parsed = new URL(url);
+      if (parsed.password) {
+        parsed.password = 'REDACTED';
+      }
+      if (parsed.username) {
+        parsed.username = 'REDACTED';
+      }
+      return parsed.toString();
+    } catch {
+      return url.replace(/([a-zA-Z0-9+.-]+:\/\/)?([^:@\s]+):([^@\s]+)@/g, "$1[REDACTED]:[REDACTED]@");
+    }
+  }
+
+  /**
+   * Internal fetch wrapper with robust exponential backoff retry logic and AbortSignal support.
+   */
+  private async fetchWithRetry(url: string, options: RequestInit, retries = 3, delayMs = 1000): Promise<Response> {
+    const signal = options.signal;
+    const cleanUrl = this.sanitizeUrl(url);
+
+    try {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      const response = await fetch(url, options);
+
+      // Only retry on transient 5xx server errors and 429 rate limits
+      if (!response.ok && (response.status >= 500 || response.status === 429)) {
+        if (retries > 0 && !signal?.aborted) {
+          console.warn(`[ScraperClient] Request to ${cleanUrl} failed with status ${response.status}. Retrying in ${delayMs}ms... (${retries} retries left)`);
+          
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(resolve, delayMs);
+            if (signal) {
+              signal.addEventListener('abort', () => {
+                clearTimeout(timeout);
+                reject(new DOMException('Aborted', 'AbortError'));
+              });
+            }
+          });
+
+          return this.fetchWithRetry(url, options, retries - 1, delayMs * 2);
+        }
+      }
+      return response;
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw error;
+      }
+      if (retries > 0 && !signal?.aborted) {
+        console.warn(`[ScraperClient] Request to ${cleanUrl} failed with error: ${error.message || error}. Retrying in ${delayMs}ms... (${retries} retries left)`);
+        
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(resolve, delayMs);
+          if (signal) {
+            signal.addEventListener('abort', () => {
+              clearTimeout(timeout);
+              reject(new DOMException('Aborted', 'AbortError'));
+            });
+          }
+        });
+
+        return this.fetchWithRetry(url, options, retries - 1, delayMs * 2);
+      }
+      throw error;
+    }
+  }
+
   /**
    * Check health of scraper service (fast 10s timeout)
    */
@@ -94,9 +165,9 @@ class ScraperClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.handshakeTimeout);
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
+      const response = await this.fetchWithRetry(`${this.baseUrl}/health`, {
         signal: controller.signal
-      });
+      }, 2, 500); // 2 retries, 500ms initial delay
       return response.ok;
     } catch (error) {
       console.error('Scraper health check failed:', error);
@@ -114,7 +185,7 @@ class ScraperClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.handshakeTimeout);
     try {
-      const response = await fetch(`${this.baseUrl}/test-connection`, {
+      const response = await this.fetchWithRetry(`${this.baseUrl}/test-connection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -123,12 +194,12 @@ class ScraperClient {
           proxyApiKey: this.proxyApiKey
         }),
         signal: controller.signal
-      });
+      }, 2, 500); // 2 retries, 500ms initial delay
 
       // If route doesn't exist yet (old deployment), fall back to /health
       if (response.status === 404) {
         console.warn('[ScraperClient] /test-connection returned 404 — falling back to /health');
-        const healthRes = await fetch(`${this.baseUrl}/health`, { signal: controller.signal });
+        const healthRes = await this.fetchWithRetry(`${this.baseUrl}/health`, { signal: controller.signal }, 2, 500);
         return healthRes.ok;
       }
 
@@ -146,7 +217,7 @@ class ScraperClient {
    */
   async getAvailableSources(): Promise<any[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/sources`);
+      const response = await this.fetchWithRetry(`${this.baseUrl}/sources`, {}, 3, 1000);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       return data.sources || [];
@@ -166,10 +237,15 @@ class ScraperClient {
       throw new Error('At least one source key required');
     }
 
+    const uaeComplianceModeVal = await getSecret('uaeComplianceMode');
+    const uaeComplianceMode = uaeComplianceModeVal === 'true';
+    const globalRateLimitDelayVal = await getSecret('globalRateLimitDelay');
+    const globalRateLimitDelay = globalRateLimitDelayVal ? parseInt(globalRateLimitDelayVal, 10) : 3000;
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.triggerTimeout);
     try {
-      const response = await fetch(`${this.baseUrl}/scrape`, {
+      const response = await this.fetchWithRetry(`${this.baseUrl}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -179,10 +255,12 @@ class ScraperClient {
           proxyApiKey: this.proxyApiKey,
           webhookUrl,
           runId,
-          criteria
+          criteria,
+          uaeComplianceMode,
+          globalRateLimitDelay
         }),
         signal: controller.signal
-      });
+      }, 3, 1000); // 3 retries, 1000ms delay
 
       if (!response.ok) {
         throw new Error(`Scraper service error: ${response.statusText}`);
@@ -204,7 +282,7 @@ class ScraperClient {
   async scrapeSourceSync(sourceKey: string): Promise<ScrapedContent> {
     const { controller, timeoutId } = this.createAbortController();
     try {
-      const response = await fetch(`${this.baseUrl}/scrape-source`, {
+      const response = await this.fetchWithRetry(`${this.baseUrl}/scrape-source`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -214,7 +292,7 @@ class ScraperClient {
           proxyApiKey: this.proxyApiKey
         }),
         signal: controller.signal
-      });
+      }, 3, 1000);
 
       if (!response.ok) {
         throw new Error(`Scraper service error: ${response.statusText}`);
@@ -239,6 +317,9 @@ async function createScraperClient(): Promise<ScraperClient> {
   const defaultLocalUrl = 'http://localhost:3002';
   let secret = (await getSecret('scraperSecret')) || process.env.SCRAPER_SECRET;
   if (!secret || secret.trim() === '') {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error("FATAL: SCRAPER_SECRET is missing in production!");
+    }
     console.warn("WARNING: SCRAPER_SECRET is missing or empty. Using default fallback secret.");
     secret = '96c92e16c2bc5f40c5724ad3bceef2fa39909e4bb136656d4a8309984f828684';
   }

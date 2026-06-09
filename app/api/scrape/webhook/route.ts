@@ -25,7 +25,10 @@ import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications
 import { getEnvVar, getRequiredEnvVar } from "@/lib/env";
 import { getSecret } from "@/lib/secrets";
 import { z } from "zod";
-import { cleanPhone } from "../../leads/import/route";
+import { cleanPhone, cleanEmail } from "@/lib/sanitizer";
+import { mlAdjustScore } from "@/lib/ml/lead-model";
+import { sendEmail } from "@/lib/mail";
+import { parsePreferences } from "@/lib/auth";
 
 // Schema for individual lead validation
 const leadSchema = z.object({
@@ -176,6 +179,33 @@ export async function POST(request: NextRequest) {
       });
 
       await notifyScrapeCompletion(agentId, 0, runId);
+
+      // Asynchronously send failure alerts to admins
+      try {
+        const admins = await prisma.user.findMany({
+          where: { role: { equals: "admin" } }
+        });
+        for (const admin of admins) {
+          const prefs = parsePreferences((admin as any).preferences).integrations || {};
+          const { smtpHost, smtpUser, smtpPass } = prefs;
+          if (smtpHost && smtpUser && smtpPass) {
+            await sendEmail({
+              host: smtpHost,
+              port: 587,
+              secure: false,
+              user: smtpUser,
+              pass: smtpPass,
+              from: `"Brilliance Alerts" <${smtpUser}>`,
+              to: admin.email,
+              subject: `⚠️ Scraper Run Failed: Run #${runId}`,
+              text: `Hello ${admin.name},\n\nThis is an automated alert from Brilliance. The scraper run #${runId} has failed with the following error:\n\n${errorMsg}\n\nPlease check the Scraper Settings panel for detailed logs.\n\nBest,\nBrilliance System`
+            });
+            console.log(`[Webhook] Scraper failure email alert sent to admin: ${admin.email}`);
+          }
+        }
+      } catch (alertErr) {
+        console.error("[Webhook] Failed to send email alert to admin:", alertErr);
+      }
 
       return NextResponse.json({ success: true, message: "Scrape run marked as failed" });
     }
@@ -361,6 +391,23 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < cleanLeadsPayload.length; i += BATCH_SIZE) {
       const batch = cleanLeadsPayload.slice(i, i + BATCH_SIZE);
 
+      // Bulk fetch existing leads for this batch to prevent O(N) DB query storms
+      const existingLeads = await prisma.lead.findMany({
+        where: {
+          agentId: agentId,
+          OR: batch.map((lead: any) => ({
+            name: lead.name,
+            company: lead.company || "Not Specified"
+          }))
+        }
+      });
+
+      const existingMap = new Map();
+      for (const el of existingLeads) {
+        const key = `${el.name.trim().toLowerCase()}|${el.company.trim().toLowerCase()}`;
+        existingMap.set(key, el);
+      }
+
       const results = await Promise.allSettled(batch.map(async (lead: any) => {
         // Basic sanity check — scraper-service already validated, but be defensive
         if (!lead.name) {
@@ -372,13 +419,17 @@ export async function POST(request: NextRequest) {
         const leadCompany = lead.company || "Not Specified";
         const leadCompanyAr = lead.companyAr || (lead.company ? null : "غير محدد");
 
-        const existingLead = await prisma.lead.findFirst({
-          where: {
-            name: lead.name,
-            company: leadCompany,
-            agentId: agentId
-          }
-        });
+        // Apply ML score adjustment
+        const baseScore = lead.score || 50;
+        let adjustedScore = baseScore;
+        try {
+          adjustedScore = await mlAdjustScore(lead, baseScore);
+        } catch (mlErr) {
+          console.error(`[Webhook] ML score adjustment failed for lead ${lead.name}:`, mlErr);
+        }
+
+        const lookupKey = `${lead.name.trim().toLowerCase()}|${leadCompany.trim().toLowerCase()}`;
+        const existingLead = existingMap.get(lookupKey);
 
         if (existingLead) {
           // Merge logic: append source if not present
@@ -390,7 +441,8 @@ export async function POST(request: NextRequest) {
 
           // Keep the higher tier/score
           const mergedTier = Math.min(existingLead.tier, lead.tier || 2); // Lower number is better
-          const mergedScore = Math.max(existingLead.score, lead.score || 50);
+          const mergedScore = Math.max(existingLead.score, adjustedScore);
+          const wasDeleted = existingLead.deletedAt !== null;
 
           await prisma.lead.update({
             where: { id: existingLead.id },
@@ -402,7 +454,7 @@ export async function POST(request: NextRequest) {
               source: mergedSource,
               tier: mergedTier,
               phone: (lead.phone ? cleanPhone(lead.phone) : null) || existingLead.phone,
-              email: lead.email || existingLead.email,
+              email: (lead.email ? cleanEmail(lead.email) : null) || existingLead.email,
               location: lead.location || existingLead.location,
               latitude: lead.latitude ?? existingLead.latitude,
               longitude: lead.longitude ?? existingLead.longitude,
@@ -413,39 +465,143 @@ export async function POST(request: NextRequest) {
               relocated: lead.relocated ?? existingLead.relocated,
               propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (existingLead.propertyPref as any),
               persona: lead.persona || existingLead.persona,
-              scrapeRunId: runId
+              scrapeRunId: runId,
+              deletedAt: null // Restore if soft deleted
             }
           });
+
+          // Log Audit Entry
+          try {
+            await prisma.auditLog.create({
+              data: {
+                action: wasDeleted ? "MERGE" : "UPDATE",
+                entityType: "Lead",
+                entityId: existingLead.id,
+                agentId: agentId,
+                details: wasDeleted 
+                  ? `Restored and merged soft-deleted lead from scrape run: ${runId}`
+                  : `Merged details for existing lead from scrape run: ${runId}`
+              }
+            });
+          } catch (auditErr) {
+            console.error("[Webhook] Failed to create audit log for merge/restore:", auditErr);
+          }
+
           return 1;
         } else {
-          await prisma.lead.create({
-            data: {
-              name: lead.name,
-              nameAr: lead.nameAr || null,
-              company: leadCompany,
-              companyAr: leadCompanyAr,
-              role: lead.role || "Professional",
-              roleAr: lead.roleAr || null,
-              source: lead.source || "HNWI Sources",
-              sourceType: lead.sourceType || "Unknown",
-              tier: lead.tier || 2,
-              phone: lead.phone ? cleanPhone(lead.phone) : null,
-              email: lead.email || null,
-              location: lead.location || "Abu Dhabi",
-              latitude: lead.latitude ?? null,
-              longitude: lead.longitude ?? null,
-              score: lead.score || 50,
-              signals: cleanSignals,
-              budgetMin: lead.budgetMin ?? null,
-              budgetMax: lead.budgetMax ?? null,
-              relocated: lead.relocated ?? false,
-              propertyPref: lead.propertyPref || {},
-              persona: lead.persona || null,
-              agentId: agentId,
-              scrapeRunId: runId
+          try {
+            const newLead = await prisma.lead.create({
+              data: {
+                name: lead.name,
+                nameAr: lead.nameAr || null,
+                company: leadCompany,
+                companyAr: leadCompanyAr,
+                role: lead.role || "Professional",
+                roleAr: lead.roleAr || null,
+                source: lead.source || "HNWI Sources",
+                sourceType: lead.sourceType || "Unknown",
+                tier: lead.tier || 2,
+                phone: lead.phone ? cleanPhone(lead.phone) : null,
+                email: lead.email ? cleanEmail(lead.email) : null,
+                location: lead.location || "Abu Dhabi",
+                latitude: lead.latitude ?? null,
+                longitude: lead.longitude ?? null,
+                score: adjustedScore,
+                signals: cleanSignals,
+                budgetMin: lead.budgetMin ?? null,
+                budgetMax: lead.budgetMax ?? null,
+                relocated: lead.relocated ?? false,
+                propertyPref: lead.propertyPref || {},
+                persona: lead.persona || null,
+                agentId: agentId,
+                scrapeRunId: runId
+              }
+            });
+
+            // Log Audit Entry for CREATE
+            try {
+              await prisma.auditLog.create({
+                data: {
+                  action: "CREATE",
+                  entityType: "Lead",
+                  entityId: newLead.id,
+                  agentId: agentId,
+                  details: `Created new lead via scrape run: ${runId}`
+                }
+              });
+            } catch (auditErr) {
+              console.error("[Webhook] Failed to create audit log for create:", auditErr);
             }
-          });
-          return 1;
+
+            return 1;
+          } catch (createErr: any) {
+            // Check for Prisma unique constraint violation (P2002)
+            if (createErr.code === 'P2002') {
+              console.warn(`[Webhook] P2002 collision caught on create for "${lead.name}" - attempting updates instead.`);
+              // Fetch the colliding lead to perform update/merge
+              const collidingLead = await prisma.lead.findFirst({
+                where: {
+                  name: lead.name,
+                  company: leadCompany,
+                  agentId: agentId
+                }
+              });
+
+              if (collidingLead) {
+                let mergedSource = collidingLead.source;
+                const newSource = lead.source || "HNWI Sources";
+                if (!mergedSource.includes(newSource)) {
+                  mergedSource = `${mergedSource}, ${newSource}`;
+                }
+                const mergedTier = Math.min(collidingLead.tier, lead.tier || 2);
+                const mergedScore = Math.max(collidingLead.score, adjustedScore);
+                const wasDeleted = collidingLead.deletedAt !== null;
+
+                await prisma.lead.update({
+                  where: { id: collidingLead.id },
+                  data: {
+                    nameAr: lead.nameAr || collidingLead.nameAr,
+                    companyAr: leadCompanyAr || collidingLead.companyAr,
+                    role: lead.role || collidingLead.role,
+                    roleAr: lead.roleAr || collidingLead.roleAr,
+                    source: mergedSource,
+                    tier: mergedTier,
+                    phone: (lead.phone ? cleanPhone(lead.phone) : null) || collidingLead.phone,
+                    email: (lead.email ? cleanEmail(lead.email) : null) || collidingLead.email,
+                    location: lead.location || collidingLead.location,
+                    latitude: lead.latitude ?? collidingLead.latitude,
+                    longitude: lead.longitude ?? collidingLead.longitude,
+                    score: mergedScore,
+                    signals: cleanSignals.length > 0 ? cleanSignals : (collidingLead.signals as any),
+                    budgetMin: lead.budgetMin ?? collidingLead.budgetMin,
+                    budgetMax: lead.budgetMax ?? collidingLead.budgetMax,
+                    relocated: lead.relocated ?? collidingLead.relocated,
+                    propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (collidingLead.propertyPref as any),
+                    persona: lead.persona || collidingLead.persona,
+                    scrapeRunId: runId,
+                    deletedAt: null
+                  }
+                });
+
+                try {
+                  await prisma.auditLog.create({
+                    data: {
+                      action: wasDeleted ? "MERGE" : "UPDATE",
+                      entityType: "Lead",
+                      entityId: collidingLead.id,
+                      agentId: agentId,
+                      details: `Merged colliding lead after P2002 race condition on scrape run: ${runId}`
+                    }
+                  });
+                } catch (auditErr) {
+                  console.error("[Webhook] Failed to create audit log for collision merge:", auditErr);
+                }
+
+                return 1;
+              }
+            }
+            throw createErr;
+          }
         }
       }));
 

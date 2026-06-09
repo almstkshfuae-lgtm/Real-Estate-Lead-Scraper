@@ -33,7 +33,7 @@ function isAuthorized(request: NextRequest): boolean {
   return !!(isCronAuth || isScraperSecretAuth || isDev);
 }
 
-/** Core cleanup logic — find and mark zombie runs as FAILED. */
+/** Core cleanup logic — find and mark zombie runs as FAILED, and prune expired leads (GDPR retention). */
 async function runCleanup(): Promise<NextResponse> {
   try {
     const cutoff = new Date(Date.now() - ZOMBIE_AGE_MINUTES * 60 * 1000);
@@ -46,32 +46,91 @@ async function runCleanup(): Promise<NextResponse> {
       select: { id: true, status: true, startedAt: true },
     });
 
-    if (zombieRuns.length === 0) {
-      return NextResponse.json({
-        cleaned: 0,
-        message: "No zombie runs found",
+    let zombieCount = 0;
+    let zombieIds: string[] = [];
+
+    if (zombieRuns.length > 0) {
+      zombieIds = zombieRuns.map((r) => r.id);
+      const result = await prisma.scrapeRun.updateMany({
+        where: { id: { in: zombieIds } },
+        data: {
+          status: "FAILED",
+          completedAt: new Date(),
+        },
       });
+      zombieCount = result.count;
+      console.info(
+        `[Cleanup] Marked ${result.count} zombie runs as FAILED:`,
+        zombieIds
+      );
     }
 
-    const zombieIds = zombieRuns.map((r) => r.id);
-
-    const result = await prisma.scrapeRun.updateMany({
-      where: { id: { in: zombieIds } },
-      data: {
-        status: "FAILED",
-        completedAt: new Date(),
+    // ── GDPR Lead Retention Policy ───────────────────────────────────────────
+    const admin = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: "admin@brilliance-lead.uk" },
+          { role: "admin" }
+        ]
       },
     });
 
-    console.info(
-      `[Cleanup] Marked ${result.count} zombie runs as FAILED:`,
-      zombieIds
-    );
+    let retentionDays = 90;
+    if (admin && admin.preferences) {
+      try {
+        const prefs = typeof admin.preferences === 'string'
+          ? JSON.parse(admin.preferences)
+          : admin.preferences;
+        if (prefs && typeof prefs.leadRetentionDays === 'number') {
+          retentionDays = prefs.leadRetentionDays;
+        } else if (prefs && typeof prefs.leadRetentionDays === 'string') {
+          const parsed = parseInt(prefs.leadRetentionDays, 10);
+          if (!isNaN(parsed)) {
+            retentionDays = parsed;
+          }
+        }
+      } catch (e) {
+        console.error("[Cleanup] Failed to parse admin preferences for leadRetentionDays:", e);
+      }
+    }
+
+    const retentionCutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const expiredLeadsCount = await prisma.lead.count({
+      where: {
+        createdAt: { lt: retentionCutoff }
+      }
+    });
+
+    let deletedLeadsCount = 0;
+    if (expiredLeadsCount > 0) {
+      const deleteResult = await prisma.lead.deleteMany({
+        where: {
+          createdAt: { lt: retentionCutoff }
+        }
+      });
+      deletedLeadsCount = deleteResult.count;
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            action: "RETENTION_CLEANUP",
+            entityType: "Lead",
+            entityId: "SYSTEM",
+            details: `GDPR retention cleanup: Hard deleted ${deletedLeadsCount} leads older than ${retentionDays} days (created before ${retentionCutoff.toISOString()})`
+          }
+        });
+      } catch (auditErr) {
+        console.error("[Cleanup] Failed to create audit log for retention cleanup:", auditErr);
+      }
+    }
 
     return NextResponse.json({
-      cleaned: result.count,
-      ids: zombieIds,
-      cutoffMinutes: ZOMBIE_AGE_MINUTES,
+      success: true,
+      zombiesCleaned: zombieCount,
+      zombieIds,
+      leadsPruned: deletedLeadsCount,
+      retentionDays,
+      cutoffDate: retentionCutoff.toISOString()
     });
   } catch (error: any) {
     console.error("[Cleanup] Error:", error?.message || error);

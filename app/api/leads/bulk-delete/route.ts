@@ -17,12 +17,40 @@ export async function POST(request: Request) {
 
     // Delete leads that belong to the current user (unless admin)
     const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
-    const deleteResult = await prisma.lead.deleteMany({
+
+    const leadsToDelete = await prisma.lead.findMany({
       where: {
         id: { in: ids },
         ...(isNonAdmin && { agentId: session.id })
+      },
+      select: { id: true, name: true, company: true }
+    });
+
+    const deleteResult = await prisma.lead.updateMany({
+      where: {
+        id: { in: ids },
+        ...(isNonAdmin && { agentId: session.id })
+      },
+      data: {
+        deletedAt: new Date()
       }
     });
+
+    if (leadsToDelete.length > 0) {
+      try {
+        await prisma.auditLog.createMany({
+          data: leadsToDelete.map(lead => ({
+            action: "SOFT_DELETE",
+            entityType: "Lead",
+            entityId: lead.id,
+            agentId: session.id,
+            details: `Bulk soft deleted lead: ${lead.name} (${lead.company})`
+          }))
+        });
+      } catch (auditErr) {
+        console.error("Failed to create bulk delete audit logs:", auditErr);
+      }
+    }
 
     return NextResponse.json({ 
       success: true, 

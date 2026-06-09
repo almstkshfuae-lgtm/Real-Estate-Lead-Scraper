@@ -161,3 +161,27 @@ export async function removeSession() {
   const cookieStore = await cookies();
   cookieStore.delete('auth_token');
 }
+
+/**
+ * Check if the active JWT session is close to expiring (less than 3 days remaining).
+ * If yes, generate a new token extending the session for another 7 days.
+ */
+export async function shouldRefreshAndCreateNewToken(token: string): Promise<string | null> {
+  try {
+    const secret = getJwtSecret();
+    const decoded = jwt.verify(token, secret) as any;
+    
+    // Check if token expires in less than 3 days
+    const threeDaysInSecs = 3 * 24 * 60 * 60;
+    const nowInSecs = Math.floor(Date.now() / 1000);
+    
+    if (decoded.exp && (decoded.exp - nowInSecs) < threeDaysInSecs) {
+      // Re-sign user payload (excluding iat, exp, etc. standard JWT fields)
+      const { iat, exp, nbf, jti, ...userPayload } = decoded;
+      return jwt.sign(userPayload, secret, { expiresIn: '7d' });
+    }
+  } catch (err) {
+    console.warn('[auth] shouldRefreshAndCreateNewToken check failed:', err instanceof Error ? err.message : String(err));
+  }
+  return null;
+}

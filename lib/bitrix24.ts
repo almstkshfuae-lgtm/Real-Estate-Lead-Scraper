@@ -130,13 +130,44 @@ export async function pushDeal(domain: string, token: string, contactId: string,
   const method = 'crm.deal.add.json';
   const url = baseUrl.endsWith('/') ? `${baseUrl}${method}` : `${baseUrl}/${method}`;
 
+  // Parse property preferences robustly
+  const propertyPref = lead.propertyPref;
+  let propType = 'Property';
+  let propBeds = '';
+  if (propertyPref) {
+    let prefObj: any = null;
+    if (typeof propertyPref === 'object') {
+      prefObj = propertyPref;
+    } else if (typeof propertyPref === 'string') {
+      try {
+        prefObj = JSON.parse(propertyPref);
+      } catch (e) {}
+    }
+
+    if (prefObj) {
+      if (Array.isArray(prefObj.types) && prefObj.types.length > 0) {
+        propType = prefObj.types.join(', ');
+      } else if (prefObj.type) {
+        propType = String(prefObj.type);
+      }
+      
+      if (prefObj.bedrooms) {
+        propBeds = `${prefObj.bedrooms} beds`;
+      } else if (prefObj.beds) {
+        propBeds = `${prefObj.beds} beds`;
+      }
+    }
+  }
+
+  const bedsString = propBeds ? ` (${propBeds})` : '';
+
   // Construct deal parameters
   const params = {
-    TITLE: `Deal: ${lead.name} - ${lead.propertyPref?.type || 'Property'}`,
+    TITLE: `Deal: ${lead.name} - ${propType}`,
     CONTACT_ID: contactId,
     OPPORTUNITY: lead.budgetMax || lead.budgetMin || 0,
     CURRENCY_ID: 'AED',
-    COMMENTS: `Lead from Brilliance UAE.\nTier: T${lead.tier}\nScore: ${lead.score}\nLocation: ${lead.location}\nProperty: ${lead.propertyPref?.type} (${lead.propertyPref?.beds || 0} beds)`,
+    COMMENTS: `Lead from Brilliance UAE.\nTier: T${lead.tier}\nScore: ${lead.score}\nLocation: ${lead.location}\nProperty: ${propType}${bedsString}\nSource: ${lead.source}`,
     OPENED: 'Y',
     SOURCE_ID: 'ADVERTISING',
   };

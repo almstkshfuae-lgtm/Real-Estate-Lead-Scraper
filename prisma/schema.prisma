@@ -52,6 +52,7 @@ model Lead {
   scrapeRunId  String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
   persona      String?   @db.Text
   sourceType   String?
   latitude     Float?
@@ -64,6 +65,11 @@ model Lead {
   @@index([agentId], map: "leads_agentId_fkey")
   @@index([scrapeRunId], map: "leads_scrapeRunId_fkey")
   @@index([source])
+  @@index([createdAt])
+  @@index([status])
+  @@index([tier])
+  @@index([score])
+  @@index([location])
   @@map("leads")
 }
 
@@ -151,6 +157,21 @@ model Notification {
   agent     User     @relation(fields: [agentId], references: [id])
 
   @@index([agentId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String   // "CREATE", "UPDATE", "SOFT_DELETE", "MERGE", "CRM_PUSH", "EXPORT", "RETENTION_CLEANUP"
+  entityType String   // "Lead"
+  entityId   String
+  agentId    String?
+  details    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([entityId])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 model ProjectHeatmap {

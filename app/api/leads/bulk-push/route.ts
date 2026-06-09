@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSessionWithDBVerify, parsePreferences } from "@/lib/auth";
-import { pushContact, testConnection } from "@/lib/bitrix24";
+import { pushContact, pushDeal, testConnection } from "@/lib/bitrix24";
 
 export async function POST(request: Request) {
   try {
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     });
 
     const prefs = parsePreferences((user as any)?.preferences).integrations || {};
-    const { bitrixDomain, bitrixToken } = prefs;
+    const { bitrixDomain, bitrixToken, bitrixPushMode } = prefs;
 
     if (!bitrixDomain || !bitrixToken) {
       return NextResponse.json({ 
@@ -57,6 +57,16 @@ export async function POST(request: Request) {
     for (const lead of leads) {
       try {
         const bitrixId = await pushContact(bitrixDomain, bitrixToken, lead);
+        
+        let bitrixDealId = null;
+        if (bitrixPushMode === 'deals') {
+          try {
+            bitrixDealId = await pushDeal(bitrixDomain, bitrixToken, String(bitrixId), lead);
+          } catch (dealError: any) {
+            console.error(`Deal push failed for lead ${lead.id}, but contact succeeded:`, dealError);
+            results.errors.push(`Lead ${lead.name} deal push failed: ${dealError.message}`);
+          }
+        }
         
         // Update lead with Bitrix ID
         await prisma.lead.update({

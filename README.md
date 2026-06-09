@@ -21,14 +21,14 @@ A full-stack real estate lead intelligence platform for UAE agents. Scrapes, sco
 | AI | Google Gemini API — `gemini-1.0` |
 | AI debugging | Next.js DevTools MCP (built into v16) |
 | Chatbot | Gemini API with conversation memory (stored in MySQL) |
-| ML | TensorFlow.js — in-app learning from agent behavior and lead outcomes |
+| ML | Pure JS Gradient Descent (Zero-Dep ML) — in-app learning from agent behavior and lead outcomes |
 | Scraper | Node.js + Playwright (server-side, Railway hosted) |
 | CRM | Bitrix24 REST API (simplified — Phase A contacts push only at launch) |
 | Messaging | WhatsApp Business Cloud API |
 | Deployment | Vercel (frontend + API routes) + Railway (scraper service + MySQL) |
 | PWA / APK | PWABuilder — Android APK + iOS Add to Home Screen (no app store) |
-| i18n | next-i18next — EN/AR, RTL/LTR via `<html dir>` |
-| Map | Mapbox as the map library with the hybrid SVG + Mapbox approach|
+| i18n | i18next + react-i18next (App Router) — EN/AR, RTL/LTR via `<html dir>` |
+| Map | Leaflet.js — dark-themed CARTO base map covering entire UAE |
 
 
 ---

@@ -28,6 +28,8 @@ yarn-error.log*
 .env*.local
 .env
 .env.production
+.env.vercel*
+jwt.txt
 
 # vercel
 .vercel
@@ -43,3 +45,6 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Generated JS duplicate files in lib
+/lib/**/*.js

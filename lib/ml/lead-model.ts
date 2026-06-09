@@ -1,4 +1,3 @@
-import * as tf from '@tensorflow/tfjs';
 import prisma from '@/lib/prisma';
 
 // Define the feature vector size
@@ -45,8 +44,8 @@ function extractFeatures(lead: any): number[] {
 }
 
 /**
- * Trains the ML model on historical "won" and "lost" leads.
- * Returns the training metrics and updated feature weights.
+ * Trains a lightweight logistic regression model on historical "won" and "lost" leads.
+ * Returns the training metrics and updated feature weights in pure JavaScript (no TensorFlow.js).
  */
 export async function trainModel() {
   const leads = await prisma.lead.findMany({
@@ -75,55 +74,86 @@ export async function trainModel() {
     ys.push(lead.status === 'won' ? 1.0 : 0.0);
   }
 
-  const xsTensor = tf.tensor2d(xs, [xs.length, FEATURE_COUNT]);
-  const ysTensor = tf.tensor2d(ys, [ys.length, 1]);
+  // Simple logistic regression with Gradient Descent in pure JS
+  const featureCount = FEATURE_COUNT;
+  let weights = new Array(featureCount).fill(0.0).map(() => Math.random() * 0.1 - 0.05);
+  let bias = 0.0;
+  const learningRate = 0.05;
+  const epochs = 100;
+  const batchSize = 32;
 
-  // Create a simple Sequential model
-  const model = tf.sequential();
-  model.add(tf.layers.dense({ units: 16, activation: 'relu', inputShape: [FEATURE_COUNT] }));
-  model.add(tf.layers.dropout({ rate: 0.2 }));
-  model.add(tf.layers.dense({ units: 8, activation: 'relu' }));
-  model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
+  let loss = 0;
+  let accuracy = 0;
 
-  model.compile({
-    optimizer: tf.train.adam(0.01),
-    loss: 'binaryCrossentropy',
-    metrics: ['accuracy'],
-  });
+  for (let epoch = 0; epoch < epochs; epoch++) {
+    // Shuffle data
+    const indices = Array.from({ length: xs.length }, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
 
-  // Train the model
-  const history = await model.fit(xsTensor, ysTensor, {
-    epochs: 50,
-    batchSize: 32,
-    validationSplit: 0.2,
-    shuffle: true,
-  });
+    let epochLoss = 0;
+    let correct = 0;
 
-  // Extract the learned weights from the first layer to see feature importance
-  const weights = model.layers[0].getWeights()[0].arraySync() as number[][];
-  
-  // Calculate relative importance of each feature
-  const featureImportance = weights.map(neuronWeights => {
-    return neuronWeights.reduce((sum, w) => sum + Math.abs(w), 0);
-  });
-  
-  // Normalize importance
-  const totalImportance = featureImportance.reduce((sum, val) => sum + val, 0);
-  const normalizedImportance = featureImportance.map(val => (val / totalImportance) * 100);
+    for (let b = 0; b < xs.length; b += batchSize) {
+      const batchIndices = indices.slice(b, b + batchSize);
+      
+      const dw = new Array(featureCount).fill(0.0);
+      let db = 0.0;
 
-  // Clean up tensors
-  xsTensor.dispose();
-  ysTensor.dispose();
+      for (const idx of batchIndices) {
+        const x = xs[idx];
+        const y = ys[idx];
 
-  // Return the insights and adjusted score weights
-  // In a production environment, you would save these weights to the database
-  // to be used by the lead scoring algorithm in `lib/scoring.ts`
+        // Forward pass
+        let dot = bias;
+        for (let j = 0; j < featureCount; j++) {
+          dot += x[j] * weights[j];
+        }
+        const pred = 1.0 / (1.0 + Math.exp(-Math.max(-20, Math.min(20, dot))));
+
+        // Calculate binary cross entropy loss
+        const eps = 1e-15;
+        const predClipped = Math.max(eps, Math.min(1 - eps, pred));
+        epochLoss += -(y * Math.log(predClipped) + (1.0 - y) * Math.log(1.0 - predClipped));
+
+        // Accuracy tracking
+        const binaryPred = pred >= 0.5 ? 1.0 : 0.0;
+        if (binaryPred === y) {
+          correct++;
+        }
+
+        // Gradients
+        const error = pred - y;
+        for (let j = 0; j < featureCount; j++) {
+          dw[j] += error * x[j];
+        }
+        db += error;
+      }
+
+      // Update weights and bias
+      const currentBatchSize = batchIndices.length;
+      for (let j = 0; j < featureCount; j++) {
+        weights[j] -= learningRate * (dw[j] / currentBatchSize);
+      }
+      bias -= learningRate * (db / currentBatchSize);
+    }
+
+    loss = epochLoss / xs.length;
+    accuracy = correct / xs.length;
+  }
+
+  // Calculate relative importance of each feature based on absolute weights
+  const totalImportance = weights.reduce((sum, w) => sum + Math.abs(w), 0) || 1e-5;
+  const normalizedImportance = weights.map(w => (Math.abs(w) / totalImportance) * 100);
+
   return {
     success: true,
     message: 'Model trained successfully and score weights updated based on agent feedback.',
     leadsCount: leads.length,
-    accuracy: history.history.acc[history.history.acc.length - 1],
-    loss: history.history.loss[history.history.loss.length - 1],
+    accuracy: accuracy,
+    loss: loss,
     readyToTrain: true,
     featureImportance: {
       tier: normalizedImportance[0],
@@ -143,10 +173,6 @@ export async function trainModel() {
  * This function integrates agent feedback (won/lost outcomes) into the lead qualification process.
  */
 export async function mlAdjustScore(lead: any, baseScore: number): Promise<number> {
-  // In a full implementation, we would load the trained weights from the database here.
-  // Since this is a serverless environment, we'll simulate the ML weight adjustment 
-  // until the 500+ lead threshold is met and training has occurred.
-  
   const leads = await prisma.lead.count({
     where: { status: { in: ['won', 'lost'] } }
   });
@@ -157,7 +183,6 @@ export async function mlAdjustScore(lead: any, baseScore: number): Promise<numbe
   }
 
   // Once trained, we extract features and apply the learned weights.
-  // (Simulated application of learned weights for demonstration)
   const features = extractFeatures(lead);
   
   // Simulated learned feature importance weights from historical data

@@ -3,7 +3,7 @@
  * Verifies that outgoing Playwright requests successfully pass through proxy when configured
  */
 
-import { chromium } from 'playwright';
+import { launchBrowser } from './browser-launcher.js';
 
 export function maskProxyUrl(str) {
   if (process.env.DISABLE_PROXY_MASKING === 'true') {
@@ -20,6 +20,33 @@ export function maskProxyUrl(str) {
 }
 
 /**
+ * Safely parses any proxy URL using the standard URL class,
+ * extracting and decoding credentials for Playwright compliance.
+ *
+ * @param {string} proxyUrl Raw proxy URL
+ * @returns {object|null} Playwright proxy configuration object or null
+ */
+export function parseProxyUrl(proxyUrl) {
+  if (!proxyUrl) return null;
+  try {
+    const url = new URL(proxyUrl);
+    const options = {
+      server: `${url.protocol}//${url.host}`
+    };
+    if (url.username) {
+      options.username = decodeURIComponent(url.username);
+    }
+    if (url.password) {
+      options.password = decodeURIComponent(url.password);
+    }
+    return options;
+  } catch (e) {
+    console.warn('Failed to parse proxy URL, falling back to raw:', proxyUrl, e.message);
+    return { server: proxyUrl };
+  }
+}
+
+/**
  * Validates proxy connectivity by attempting a real page load through the proxy
  * Returns detailed diagnostic information for debugging connection issues
  */
@@ -31,15 +58,15 @@ export async function validateProxyConnection(proxyUrl, timeoutMs = 30000) {
     };
   }
 
-  const browser = await chromium.launch({ channel: 'msedge', 
-    headless: true,
+  const browser = await launchBrowser({
     args: ['--disable-blink-features=AutomationControlled']
   });
 
   try {
     const startTime = Date.now();
+    const proxyOptions = parseProxyUrl(proxyUrl);
     const context = await browser.newContext({
-      proxy: { server: proxyUrl },
+      proxy: proxyOptions || undefined,
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       extraHTTPHeaders: {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -111,10 +138,15 @@ export async function validateProxyConnection(proxyUrl, timeoutMs = 30000) {
       ]
     };
   } finally {
-    try {
-      await browser.close();
-    } catch (e) {
-      // ignore close errors
+    if (browser) {
+      try {
+        await Promise.race([
+          browser.close(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+        ]);
+      } catch (err) {
+        console.error('[Browser] Error closing browser cleanly in validateProxyConnection:', err.message);
+      }
     }
   }
 }
@@ -152,10 +184,13 @@ export async function verifyProxyEgress(proxyUrl, timeoutMs = 30000) {
   }
 
   // Use Playwright to perform a proxied request and observe reported IP
-  const browser = await chromium.launch({ channel: 'msedge',  headless: true, args: ['--disable-blink-features=AutomationControlled'] });
+  const browser = await launchBrowser({
+    args: ['--disable-blink-features=AutomationControlled']
+  });
   try {
+    const proxyOptions = parseProxyUrl(proxyUrl);
     const context = await browser.newContext({
-      proxy: { server: proxyUrl },
+      proxy: proxyOptions || undefined,
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       extraHTTPHeaders: {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -166,6 +201,7 @@ export async function verifyProxyEgress(proxyUrl, timeoutMs = 30000) {
       }
     });
     const page = await context.newPage();
+
 
     try {
       await page.goto('https://httpbin.org/ip', { timeout: timeoutMs, waitUntil: 'domcontentloaded' });
@@ -187,7 +223,16 @@ export async function verifyProxyEgress(proxyUrl, timeoutMs = 30000) {
   } catch (e) {
     result.details.browserError = maskProxyUrl(e.message || String(e));
   } finally {
-    try { await browser.close(); } catch (e) { }
+    if (browser) {
+      try {
+        await Promise.race([
+          browser.close(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+        ]);
+      } catch (err) {
+        console.error('[Browser] Error closing browser cleanly in verifyProxyEgress:', err.message);
+      }
+    }
   }
 
   // Determine pass/fail: proxied IP should exist and be different from direct IP

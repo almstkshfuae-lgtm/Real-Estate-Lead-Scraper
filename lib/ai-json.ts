@@ -42,15 +42,14 @@ function stripMarkdownFences(text: string): string {
 }
 
 /**
- * Find the first complete, balanced JSON object in a string.
+ * Find all complete, balanced JSON objects in a string.
  *
- * Walks the string char-by-char tracking brace depth. Stops at the first
- * position where depth returns to 0 after having opened at least once.
+ * Walks the string char-by-char tracking brace depth. Returns an array of all
+ * complete, balanced {...} blocks found.
  * Handles '{' / '}' inside strings (both double-quoted and escaped) safely.
- *
- * Returns null if no balanced block is found.
  */
-function extractFirstBalancedObject(text: string): string | null {
+function extractAllBalancedObjects(text: string): string[] {
+  const objects: string[] = [];
   let depth = 0;
   let start = -1;
   let inString = false;
@@ -82,13 +81,14 @@ function extractFirstBalancedObject(text: string): string | null {
       } else if (ch === "}") {
         depth--;
         if (depth === 0 && start !== -1) {
-          return text.slice(start, i + 1);
+          objects.push(text.slice(start, i + 1));
+          start = -1;
         }
       }
     }
   }
 
-  return null;
+  return objects;
 }
 
 /**
@@ -112,13 +112,16 @@ export function parseAIJson<T = unknown>(raw: string): T {
     // fall through
   }
 
-  // Layer 2: balanced-brace scan — non-greedy, finds first complete object
-  const block = extractFirstBalancedObject(cleaned);
-  if (block) {
-    try {
-      return JSON.parse(block) as T;
-    } catch {
-      // fall through — the block itself is malformed (e.g. trailing comma)
+  // Layer 2: balanced-brace scan — find all balanced objects, try parsing them starting from the longest
+  const blocks = extractAllBalancedObjects(cleaned);
+  if (blocks.length > 0) {
+    const sortedBlocks = [...blocks].sort((a, b) => b.length - a.length);
+    for (const block of sortedBlocks) {
+      try {
+        return JSON.parse(block) as T;
+      } catch {
+        // fall through — try the next block
+      }
     }
   }
 

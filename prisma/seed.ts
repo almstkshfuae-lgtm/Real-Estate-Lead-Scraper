@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { DEFAULT_SCRAPER_SOURCES } from '../scraper-service/default-sources.js';
 
 const prisma = new PrismaClient();
 
@@ -8,6 +9,39 @@ async function main() {
     console.log('Skipping seed script in production/deployment environment.');
     return;
   }
+
+  // Seed/Sync default sources config
+  console.log('Syncing default scraper sources...');
+  for (const source of DEFAULT_SCRAPER_SOURCES) {
+    await prisma.sourceConfig.upsert({
+      where: { key: source.key },
+      update: {
+        url: source.url,
+        name: source.name,
+        type: source.type,
+        signals: source.signals,
+        navigationSelectors: source.navigationSelectors,
+        contentSelectors: source.contentSelectors,
+        crawlDepth: source.crawlDepth,
+        maxPages: source.maxPages,
+        delayBetweenPages: source.delayBetweenPages,
+      },
+      create: {
+        key: source.key,
+        url: source.url,
+        name: source.name,
+        type: source.type,
+        signals: source.signals,
+        navigationSelectors: source.navigationSelectors,
+        contentSelectors: source.contentSelectors,
+        crawlDepth: source.crawlDepth,
+        maxPages: source.maxPages,
+        delayBetweenPages: source.delayBetweenPages,
+        active: true,
+      },
+    });
+  }
+  console.log(`Synced ${DEFAULT_SCRAPER_SOURCES.length} default sources.`);
 
   // Double protection: skip if the database already has leads
   const existingCount = await prisma.lead.count();

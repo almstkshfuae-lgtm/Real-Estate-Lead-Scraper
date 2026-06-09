@@ -43,6 +43,12 @@ export async function GET(request: Request) {
       conditions.push({ agentId: session.id });
     }
 
+    // Exclude soft deleted leads by default, unless includeDeleted is explicitly "true"
+    const includeDeleted = searchParams.get("includeDeleted") === "true";
+    if (!includeDeleted) {
+      conditions.push({ deletedAt: null });
+    }
+
     if (search) {
       conditions.push({
         OR: [

@@ -51,8 +51,13 @@ self.addEventListener("fetch", (event) => {
                 event.request.headers.get("RSC") === "1" || 
                 event.request.headers.get("Next-Router-Prefetch") === "1";
   const isServerAction = event.request.method === "POST" && event.request.headers.has("Next-Action");
+  const isSensitive = url.pathname.startsWith("/leads") ||
+                      url.pathname.startsWith("/map") ||
+                      url.pathname.startsWith("/search") ||
+                      url.pathname.startsWith("/campaigns") ||
+                      url.pathname.startsWith("/settings");
 
-  if (isApi || isNextInternal || isRsc || isServerAction) {
+  if (isApi || isNextInternal || isRsc || isServerAction || isSensitive) {
     return;
   }
 

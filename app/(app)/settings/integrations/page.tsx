@@ -23,7 +23,9 @@ export default function IntegrationsSettingsPage() {
     whatsappToken: "",
     smtpHost: "",
     smtpUser: "",
-    smtpPass: ""
+    smtpPass: "",
+    uaeComplianceMode: false,
+    globalRateLimitDelay: 3000
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -64,7 +66,7 @@ export default function IntegrationsSettingsPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const handleChange = (key: keyof typeof integrations, value: string) => {
+  const handleChange = (key: keyof typeof integrations, value: any) => {
     setIntegrations(prev => {
       const next = { ...prev, [key]: value };
       // Persist draft to sessionStorage to survive navigation
@@ -278,6 +280,58 @@ export default function IntegrationsSettingsPage() {
             )}
             Test Scraper Service
           </button>
+        </div>
+      </div>
+
+      {/* Compliance & Rate-Limiting */}
+      <div className="p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] space-y-6">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div className="text-start">
+              <h2 className="text-lg font-bold text-[var(--color-text-primary)]">Compliance & Rate-Limiting</h2>
+              <p className="text-sm text-[var(--color-text-secondary)]">Manage UAE legal protection settings and scraping speeds.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="flex items-start gap-3 p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/30 text-start">
+            <input
+              type="checkbox"
+              id="uaeComplianceMode"
+              checked={!!integrations.uaeComplianceMode}
+              onChange={(e) => handleChange('uaeComplianceMode', e.target.checked)}
+              className="mt-1 w-4 h-4 rounded text-[var(--color-primary)] border-[var(--color-border)] focus:ring-[var(--color-primary)] cursor-pointer"
+            />
+            <div className="space-y-1">
+              <label htmlFor="uaeComplianceMode" className="text-sm font-bold text-[var(--color-text-primary)] cursor-pointer">
+                UAE PDPL Compliance Mode
+              </label>
+              <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+                When enabled, automatically skips scraping from sources with strict anti-scraping terms (e.g. Bayut, Dubizzle) to ensure regulatory compliance with UAE data protection laws.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2 p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/30 text-start">
+            <label className="text-sm font-bold text-[var(--color-text-primary)]">
+              Global Scraping Delay (ms)
+            </label>
+            <input
+              type="number"
+              min="500"
+              max="30000"
+              value={integrations.globalRateLimitDelay ?? 3000}
+              onChange={(e) => handleChange('globalRateLimitDelay', parseInt(e.target.value, 10) || 3000)}
+              className="w-full h-10 px-3 border border-[var(--color-border)] rounded-lg bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)]"
+            />
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              Enforces a minimum pause (in milliseconds) between crawling consecutive pages to prevent rate limits and IP bans.
+            </p>
+          </div>
         </div>
       </div>
 

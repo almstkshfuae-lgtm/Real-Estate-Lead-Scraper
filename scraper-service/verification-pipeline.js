@@ -1,6 +1,7 @@
-import { chromium } from 'playwright';
+import { launchBrowser } from './browser-launcher.js';
 import * as cheerio from 'cheerio';
-import { maskProxyUrl } from './proxy-validator.js';
+import axios from 'axios';
+import { maskProxyUrl, parseProxyUrl } from './proxy-validator.js';
 
 async function dismissGoogleConsent(page) {
   const url = page.url();
@@ -126,7 +127,7 @@ export async function applyStealthOverrides(page) {
  * Attempt to solve/bypass Cloudflare Turnstile or JS challenges on the page.
  * Waits for challenge to appear, clicks the checkbox if present, and waits for resolution.
  */
-export async function resolveCloudflareChallenge(page, timeoutMs = 20000) {
+export async function resolveCloudflareChallenge(page, timeoutMs = 45000) {
   const startTime = Date.now();
   console.log('[AntiBot] Checking for Cloudflare/Turnstile challenge...');
   
@@ -159,27 +160,167 @@ export async function resolveCloudflareChallenge(page, timeoutMs = 20000) {
 
   console.log('[AntiBot] Cloudflare Turnstile or JS challenge detected! Attempting automatic bypass...');
 
-  // Loop checking/solving until resolved or timeout
+  // Try 2Captcha integration if API key is present
+  const apiKey = process.env.TWOCAPTCHA_API_KEY;
+  if (apiKey && apiKey.trim()) {
+    console.log('[AntiBot] TWOCAPTCHA_API_KEY configured. Trying 2Captcha Turnstile solver...');
+    try {
+      // 1. Extract sitekey
+      let sitekey = null;
+      // Try DOM attributes
+      const turnstileEl = await page.$('.cf-turnstile, [data-sitekey]');
+      if (turnstileEl) {
+        sitekey = await turnstileEl.getAttribute('data-sitekey');
+      }
+      
+      // Try iframe source param
+      if (!sitekey) {
+        const frames = page.frames();
+        for (const frame of frames) {
+          const u = frame.url();
+          if (u.includes('challenges.cloudflare.com')) {
+            try {
+              const urlObj = new URL(u);
+              sitekey = urlObj.searchParams.get('key') || urlObj.searchParams.get('sitekey');
+              if (sitekey) break;
+            } catch (err) {}
+          }
+        }
+      }
+
+      // Try page source regex
+      if (!sitekey) {
+        const html = await page.content();
+        const m = html.match(/sitekey\s*:\s*["']([^"']+)["']/i);
+        if (m && m[1]) {
+          sitekey = m[1];
+        }
+      }
+
+      if (sitekey) {
+        console.log(`[AntiBot] Extracted Turnstile sitekey: ${sitekey}. Submitting solving task to 2Captcha...`);
+        const pageUrl = page.url();
+        const postUrl = `https://2captcha.com/in.php`;
+        const postParams = {
+          key: apiKey,
+          method: 'turnstile',
+          sitekey: sitekey,
+          pageurl: pageUrl,
+          json: 1
+        };
+
+        const postResp = await axios.post(postUrl, null, { params: postParams, timeout: 15000 });
+        if (postResp.data && postResp.data.status === 1) {
+          const captchaId = postResp.data.request;
+          console.log(`[AntiBot] 2Captcha task created. Task ID: ${captchaId}. Polling for token...`);
+          
+          let solved = false;
+          let token = null;
+          const pollStart = Date.now();
+          const pollTimeoutMs = timeoutMs - 5000; // leave some buffer
+
+          while (Date.now() - pollStart < pollTimeoutMs) {
+            await page.waitForTimeout(5000);
+            const getUrl = `https://2captcha.com/res.php`;
+            const getParams = {
+              key: apiKey,
+              action: 'get',
+              id: captchaId,
+              json: 1
+            };
+            try {
+              const getResp = await axios.get(getUrl, { params: getParams, timeout: 10000 });
+              if (getResp.data) {
+                if (getResp.data.status === 1) {
+                  token = getResp.data.request;
+                  solved = true;
+                  break;
+                } else if (getResp.data.request === 'CAPCHA_NOT_READY') {
+                  console.log('[AntiBot] 2Captcha response not ready yet...');
+                } else {
+                  console.warn(`[AntiBot] 2Captcha returned error: ${getResp.data.request}`);
+                  break;
+                }
+              }
+            } catch (pollErr) {
+              console.warn(`[AntiBot] 2Captcha polling error: ${pollErr.message}`);
+            }
+          }
+
+          if (solved && token) {
+            console.log('[AntiBot] 2Captcha solved challenge successfully! Injecting token into page...');
+            
+            await page.evaluate((t) => {
+              // Fill input fields
+              const inputs = document.querySelectorAll('textarea[name="cf-turnstile-response"], input[name="cf-turnstile-response"]');
+              inputs.forEach(input => {
+                input.value = t;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+              });
+
+              // Trigger callback functions if defined
+              const widgets = document.querySelectorAll('.cf-turnstile, [data-sitekey]');
+              widgets.forEach(w => {
+                const cb = w.getAttribute('data-callback');
+                if (cb && typeof window[cb] === 'function') {
+                  try {
+                    window[cb](t);
+                    console.log(`[AntiBot] Triggered Turnstile callback: ${cb}`);
+                  } catch (err) {
+                    console.error(`[AntiBot] Callback error:`, err);
+                  }
+                }
+              });
+
+              // Try submitting form if callback not present
+              if (widgets.length > 0 && !Array.from(widgets).some(w => w.getAttribute('data-callback'))) {
+                const form = widgets[0].closest('form');
+                if (form) {
+                  form.submit();
+                  console.log('[AntiBot] Submitted form after Turnstile injection.');
+                }
+              }
+            }, token);
+
+            await page.waitForTimeout(3000);
+            
+            if (!(await isChallengePresent())) {
+              console.log('[AntiBot] Cloudflare challenge solved via 2Captcha!');
+              return true;
+            }
+          }
+        } else {
+          console.warn('[AntiBot] Failed to create 2Captcha task:', postResp.data?.request || 'Unknown error');
+        }
+      } else {
+        console.warn('[AntiBot] Could not extract Turnstile sitekey. Falling back to click bypass...');
+      }
+    } catch (solveErr) {
+      console.error('[AntiBot] 2Captcha Turnstile solver failed, falling back to click solver:', solveErr.message);
+    }
+  } else {
+    console.log('[AntiBot] TWOCAPTCHA_API_KEY is not configured. Falling back to coordinates click bypass.');
+  }
+
+  // Fallback to coordinates click solver
   while (Date.now() - startTime < timeoutMs) {
     if (!(await isChallengePresent())) {
       console.log('[AntiBot] Cloudflare challenge resolved successfully!');
       return true;
     }
 
-    // Try finding Turnstile iframe
     const cfFrame = page.frames().find(f => f.url().includes('challenges.cloudflare.com') || f.name().includes('cf-'));
     
     if (cfFrame) {
       console.log('[AntiBot] Found Cloudflare challenges iframe.');
       try {
-        // Look for checkbox container or input
         const checkbox = await cfFrame.$('input[type="checkbox"], #challenge-stage, .cb-i, .mark');
         if (checkbox) {
           console.log('[AntiBot] Found checkbox inside Turnstile iframe. Attempting click...');
           await checkbox.click({ timeout: 3000 });
           console.log('[AntiBot] Clicked Turnstile checkbox inside iframe.');
         } else {
-          // coordinate click fallback on the iframe element
           const iframeElement = await page.$('iframe[src*="challenges.cloudflare.com"], iframe[id*="cf-"]');
           if (iframeElement) {
             const box = await iframeElement.boundingBox();
@@ -187,7 +328,7 @@ export async function resolveCloudflareChallenge(page, timeoutMs = 20000) {
               const clickX = box.x + 30;
               const clickY = box.y + box.height / 2;
               await page.mouse.click(clickX, clickY);
-              console.log(`[AntiBot] Clicked iframe at coordinate coordinates (${clickX}, ${clickY}).`);
+              console.log(`[AntiBot] Clicked iframe at coordinates (${clickX}, ${clickY}).`);
             }
           }
         }
@@ -213,7 +354,6 @@ export async function resolveCloudflareChallenge(page, timeoutMs = 20000) {
     await page.waitForTimeout(2500);
   }
 
-  // Final check
   if (!(await isChallengePresent())) {
     console.log('[AntiBot] Cloudflare challenge resolved successfully!');
     return true;
@@ -224,38 +364,7 @@ export async function resolveCloudflareChallenge(page, timeoutMs = 20000) {
 }
 
 function getPlaywrightProxyOptions(proxyUrl) {
-  if (!proxyUrl) return null;
-  
-  if (process.env.ACTIVE_PROXY_PROVIDER === 'dataimpulse' || process.env.DATAIMPULSE_PROXY_USERNAME) {
-    const username = process.env.DATAIMPULSE_PROXY_USERNAME;
-    const password = process.env.DATAIMPULSE_PROXY_PASSWORD;
-    const host = process.env.DATAIMPULSE_PROXY_HOST || 'gw.dataimpulse.com';
-    const port = process.env.DATAIMPULSE_PROXY_PORT || '823';
-    
-    if (username && password) {
-      return {
-        server: `http://${host}:${port}`,
-        username,
-        password
-      };
-    }
-  }
-
-  try {
-    const url = new URL(proxyUrl);
-    const options = {
-      server: `${url.protocol}//${url.host}`
-    };
-    if (url.username) {
-      options.username = decodeURIComponent(url.username);
-    }
-    if (url.password) {
-      options.password = decodeURIComponent(url.password);
-    }
-    return options;
-  } catch (e) {
-    return { server: proxyUrl };
-  }
+  return parseProxyUrl(proxyUrl);
 }
 
 /**
@@ -379,7 +488,7 @@ async function technicalAccessTest(url, proxyUrl = null) {
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
+    browser = await launchBrowser(browserOptions);
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     // Set request/response interception for diagnostics
@@ -455,7 +564,14 @@ async function technicalAccessTest(url, proxyUrl = null) {
     testResult.issues.push(maskProxyUrl(`Test Error: ${error.message}`));
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await Promise.race([
+          browser.close(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+        ]);
+      } catch (err) {
+        console.error('[Browser] Error closing browser cleanly in technicalAccessTest:', err.message);
+      }
     }
   }
 
@@ -495,7 +611,7 @@ async function domDataVerification(url, proxyUrl = null) {
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
+    browser = await launchBrowser(browserOptions);
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -624,7 +740,14 @@ async function domDataVerification(url, proxyUrl = null) {
     testResult.issues.push(maskProxyUrl(`DOM Verification Error: ${error.message}`));
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await Promise.race([
+          browser.close(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+        ]);
+      } catch (err) {
+        console.error('[Browser] Error closing browser cleanly in domDataVerification:', err.message);
+      }
     }
   }
 
@@ -662,7 +785,7 @@ async function interactionMapping(url, proxyUrl = null) {
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
+    browser = await launchBrowser(browserOptions);
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -785,7 +908,14 @@ async function interactionMapping(url, proxyUrl = null) {
     testResult.issues.push(maskProxyUrl(`Interaction Mapping Error: ${error.message}`));
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await Promise.race([
+          browser.close(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+        ]);
+      } catch (err) {
+        console.error('[Browser] Error closing browser cleanly in interactionMapping:', err.message);
+      }
     }
   }
 
@@ -823,7 +953,7 @@ async function aiExtractionViabilityTest(url, proxyUrl = null, aiExtractionFn = 
       browserOptions.proxy = proxyOptions;
     }
 
-    browser = await chromium.launch({ ...browserOptions, channel: 'msedge' });
+    browser = await launchBrowser(browserOptions);
     const { context, page } = await createStealthContextAndPage(browser, proxyUrl);
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -920,7 +1050,14 @@ Text: ${text}`;
     testResult.issues.push(maskProxyUrl(`AI Extraction Test Error: ${error.message}`));
   } finally {
     if (browser) {
-      await browser.close();
+      try {
+        await Promise.race([
+          browser.close(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Browser close timeout')), 5000))
+        ]);
+      } catch (err) {
+        console.error('[Browser] Error closing browser cleanly in aiExtractionViabilityTest:', err.message);
+      }
     }
   }
 

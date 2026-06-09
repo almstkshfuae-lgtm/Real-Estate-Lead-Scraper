@@ -91,6 +91,15 @@
 - [x] Apollo Prospecting (Removed)
 - [x] Sequential queue scheduling system for concurrent runs
 
+### 7G — Scraper Service Hardening & Refactoring ✅ (COMPLETED)
+- [x] 7G.1 Refactor monolithic index.js into src modular files
+- [x] 7G.2 Implement stateful queue manager to prevent watchdog race conditions
+- [x] 7G.3 Secure env variable loading and mask sensitive logs
+- [x] 7G.4 Expand selector validation to support full Playwright engines
+- [x] 7G.5 Integrate 2Captcha Turnstile solving fallback in verification pipeline
+
+
+
 ## Phase 8 — Export ✅ (COMPLETED)
 - [x] 8A.1 Standardize export fields (EN/AR parity) <!-- id: 8A.1 -->
 - [x] 8A.2 Fix ExcelJS/CSV export routes <!-- id: 8A.2 -->
@@ -228,6 +237,8 @@
 - [x] **Hardened: Prisma Proxy caching** — Implement WeakMap caching of model and method proxies in `lib/prisma.ts` and `lib/prisma.js` to eliminate memory leaks and GC overhead under high traffic.
 - [x] **Map Project Creation** — Enabled super admin users (role === "admin") to add new projects with geographic details directly from the map page interface.
 - [x] **Hardened**: Translation caching optimization & DB synchronization for SSR parity.
+- [x] **Database Hardening & GDPR Retention Policy** — Added performance indexes, soft deletes, mutation audit logs, safe webhook restoration/P2002 handling, CSV import duplicate safety, and automated GDPR retention pruning.
+- [x] **Hardened: Performance & Scalability Gaps** — Capped scraper DB pool size (`connection_limit=3`) and shared single client; parallelized ScrapeQueueManager (`MAX_CONCURRENT_SCRAPES=2`); added browser close watchdog watchdogs; replaced TensorFlow.js with Gradient Descent JS ML model (saving 30MB+ package bloat); optimized lead imports and webhooks with bulk query batching (reducing query overhead by 90%).
 
 
 

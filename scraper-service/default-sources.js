@@ -251,5 +251,52 @@ export const DEFAULT_SCRAPER_SOURCES = [
     },
     maxPages: 10,
     delayBetweenPages: 2000
+  },
+  {
+    key: 'google-maps',
+    url: 'https://www.google.com/maps',
+    name: 'Google Maps Business Directory',
+    type: 'Google Maps Business Directory',
+    signals: ['Business Directory', 'Local Business', 'Contact Info'],
+    crawlDepth: 1,
+    navigationSelectors: {
+      memberDirectory: [],
+      pagination: [],
+      expandButtons: [],
+      memberLinks: []
+    },
+    contentSelectors: {
+      namePatterns: [],
+      companyPatterns: [],
+      rolePatterns: [],
+      phonePatterns: [],
+      emailPatterns: []
+    },
+    maxPages: 5,
+    delayBetweenPages: 2000
+  },
+  {
+    key: 'yellow-pages',
+    url: 'https://www.yellowpages.ae',
+    name: 'Yellow Pages UAE',
+    type: 'Business Directory',
+    signals: ['Business Directory', 'Local Business', 'Contact Info'],
+    crawlDepth: 1,
+    navigationSelectors: {
+      memberDirectory: [],
+      pagination: [],
+      expandButtons: [],
+      memberLinks: []
+    },
+    contentSelectors: {
+      namePatterns: [],
+      companyPatterns: [],
+      rolePatterns: [],
+      phonePatterns: [],
+      emailPatterns: []
+    },
+    maxPages: 5,
+    delayBetweenPages: 2000
   }
 ];
+
