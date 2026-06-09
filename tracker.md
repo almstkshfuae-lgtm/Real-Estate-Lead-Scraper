@@ -77,6 +77,7 @@
 - [x] **Chatbot EN/AR** — responds in active language
 - [x] **ML model: TensorFlow.js** — train on lead outcomes (Start after 500+ leads in DB)
 - [x] **ML: adjust base score weights based on agent feedback** — Won/Lost signals feed model
+- [x] **Lead Scoring & Tiering Validation** — Pearson correlation coefficient, conversion rates per tier, and heuristic classifier performance metrics integrated in the Scraper Settings page (bilingual EN/AR).
 - [x] **Centralized AI Gateway & Cost Control** — Consolidated Gemini API gateway, right-sized outputs, daily budget limits, cost dashboard, and integrated tracking in Next.js + scraper service.
 
 ---
@@ -117,11 +118,11 @@
 
 ---
 
-## Phase 9 — CRM & Outreach 🔲
+## Phase 9 — CRM & Outreach ✅ (COMPLETED)
 
 > Bitrix24 integration is split into 3 phases. Never skip to Phase B or C until the previous phase is confirmed stable in production.
 
-### Phase 9A — Contacts Push (Launch scope) 🔲
+### Phase 9A — Contacts Push (Launch scope) ✅ (COMPLETED)
 
 | # | Task | Status | Priority | Notes |
 |---|------|--------|----------|-------|
@@ -135,7 +136,7 @@
 | 9A.8 | Send WhatsApp message from lead sidebar | ✅ Done | High | Uses lead phone number |
 | 9A.9 | Email outreach — compose + send via SMTP | ✅ Done | Medium | Resend or nodemailer |
 
-### Phase 9B — Deals Push (Post-launch, after 9A stable) 🔲
+### Phase 9B — Deals Push (Post-launch, after 9A stable) ✅ (COMPLETED)
 
 | # | Task | Status | Priority | Notes |
 |---|------|--------|----------|-------|

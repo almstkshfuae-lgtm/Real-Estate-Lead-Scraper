@@ -220,12 +220,6 @@
   "campaigns": {
     "title": "Campaign Manager",
     "subtitle": "Manage Bitrix24 campaigns and automated outreach.",
-    "comingSoon": "Campaign Manager is under development",
-    "description": "We are finalizing the Bitrix24 OAuth handshake and WhatsApp Business API integration to enable seamless lead distribution.",
-    "feature1": "Lead Distribution",
-    "feature2": "CRM Sync",
-    "feature3": "Outreach Analytics",
-    "phase": "Phase 4: Pipeline Management",
     "groups": {
       "propertyType": "Group by Property Type",
       "tier": "Group by Tier"
@@ -233,7 +227,24 @@
     "totalLeads": "{{count}} Leads",
     "grouping": "Grouping",
     "pushGroup": "Push Group to Bitrix24",
-    "emptyGroups": "No leads found for grouping."
+    "emptyGroups": "No leads found for grouping.",
+    "outreachTitle": "Campaign Outreach & Pitches",
+    "outreachChannel": "Outreach Channel",
+    "selectChannel": "Select Channel",
+    "tone": "AI Pitch Tone",
+    "generateBtn": "Generate AI Pitch Template",
+    "generating": "Generating Template...",
+    "templatePlaceholder": "Write or generate your campaign template using {{name}}, {{company}}, and {{location}} placeholders...",
+    "previewTitle": "Outreach Message Preview (First Lead)",
+    "previewPlaceholder": "Template preview will appear here...",
+    "sendOutreachBtn": "Launch Bulk Outreach",
+    "sendingProgress": "Sending... {{current}} of {{total}} leads contacted",
+    "outreachSuccess": "Outreach campaign successfully completed! Succeeded: {{successCount}}, Failed: {{failCount}}.",
+    "outreachError": "Outreach campaign completed with errors. Succeeded: {{successCount}}, Failed: {{failCount}}.",
+    "smtpNotConfigured": "SMTP settings not configured.",
+    "whatsappNotConfigured": "WhatsApp settings not configured.",
+    "outreachDrawerTitle": "Segment Outreach Manager",
+    "outreachSubtitle": "Compose and send personalized pitches to this group via WhatsApp or Email."
   },
   "settings": {
     "profile": {
@@ -280,6 +291,28 @@
         "sources": "Sources",
         "leadsFound": "Leads Found",
         "duration": "Duration"
+      },
+      "validation": {
+        "title": "Lead Scoring & Tiering Validation",
+        "subtitle": "Validate scoring accuracy and statistical correlation against real won/lost outcomes.",
+        "noOutcomes": "Insufficient Historical Outcomes. Mark at least 10 leads as Won or Lost in the Pipeline to generate statistics.",
+        "seedBtn": "Seed Simulated Outcomes (550 leads)",
+        "seeding": "Seeding outcomes...",
+        "correlation": "Pearson Correlation",
+        "correlationDesc": "Measures statistical correlation between lead score and won outcome (Target: > 0.50).",
+        "avgScoreWon": "Avg. Score (Won)",
+        "avgScoreLost": "Avg. Score (Lost)",
+        "tierConversion": "Conversion by Tier",
+        "scoreBandConversion": "Win Rate by Score Band",
+        "heuristicPerformance": "Heuristic Classifier Performance (Threshold: 80)",
+        "precision": "Precision",
+        "recall": "Recall",
+        "f1": "F1-Score",
+        "confusionMatrix": "Confusion Matrix",
+        "tp": "True Positives (Score >= 80, Won)",
+        "fp": "False Positives (Score >= 80, Lost)",
+        "tn": "True Negatives (Score < 80, Lost)",
+        "fn": "False Negatives (Score < 80, Won)"
       }
     },
     "exportHistory": {
