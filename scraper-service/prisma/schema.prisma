@@ -52,17 +52,24 @@ model Lead {
   scrapeRunId  String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
   persona      String?   @db.Text
   sourceType   String?
   latitude     Float?
   longitude    Float?
+  metadata     Json?
   agent        User      @relation(fields: [agentId], references: [id])
   scrapeRun    ScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
 
-  @@unique([name, company, source, agentId])
-  @@index([agentId], map: "Lead_agentId_fkey")
-  @@index([scrapeRunId], map: "Lead_scrapeRunId_fkey")
+  @@unique([name, company, source, agentId], map: "Lead_name_company_source_agentId_key")
+  @@index([agentId], map: "leads_agentId_fkey")
+  @@index([scrapeRunId], map: "leads_scrapeRunId_fkey")
   @@index([source])
+  @@index([createdAt])
+  @@index([status])
+  @@index([tier])
+  @@index([score])
+  @@index([location])
   @@map("leads")
 }
 
@@ -107,7 +114,7 @@ model ScrapeRun {
 model Search {
   id        String   @id @default(cuid())
   agentId   String
-  criteria  String
+  criteria  String @db.Text
   createdAt DateTime @default(now())
   agent     User     @relation(fields: [agentId], references: [id])
 
@@ -142,12 +149,69 @@ model Notification {
   id        String   @id @default(cuid())
   agentId   String
   title     String
-  body      String
+  body      String   @db.Text
   type      String
-  data      String?
+  data      String?  @db.Text
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
   agent     User     @relation(fields: [agentId], references: [id])
 
   @@index([agentId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String   // "CREATE", "UPDATE", "SOFT_DELETE", "MERGE", "CRM_PUSH", "EXPORT", "RETENTION_CLEANUP"
+  entityType String   // "Lead"
+  entityId   String
+  agentId    String?
+  details    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([entityId])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model ProjectHeatmap {
+  id            String   @id @default(cuid())
+  projectName   String
+  location      String
+  developer     String?
+  startingPrice Float?
+  handoverDate  String?
+  propertyType  String?
+  areaSqft      Int?
+  latitude      Float?
+  longitude     Float?
+  imageUrl      String?  @db.Text
+  sourceUrl     String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([location])
+  @@map("project_heatmaps")
+}
+
+model AiUsageLog {
+  id               String   @id @default(cuid())
+  taskType         String   // pitch | score | signals | chat | extraction | persona | projects
+  model            String   // e.g. gemini-2.5-flash
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  estimatedCostUsd Float    @default(0)
+  inputChars       Int      @default(0)
+  truncated        Boolean  @default(false)
+  success          Boolean  @default(true)
+  errorMessage     String?  @db.Text
+  agentId          String?
+  durationMs       Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([taskType])
+  @@index([agentId])
+  @@map("ai_usage_logs")
 }

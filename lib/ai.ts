@@ -1,5 +1,19 @@
 import { getSecret } from "./secrets";
 import { getEnvVar } from "./env";
+import { callGemini, BudgetExceededError, type AiTaskType } from "./ai-gateway";
+import {
+  withRetry,
+  safeParseJson,
+  isLikelyTruncated,
+  extractTextFromAIResponse,
+  extractTokenUsage,
+  estimateCost,
+  getMaxOutputTokens,
+  TASK_TOKEN_DEFAULTS,
+} from "./ai-utils";
+
+// Re-export shared utilities for backward compatibility
+export { withRetry, safeParseJson, isLikelyTruncated, extractTextFromAIResponse, BudgetExceededError };
 
 interface AIConfig {
   apiKey: string;
@@ -142,158 +156,9 @@ function filterLeadByCriteria(lead: any, criteria?: any) {
 
 
 
-function extractTextFromAIResponse(response: any): string {
-  if (!response) {
-    return "";
-  }
-
-  const candidate = response?.predictions?.[0] || response?.candidates?.[0] || response?.choices?.[0] || response?.output?.[0] || response?.output || response;
-  let contents = candidate?.message?.content || candidate?.content || candidate?.output || candidate?.text || candidate;
-
-  if (!contents) {
-    return "";
-  }
-
-  if (typeof contents === "object" && Array.isArray(contents.parts)) {
-    return contents.parts
-      .map((part: any) => part.text || "")
-      .filter(Boolean)
-      .join("");
-  }
-
-  if (typeof candidate === "object" && Array.isArray(candidate.parts)) {
-    return candidate.parts
-      .map((part: any) => part.text || "")
-      .filter(Boolean)
-      .join("");
-  }
-
-  if (Array.isArray(contents)) {
-    return contents
-      .map((item: any) => (typeof item === "string" ? item : item?.text || ""))
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  if (typeof contents === "string") {
-    return contents;
-  }
-
-  if (typeof contents === "object") {
-    return Object.values(contents)
-      .map((value: any) => (typeof value === "string" ? value : ""))
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  return "";
-}
-
-/**
- * Retry a function with exponential backoff on rate-limit or transient errors.
- * Handles Gemini 429 (Too Many Requests) and 503 (Service Unavailable).
- */
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxAttempts = 8,
-  baseDelayMs = 3000
-): Promise<T> {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      const msg = String(err?.message || '');
-      const isRateLimit =
-        msg.includes('429') ||
-        msg.includes('RESOURCE_EXHAUSTED') ||
-        msg.includes('503') ||
-        msg.includes('Service Unavailable');
-      const isLastAttempt = attempt === maxAttempts;
-
-      if (!isRateLimit || isLastAttempt) throw err;
-
-      // Exponential backoff with ±500ms jitter to avoid thundering herd
-      const delay = baseDelayMs * Math.pow(2, attempt - 1) + Math.random() * 500;
-      console.warn(
-        `[AI] Gemini rate-limited (attempt ${attempt}/${maxAttempts}). Retrying in ${Math.round(delay)}ms...`
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-  throw new Error('[AI] withRetry: max attempts exceeded — this line should be unreachable');
-}
-
-/**
- * Detect whether a Gemini JSON response was likely truncated due to maxOutputTokens limit.
- * Truncated responses end mid-structure (no closing ] or }) and are non-trivially long.
- */
-function isLikelyTruncated(text: string): boolean {
-  if (!text || text.length < 50) return false;
-  const trimmed = text.trim();
-  // A complete JSON array/object always ends with ] or }
-  const lastChar = trimmed[trimmed.length - 1];
-  return lastChar !== ']' && lastChar !== '}';
-}
-
-function safeParseJson(text: string, fallback: any = []): any {
-  if (!text) return fallback;
-
-  let cleanText = text.trim();
-
-  // 1. Remove markdown code blocks if present anywhere in the text
-  if (cleanText.includes("```")) {
-    const matches = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-    if (matches && matches[1]) {
-      cleanText = matches[1].trim();
-    }
-  }
-
-  // 2. Try to locate the JSON array or object boundaries explicitly
-  const firstBracket = cleanText.indexOf('[');
-  const lastBracket = cleanText.lastIndexOf(']');
-  const firstBrace = cleanText.indexOf('{');
-  const lastBrace = cleanText.lastIndexOf('}');
-
-  let jsonStr = cleanText;
-
-  if (firstBracket !== -1 && lastBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-    jsonStr = cleanText.substring(firstBracket, lastBracket + 1);
-  } else if (firstBrace !== -1 && lastBrace !== -1) {
-    jsonStr = cleanText.substring(firstBrace, lastBrace + 1);
-  }
-
-  // 3. Robust sanitization of control characters and backslashes
-  // Remove all invalid ASCII control characters (0x00 to 0x1F) except newline (\n), carriage return (\r), and tab (\t)
-  jsonStr = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
-
-  try {
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    // Check for likely truncation before generic error logging
-    if (isLikelyTruncated(text)) {
-      console.warn('[AI] TRUNCATION DETECTED — Gemini response cut off before closing bracket.', {
-        inputLength: text.length,
-        lastChars: text.slice(-120),
-        firstChars: text.slice(0, 120)
-      });
-    } else {
-      console.error('[AI] JSON Parse failed for raw text:', text.substring(0, 500));
-      console.error('[AI] Cleaned text attempt:', jsonStr.substring(0, 500));
-    }
-
-    try {
-      const fixedJsonStr = jsonStr
-        .replace(/,\s*\]/g, ']') // remove trailing comma in arrays
-        .replace(/,\s*\}/g, '}') // remove trailing comma in objects
-        .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"'); // normalize smart/curly quotes
-      return JSON.parse(fixedJsonStr);
-    } catch (innerError) {
-      console.error('[AI] Secondary JSON parsing recovery failed:', innerError);
-      if (fallback === null) return null;
-      throw new Error("AI JSON Parsing Failed: Gemini returned an invalid or incomplete JSON response.");
-    }
-  }
-}
+// NOTE: extractTextFromAIResponse, withRetry, isLikelyTruncated, safeParseJson
+// are now imported from ./ai-utils and re-exported at the top of this file.
+// This eliminates 150+ lines of duplicated utility code.
 
 function pickFirstMatch(matches: string[] | null) {
   return matches && matches.length > 0 ? matches[0].trim() : null;
@@ -691,79 +556,33 @@ function heuristicExtractLeads(scrapedData: any, criteria?: any) {
   return leads.filter((lead) => filterLeadByCriteria(lead, criteria));
 }
 
-async function generateGeminiText(systemPrompt: string, userPrompt: string, maxTokens = 1024, signal?: AbortSignal) {
-  const config = await getAIConfig();
-  if (!config) {
-    console.error('[AI] no provider configured');
-    throw new Error("No AI provider configured. Set GOOGLE_AI_API_KEY.");
-  }
+/**
+ * Generate text via Gemini — now delegates to the centralized AI gateway.
+ * Maintains the same public signature for backward compatibility.
+ *
+ * @param taskType - Optional task type for right-sized token budgets and tracking.
+ *                   Defaults to 'extraction' if not specified.
+ */
+async function generateGeminiText(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens = 1024,
+  signal?: AbortSignal,
+  taskType: AiTaskType = 'extraction',
+  agentId?: string,
+  skipBudgetCheck?: boolean
+) {
+  const result = await callGemini({
+    systemPrompt,
+    userPrompt,
+    maxOutputTokens: maxTokens,
+    signal,
+    taskType,
+    agentId,
+    skipBudgetCheck,
+  });
 
-  const isProjectBased = Boolean(config.projectId);
-  const body = isProjectBased
-    ? {
-      instances: [
-        {
-          content: `${systemPrompt}\n\n${userPrompt}`
-        }
-      ],
-      parameters: {
-        temperature: 0.0,
-        maxOutputTokens: maxTokens,
-        topP: 0.95,
-        topK: 40
-      }
-    }
-    : {
-      contents: [
-        {
-          parts: [
-            {
-              text: `${systemPrompt}\n\n${userPrompt}`
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.0,
-        maxOutputTokens: maxTokens,
-        topP: 0.95,
-        topK: 40
-      }
-    };
-
-  const endpoint = isProjectBased
-    ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:generateText?key=${encodeURIComponent(config.apiKey)}`
-    : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
-
-  // Wrap the fetch in withRetry to handle 429 / 503 rate-limits gracefully
-  return withRetry(async () => {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body),
-      signal
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      // Log the error details for debugging (masking any potential sensitive snippets)
-      try {
-        console.error('[AI] Gemini API error', { status: response.status, body: errorText.substring(0, 1000) });
-      } catch { }
-      if (response.status === 400 && errorText.includes("API key not valid")) {
-        throw new Error("Gemini API key invalid or unauthorized. Verify GOOGLE_AI_API_KEY and project settings.");
-      }
-      if (response.status === 401 || response.status === 403) {
-        throw new Error(`Gemini authentication error ${response.status}: ${errorText}`);
-      }
-      throw new Error(`Gemini API error ${response.status}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    return extractTextFromAIResponse(data) || "";
-  }, 8, 3000);
+  return result.text;
 }
 
 /**
@@ -884,7 +703,9 @@ Example format:
 
 Output ONLY the JSON array. No other text.`,
     `Extract leads from this content:\n\nPage Title: ${scrapedData.title}\nSource: ${scrapedData.name}\nType: ${scrapedData.type}\n\nContent:\n${cleanedContent}`,
-    4096
+    4096,
+    undefined,
+    'extraction'
   );
 
   if (!content) {
@@ -908,7 +729,9 @@ ${isDirectorySource ? `ABSOLUTE RULE: Since this content is from a business dire
 Return a JSON array of at most 5 leads. Each lead MUST have: name, nameAr, company, companyAr, role, roleAr, location, tier, score, email, phone, budgetMin, budgetMax, relocated, source, sourceType, signals, persona.
 Output ONLY the JSON array. No other text.`,
       `Page Title: ${scrapedData.title}\nSource: ${scrapedData.name}\nContent (truncated):\n${cleanedContent.substring(0, 6000)}`,
-      4096
+      4096,
+      undefined,
+      'extraction'
     );
     if (retryContent) {
       try {
@@ -1120,7 +943,9 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
 
     ${criteriaPrompt}`,
     `Extract leads from this text: ${cleanedText}`,
-    1024
+    2048,
+    undefined,
+    'extraction'
   );
 
   if (!content) {
@@ -1212,7 +1037,9 @@ Return ONLY this JSON object with keys tier and score. No explanatory text.`,
       source: enrichedLead.source,
       signals: enrichedLead.signals
     }),
-    4096
+    512,
+    undefined,
+    'enrichment'
   );
 
   if (!content) {
@@ -1234,7 +1061,7 @@ Return ONLY this JSON object with keys tier and score. No explanatory text.`,
 /**
  * Generate buyer persona analysis for detailed lead understanding
  */
-export async function generatePersonaAnalysis(lead: any, lang = "en") {
+export async function generatePersonaAnalysis(lead: any, lang = "en", agentId?: string) {
   if (lead.persona) {
     const isArabicRequest = lang === "ar";
     const hasArabicLetters = /[\u0600-\u06FF]/.test(lead.persona);
@@ -1272,7 +1099,10 @@ Do not use placeholders. Use the data provided.`,
       budgetMax: lead.budgetMax,
       notes: lead.notes
     }),
-    4096
+    1024,
+    undefined,
+    'persona',
+    agentId
   );
 
   if (!content) {
@@ -1549,7 +1379,9 @@ export async function extractProjectData(text: string): Promise<any[]> {
     
     Return a JSON array of objects.`,
     `Extract projects from this text: ${text}`,
-    2048
+    2048,
+    undefined,
+    'projects'
   );
 
   return safeParseJson(content, []);

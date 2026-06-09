@@ -29,7 +29,8 @@ export async function GET(request: Request) {
       proxyServiceUrl: "",
       proxyApiKey: "",
       uaeComplianceMode: false,
-      globalRateLimitDelay: 3000
+      globalRateLimitDelay: 3000,
+      aiDailyBudgetUsd: 5.0
     };
 
     let prefs: any = {};

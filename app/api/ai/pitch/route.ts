@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateGeminiText, getAIConfig } from "@/lib/ai";
 import { signalsToString } from "@/lib/signals";
+import { getSession } from "@/lib/auth";
 
 // Allow up to 30s — Gemini API calls can take 10-15s on cold start
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { lead, lang = "en", style = "professional" } = body;
 
@@ -65,7 +71,7 @@ Tone: ${style === "formal" ? "Very formal and corporate" : style === "casual" ? 
 
 Write the pitch in English directly without any preamble or extra labels:`;
 
-    const pitchText = await generateGeminiText(systemPrompt, userPrompt, 4096);
+    const pitchText = await generateGeminiText(systemPrompt, userPrompt, 512, undefined, 'pitch', session.id);
 
     return NextResponse.json({ pitch: pitchText || "", tokens: null });
   } catch (error: any) {

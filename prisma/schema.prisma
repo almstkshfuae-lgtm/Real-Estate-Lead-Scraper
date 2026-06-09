@@ -193,3 +193,25 @@ model ProjectHeatmap {
   @@index([location])
   @@map("project_heatmaps")
 }
+
+model AiUsageLog {
+  id               String   @id @default(cuid())
+  taskType         String   // pitch | score | signals | chat | extraction | persona | projects
+  model            String   // e.g. gemini-2.5-flash
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  estimatedCostUsd Float    @default(0)
+  inputChars       Int      @default(0)
+  truncated        Boolean  @default(false)
+  success          Boolean  @default(true)
+  errorMessage     String?  @db.Text
+  agentId          String?
+  durationMs       Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([taskType])
+  @@index([agentId])
+  @@map("ai_usage_logs")
+}

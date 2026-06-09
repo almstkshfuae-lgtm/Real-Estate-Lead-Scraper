@@ -3,9 +3,15 @@ import { generateGeminiText } from "@/lib/ai";
 import prisma from "@/lib/prisma";
 import { signalsToString } from "@/lib/signals";
 import { parseAIJson, AIJsonParseError } from "@/lib/ai-json";
+import { getSession } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { leadId } = body;
 
@@ -50,7 +56,7 @@ STABILITY CONSTRAINTS:
 
 Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "reasoning": "<1-2 sentence justification>", "recommendations": ["<action 1>", "<action 2>"]}`;
 
-    const responseText = await generateGeminiText("", prompt, 4096);
+    const responseText = await generateGeminiText("", prompt, 256, undefined, 'score', session.id);
 
     let parsed: {
       refinedScore: number;

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { generateGeminiText, getAIConfig, generateGeminiStream, generateGeminiChatStream } from "@/lib/ai";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkDailyBudget } from "@/lib/ai-gateway";
 
 const buildSystemPrompt = (lang: string, context: string | undefined, user: { email: string; role: string; language?: string; name?: string; nameAr?: string | null } | null) => {
   const profileHints = [] as string[];
@@ -104,6 +105,16 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       });
     }
+
+    const budget = await checkDailyBudget();
+    if (budget.exceeded) {
+      return new Response(
+        JSON.stringify({
+          error: `Daily AI budget exceeded ($${budget.currentSpend.toFixed(4)} / $${budget.limit.toFixed(2)}). Please adjust in Settings → Integrations.`
+        }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      );
+    }
     const body = await req.json();
     const { messages, lang = "en", context } = body;
 
@@ -138,7 +149,7 @@ export async function POST(req: NextRequest) {
     const recentMessages = messages.slice(-maxHistory);
 
     // Get the live stream from Gemini using the native chat format and system instruction
-    const rawStream = await generateGeminiChatStream(systemPrompt, recentMessages, 4096, req.signal);
+    const rawStream = await generateGeminiChatStream(systemPrompt, recentMessages, 2048, req.signal);
     const reader = rawStream.getReader();
     const encoder = new TextEncoder();
 

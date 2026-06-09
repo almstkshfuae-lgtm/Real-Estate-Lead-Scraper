@@ -12,6 +12,113 @@ const UAE_COORDS = {
   'Ajman': { lat: 25.4052, lng: 55.5136 }, 'Ras Al Khaimah': { lat: 25.7953, lng: 55.9788 }
 };
 
+const MODEL_PRICING = {
+  'gemini-2.5-flash': { input: 0.15, output: 0.60 },      // $0.15/1M input, $0.60/1M output
+  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
+  'gemini-1.5-flash': { input: 0.075, output: 0.30 },
+  'gemini-1.5-pro':   { input: 1.25, output: 5.00 },
+  'gemini-2.5-pro':   { input: 1.25, output: 10.00 },
+};
+
+function estimateCostJS(model, promptTokens, completionTokens) {
+  const normalizedModel = String(model || '').toLowerCase().trim();
+  let pricing = null;
+  for (const [key, val] of Object.entries(MODEL_PRICING)) {
+    if (normalizedModel.includes(key) || key.includes(normalizedModel)) {
+      pricing = val;
+      break;
+    }
+  }
+  if (!pricing) {
+    pricing = MODEL_PRICING['gemini-2.5-flash'];
+  }
+  const inputCost = (promptTokens / 1000000) * pricing.input;
+  const outputCost = (completionTokens / 1000000) * pricing.output;
+  return Math.round((inputCost + outputCost) * 1000000) / 1000000;
+}
+
+async function checkScraperDailyBudget() {
+  try {
+    let budgetLimit = 3.0; // default $3 USD for scraper
+    const envBudget = process.env.SCRAPER_AI_DAILY_BUDGET_USD || process.env.AI_DAILY_BUDGET_USD;
+    if (envBudget) {
+      const parsed = parseFloat(envBudget);
+      if (!isNaN(parsed) && parsed > 0) budgetLimit = parsed;
+    }
+
+    try {
+      const admin = await prisma.user.findFirst({
+        where: { role: 'admin' },
+        select: { preferences: true }
+      });
+      if (admin?.preferences) {
+        const prefs = typeof admin.preferences === 'string' ? JSON.parse(admin.preferences) : admin.preferences;
+        const configuredBudget = prefs.integrations?.aiDailyBudgetUsd;
+        if (configuredBudget !== undefined && configuredBudget !== null) {
+          const parsed = parseFloat(String(configuredBudget));
+          if (!isNaN(parsed) && parsed > 0) budgetLimit = parsed;
+        }
+      }
+    } catch (dbErr) {
+      console.warn('[ScraperAI] Failed to read budget from DB preferences, using env/default:', dbErr.message);
+    }
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const result = await prisma.aiUsageLog.aggregate({
+      _sum: { estimatedCostUsd: true },
+      where: { createdAt: { gte: todayStart } }
+    });
+    const currentSpend = result._sum?.estimatedCostUsd || 0;
+
+    return {
+      exceeded: currentSpend >= budgetLimit,
+      currentSpend,
+      limit: budgetLimit
+    };
+  } catch (err) {
+    console.error('[ScraperAI] Error checking daily budget:', err.message);
+    return { exceeded: false, currentSpend: 0, limit: 3.0 };
+  }
+}
+
+async function logAiUsageJS({
+  taskType,
+  model,
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  inputChars,
+  truncated,
+  success,
+  errorMessage = null,
+  durationMs
+}) {
+  try {
+    const costUsd = estimateCostJS(model, promptTokens, completionTokens);
+    await prisma.aiUsageLog.create({
+      data: {
+        taskType,
+        model,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        estimatedCostUsd: costUsd,
+        inputChars,
+        truncated,
+        success,
+        errorMessage: errorMessage ? String(errorMessage).substring(0, 1000) : null,
+        durationMs,
+        createdAt: new Date()
+      }
+    });
+  } catch (err) {
+    console.error('[ScraperAI] Failed to write AI usage log to DB:', err.message);
+  }
+}
+
+
 const GLOBAL_COORDS = {
   // Saudi Arabia
   'Riyadh': { lat: 24.7136, lng: 46.6753 }, 'الرياض': { lat: 24.7136, lng: 46.6753 },
@@ -194,6 +301,13 @@ export async function callGeminiForLeads(scrapedContent, criteria = {}) {
     return [];
   }
 
+  // Budget check
+  const budget = await checkScraperDailyBudget();
+  if (budget.exceeded) {
+    console.warn(`[ScraperAI] Daily AI budget limit exceeded ($${budget.currentSpend.toFixed(4)} / $${budget.limit.toFixed(2)}). Skipping AI enrichment.`);
+    return [];
+  }
+
   const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
 
   const maxInputChars = process.env.SCRAPER_MAX_INPUT_CHARS ? parseInt(process.env.SCRAPER_MAX_INPUT_CHARS, 10) : 50000;
@@ -256,7 +370,14 @@ Output ONLY a JSON array. No other text.`;
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
+  const startTime = Date.now();
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let totalTokens = 0;
+  let success = false;
+  let errorMessage = null;
   let rawText = '';
+
   try {
     rawText = await withRetryJS(async () => {
       const resp = await axios.post(endpoint, requestBody, {
@@ -264,16 +385,38 @@ Output ONLY a JSON array. No other text.`;
         timeout: 60000
       });
       const data = resp.data;
+      const usageMetadata = data?.usageMetadata || {};
+      promptTokens = usageMetadata.promptTokenCount || 0;
+      completionTokens = usageMetadata.candidatesTokenCount || 0;
+      totalTokens = usageMetadata.totalTokenCount || (promptTokens + completionTokens);
+
       const candidate = data?.candidates?.[0];
       const parts = candidate?.content?.parts || [];
       return parts.map(p => p.text || '').join('');
     }, 6, 2000);
+    success = true;
   } catch (err) {
+    success = false;
+    errorMessage = err.message;
     console.error(`[ScraperAI] Gemini call failed for source ${scrapedContent.name}:`, err.message);
-    return [];
   }
 
-  if (!rawText) return [];
+  const durationMs = Date.now() - startTime;
+
+  await logAiUsageJS({
+    taskType: 'extraction',
+    model: GOOGLE_AI_MODEL,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    inputChars: systemPrompt.length + userPrompt.length,
+    truncated: (scrapedContent.content || '').length > maxInputChars,
+    success,
+    errorMessage,
+    durationMs
+  });
+
+  if (!success || !rawText) return [];
 
   let leads = safeParseJsonJS(rawText, []);
 
@@ -292,16 +435,51 @@ Output ONLY a JSON array. No other text.`;
         responseMimeType: "application/json"
       }
     };
+
+    const retryStartTime = Date.now();
+    let retryPromptTokens = 0;
+    let retryCompletionTokens = 0;
+    let retryTotalTokens = 0;
+    let retrySuccess = false;
+    let retryErrorMessage = null;
+
     try {
-      const retryResp = await withRetryJS(() => axios.post(endpoint, retryBody, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 30000
-      }), 4, 2000);
+      const retryResp = await withRetryJS(async () => {
+        const resp = await axios.post(endpoint, retryBody, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 30000
+        });
+        const data = resp.data;
+        const usageMetadata = data?.usageMetadata || {};
+        retryPromptTokens = usageMetadata.promptTokenCount || 0;
+        retryCompletionTokens = usageMetadata.candidatesTokenCount || 0;
+        retryTotalTokens = usageMetadata.totalTokenCount || (retryPromptTokens + retryCompletionTokens);
+        return resp;
+      }, 4, 2000);
+
       const retryText = (retryResp.data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
       leads = safeParseJsonJS(retryText, []);
+      retrySuccess = true;
     } catch (retryErr) {
+      retrySuccess = false;
+      retryErrorMessage = retryErr.message;
       console.error('[ScraperAI] Retry failed:', retryErr.message);
     }
+
+    const retryDurationMs = Date.now() - retryStartTime;
+
+    await logAiUsageJS({
+      taskType: 'extraction',
+      model: GOOGLE_AI_MODEL,
+      promptTokens: retryPromptTokens,
+      completionTokens: retryCompletionTokens,
+      totalTokens: retryTotalTokens,
+      inputChars: systemPrompt.length + cleanContent.substring(0, retryMaxInputChars).length + 80,
+      truncated: true,
+      success: retrySuccess,
+      errorMessage: retryErrorMessage,
+      durationMs: retryDurationMs
+    });
   }
 
   if (!Array.isArray(leads) || leads.length === 0) return [];
@@ -347,6 +525,13 @@ export async function callGeminiForProjects(scrapedContent) {
     return [];
   }
 
+  // Budget check
+  const budget = await checkScraperDailyBudget();
+  if (budget.exceeded) {
+    console.warn(`[ScraperAI] Daily AI budget limit exceeded ($${budget.currentSpend.toFixed(4)} / $${budget.limit.toFixed(2)}). Skipping projects AI enrichment.`);
+    return [];
+  }
+
   const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash';
 
   const maxInputChars = process.env.SCRAPER_MAX_INPUT_CHARS ? parseInt(process.env.SCRAPER_MAX_INPUT_CHARS, 10) : 50000;
@@ -387,7 +572,14 @@ Output ONLY a JSON array. No other text.`;
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_AI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
+  const startTime = Date.now();
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let totalTokens = 0;
+  let success = false;
+  let errorMessage = null;
   let rawText = '';
+
   try {
     rawText = await withRetryJS(async () => {
       const resp = await axios.post(endpoint, requestBody, {
@@ -395,12 +587,35 @@ Output ONLY a JSON array. No other text.`;
         timeout: 60000
       });
       const data = resp.data;
+      const usageMetadata = data?.usageMetadata || {};
+      promptTokens = usageMetadata.promptTokenCount || 0;
+      completionTokens = usageMetadata.candidatesTokenCount || 0;
+      totalTokens = usageMetadata.totalTokenCount || (promptTokens + completionTokens);
+
       return (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     }, 6, 2000);
+    success = true;
   } catch (err) {
+    success = false;
+    errorMessage = err.message;
     console.error(`[ScraperAI] Gemini projects call failed for source ${scrapedContent.name}:`, err.message);
     return [];
   }
+
+  const durationMs = Date.now() - startTime;
+
+  await logAiUsageJS({
+    taskType: 'projects',
+    model: GOOGLE_AI_MODEL,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    inputChars: systemPrompt.length + userPrompt.length,
+    truncated: (scrapedContent.content || '').length > maxInputChars,
+    success,
+    errorMessage,
+    durationMs
+  });
 
   if (!rawText) return [];
 

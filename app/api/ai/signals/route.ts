@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateGeminiText, deduplicateSignals } from "@/lib/ai";
 import { signalsToString } from "@/lib/signals";
 import { parseAIJson, AIJsonParseError } from "@/lib/ai-json";
+import { getSession } from "@/lib/auth";
 
 // Predefined news signals for UAE high-profile individuals (simulated)
 const UAE_SIGNALS_DB = [
@@ -19,6 +20,11 @@ const UAE_SIGNALS_DB = [
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { lead, lang = "en" } = body;
 
@@ -45,7 +51,7 @@ ${lang === "ar" ? "أجب باللغة العربية للملخص، لكن ال
 
 Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<intelligence summary>", "confidenceScore": <0-100>, "newsSnippets": ["<snippet 1>", "<snippet 2>"]}`;
 
-    const responseText = await generateGeminiText("", prompt, 4096);
+    const responseText = await generateGeminiText("", prompt, 512, undefined, 'signals', session.id);
 
     let parsed: {
       signals: string[];

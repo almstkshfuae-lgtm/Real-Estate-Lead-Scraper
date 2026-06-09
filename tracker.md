@@ -77,6 +77,7 @@
 - [x] **Chatbot EN/AR** — responds in active language
 - [x] **ML model: TensorFlow.js** — train on lead outcomes (Start after 500+ leads in DB)
 - [x] **ML: adjust base score weights based on agent feedback** — Won/Lost signals feed model
+- [x] **Centralized AI Gateway & Cost Control** — Consolidated Gemini API gateway, right-sized outputs, daily budget limits, cost dashboard, and integrated tracking in Next.js + scraper service.
 
 ---
 

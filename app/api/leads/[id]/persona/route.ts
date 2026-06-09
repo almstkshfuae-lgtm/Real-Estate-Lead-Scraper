@@ -30,7 +30,7 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const persona = await generatePersonaAnalysis(lead, lang);
+    const persona = await generatePersonaAnalysis(lead, lang, session.id);
 
     // Cache the newly generated/regenerated persona back in the database
     if (lead.persona !== persona) {
