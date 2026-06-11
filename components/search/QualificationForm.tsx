@@ -82,8 +82,12 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   const defaultMaxBudget = Number(process.env.NEXT_PUBLIC_DEFAULT_BUDGET_MAX) || 10000000;
 
   const [propertyTypes, setPropertyTypes] = useState<string[]>(initialData?.propertyTypes || []);
-  const [budgetMin, setBudgetMin] = useState<number>(initialData?.budgetMin || defaultMinBudget);
-  const [budgetMax, setBudgetMax] = useState<number>(initialData?.budgetMax || defaultMaxBudget);
+  const [budgetMin, setBudgetMin] = useState<number | "">(
+    initialData?.budgetMin !== undefined && initialData?.budgetMin !== null ? initialData.budgetMin : ""
+  );
+  const [budgetMax, setBudgetMax] = useState<number | "">(
+    initialData?.budgetMax !== undefined && initialData?.budgetMax !== null ? initialData.budgetMax : ""
+  );
   const [emirates, setEmirates] = useState<string[]>(initialData?.emirates || []);
   const [relocated, setRelocated] = useState(initialData?.relocated || false);
   const [excludeRental, setExcludeRental] = useState(initialData?.excludeRental || true);
@@ -94,14 +98,14 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   useEffect(() => {
     if (initialData) {
       setPropertyTypes(initialData.propertyTypes || []);
-      setBudgetMin(initialData.budgetMin || defaultMinBudget);
-      setBudgetMax(initialData.budgetMax || defaultMaxBudget);
+      setBudgetMin(initialData.budgetMin !== undefined && initialData.budgetMin !== null ? initialData.budgetMin : "");
+      setBudgetMax(initialData.budgetMax !== undefined && initialData.budgetMax !== null ? initialData.budgetMax : "");
       setEmirates(initialData.emirates || []);
       setRelocated(initialData.relocated || false);
       setExcludeRental(initialData.excludeRental || true);
       setKeywords(initialData.keywords || "");
     }
-  }, [initialData, defaultMinBudget, defaultMaxBudget]);
+  }, [initialData]);
 
   useEffect(() => {
     if (queryKeywords) {
@@ -167,8 +171,8 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
     try {
       const criteria = {
         propertyTypes,
-        budgetMin,
-        budgetMax,
+        budgetMin: budgetMin === "" ? undefined : budgetMin,
+        budgetMax: budgetMax === "" ? undefined : budgetMax,
         emirates,
         relocated,
         excludeRental,
@@ -302,8 +306,9 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                     <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Min</p>
                     <input
                       type="number"
+                      placeholder={String(defaultMinBudget)}
                       value={budgetMin}
-                      onChange={(e) => setBudgetMin(Number(e.target.value))}
+                      onChange={(e) => setBudgetMin(e.target.value === "" ? "" : Number(e.target.value))}
                       className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
                     />
                   </div>
@@ -311,8 +316,9 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
                     <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase ml-1">Max</p>
                     <input
                       type="number"
+                      placeholder={String(defaultMaxBudget)}
                       value={budgetMax}
-                      onChange={(e) => setBudgetMax(Number(e.target.value))}
+                      onChange={(e) => setBudgetMax(e.target.value === "" ? "" : Number(e.target.value))}
                       className="w-full px-4 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] text-sm focus:ring-2 focus:ring-[var(--color-primary)] outline-none"
                     />
                   </div>

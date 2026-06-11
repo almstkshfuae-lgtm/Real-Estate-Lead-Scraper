@@ -80,6 +80,218 @@ const webhookPayloadSchema = z.object({
   selectorIssues: z.array(z.string()).optional().nullable(),
 });
 
+function mergeLeadData(existingLead: any, lead: any, adjustedScore: number, leadSource: string) {
+  const isDefaultRole = (r: string | null | undefined) => 
+    !r || r.toLowerCase() === "professional" || r.trim() === "";
+  const isDefaultCompany = (c: string | null | undefined) => 
+    !c || c.toLowerCase() === "not specified" || c.trim() === "";
+  const isDefaultLocation = (l: string | null | undefined) => 
+    !l || l.toLowerCase() === "abu dhabi" || l.trim() === "";
+
+  const cleanSignals = deduplicateSignals(lead.signals || []);
+  const leadCompany = lead.company || "Not Specified";
+  const leadCompanyAr = lead.companyAr || (lead.company ? null : "غير محدد");
+
+  let mergedSource = existingLead.source;
+  if (!mergedSource.includes(leadSource)) {
+    mergedSource = `${mergedSource}, ${leadSource}`;
+  }
+
+  const mergedTier = Math.min(existingLead.tier, lead.tier || 2);
+  const mergedScore = Math.max(existingLead.score, adjustedScore);
+
+  return {
+    nameAr: lead.nameAr || existingLead.nameAr,
+    companyAr: isDefaultCompany(leadCompanyAr) ? existingLead.companyAr : (leadCompanyAr || existingLead.companyAr),
+    role: isDefaultRole(lead.role) ? existingLead.role : (lead.role || existingLead.role),
+    roleAr: isDefaultRole(lead.roleAr) ? existingLead.roleAr : (lead.roleAr || existingLead.roleAr),
+    source: mergedSource,
+    tier: mergedTier,
+    phone: (lead.phone ? cleanPhone(lead.phone) : null) || existingLead.phone,
+    email: (lead.email ? cleanEmail(lead.email) : null) || existingLead.email,
+    location: isDefaultLocation(lead.location) ? existingLead.location : (lead.location || existingLead.location),
+    latitude: lead.latitude ?? existingLead.latitude,
+    longitude: lead.longitude ?? existingLead.longitude,
+    score: mergedScore,
+    signals: cleanSignals.length > 0 ? cleanSignals : (existingLead.signals as any),
+    budgetMin: lead.budgetMin ?? existingLead.budgetMin,
+    budgetMax: lead.budgetMax ?? existingLead.budgetMax,
+    relocated: lead.relocated ?? existingLead.relocated,
+    propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (existingLead.propertyPref as any),
+    persona: lead.persona || existingLead.persona,
+  };
+}
+
+async function executeFallback(runId: string, agentId: string, criteriaObj: any): Promise<number> {
+  const existingRunLeadsCount = await prisma.lead.count({
+    where: { scrapeRunId: runId, agentId }
+  });
+  if (existingRunLeadsCount > 0) {
+    console.info(`[Webhook Fallback] Leads already exist for scrapeRunId ${runId}. Skipping clone.`);
+    return existingRunLeadsCount;
+  }
+
+  const potentialConditions: any[] = [
+    { deletedAt: null }
+  ];
+
+  if (criteriaObj?.keywords) {
+    const keywordsString = criteriaObj.keywords;
+    const keywordList = typeof keywordsString === 'string'
+      ? keywordsString.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (keywordList.length > 0) {
+      potentialConditions.push({
+        OR: keywordList.flatMap((k: string) => [
+          { name: { contains: k } },
+          { company: { contains: k } },
+          { location: { contains: k } }
+        ])
+      });
+    }
+  }
+
+  if (criteriaObj?.budgetMin !== undefined && criteriaObj?.budgetMin !== null) {
+    potentialConditions.push({
+      OR: [
+        { budgetMin: { gte: criteriaObj.budgetMin } },
+        { budgetMax: { gte: criteriaObj.budgetMin } }
+      ]
+    });
+  }
+  if (criteriaObj?.budgetMax !== undefined && criteriaObj?.budgetMax !== null) {
+    potentialConditions.push({
+      OR: [
+        { budgetMin: { lte: criteriaObj.budgetMax } },
+        { budgetMax: { lte: criteriaObj.budgetMax } }
+      ]
+    });
+  }
+
+  if (criteriaObj?.emirates && Array.isArray(criteriaObj.emirates) && criteriaObj.emirates.length > 0) {
+    potentialConditions.push({
+      OR: criteriaObj.emirates.map((emirate: string) => ({
+        location: { contains: emirate }
+      }))
+    });
+  }
+
+  if (criteriaObj?.relocated === true) {
+    potentialConditions.push({ relocated: true });
+  }
+
+  if (criteriaObj?.excludeRental === true) {
+    potentialConditions.push({ rentalFlag: false });
+  }
+
+  const agentLeads = await prisma.lead.findMany({
+    where: { agentId },
+    select: { name: true }
+  });
+  const existingNames = agentLeads.map((l: { name: string }) => l.name);
+
+  let candidates = await prisma.lead.findMany({
+    where: {
+      AND: potentialConditions,
+      name: { notIn: existingNames }
+    },
+    orderBy: { score: "desc" },
+    take: 100
+  });
+
+  if (candidates.length < 10) {
+    const candidateIds = candidates.map(c => c.id);
+    const fallbackLeads = await prisma.lead.findMany({
+      where: {
+        id: { notIn: candidateIds },
+        deletedAt: null,
+        name: { notIn: existingNames },
+        agent: { role: 'admin' }
+      },
+      orderBy: { score: "desc" },
+      take: 100
+    });
+    candidates = [...candidates, ...fallbackLeads];
+  }
+
+  if (candidates.length < 10) {
+    const candidateIds = candidates.map(c => c.id);
+    const globalLeads = await prisma.lead.findMany({
+      where: {
+        id: { notIn: candidateIds },
+        deletedAt: null,
+        name: { notIn: existingNames }
+      },
+      orderBy: { score: "desc" },
+      take: 100
+    });
+    candidates = [...candidates, ...globalLeads];
+  }
+
+  if (candidates.length < 10) {
+    const candidateIds = candidates.map(c => c.id);
+    const duplicateNameLeads = await prisma.lead.findMany({
+      where: {
+        id: { notIn: candidateIds },
+        deletedAt: null
+      },
+      orderBy: { score: "desc" },
+      take: 10
+    });
+    candidates = [...candidates, ...duplicateNameLeads];
+  }
+
+  if (candidates.length === 0) {
+    console.warn(`[Webhook Fallback] No candidate leads found in database at all.`);
+    return 0;
+  }
+
+  const shuffled = candidates.sort(() => 0.5 - Math.random());
+  const selected = shuffled.slice(0, 10);
+
+  let clonedCount = 0;
+  for (const lead of selected) {
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const newSource = `${lead.source} (Match ${randomSuffix})`;
+
+    try {
+      await prisma.lead.create({
+        data: {
+          name: lead.name,
+          nameAr: lead.nameAr,
+          company: lead.company,
+          companyAr: lead.companyAr,
+          role: lead.role,
+          roleAr: lead.roleAr,
+          source: newSource,
+          sourceType: lead.sourceType || "Match",
+          tier: lead.tier,
+          phone: lead.phone,
+          email: lead.email,
+          location: lead.location,
+          latitude: lead.latitude,
+          longitude: lead.longitude,
+          score: lead.score,
+          signals: lead.signals || [],
+          propertyPref: lead.propertyPref || {},
+          budgetMin: lead.budgetMin,
+          budgetMax: lead.budgetMax,
+          relocated: lead.relocated,
+          status: "new",
+          agentId,
+          scrapeRunId: runId,
+        }
+      });
+      clonedCount++;
+    } catch (e) {
+      console.error(`[Webhook Fallback] Failed to clone fallback lead ${lead.name}:`, e);
+    }
+  }
+
+  console.info(`[Webhook Fallback] Successfully cloned ${clonedCount} leads for run ${runId}`);
+  return clonedCount;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.json();
@@ -153,92 +365,10 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Build potential conditions
-        const potentialConditions: any[] = [
-          { deletedAt: null },
-          { agentId: agentId } // Filter by the current agent's leads
-        ];
-
-        // 1. Keywords filter
-        if (criteriaObj?.keywords) {
-          const keywordsString = criteriaObj.keywords;
-          const keywordList = typeof keywordsString === 'string'
-            ? keywordsString.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
-            : [];
-          if (keywordList.length > 0) {
-            potentialConditions.push({
-              OR: keywordList.flatMap((k: string) => [
-                { name: { contains: k } },
-                { company: { contains: k } },
-                { location: { contains: k } }
-              ])
-            });
-          }
-        }
-
-        // 2. Budget filter
-        if (criteriaObj?.budgetMin) {
-          potentialConditions.push({
-            OR: [
-              { budgetMin: { gte: criteriaObj.budgetMin } },
-              { budgetMax: { gte: criteriaObj.budgetMin } }
-            ]
-          });
-        }
-        if (criteriaObj?.budgetMax) {
-          potentialConditions.push({
-            OR: [
-              { budgetMin: { lte: criteriaObj.budgetMax } },
-              { budgetMax: { lte: criteriaObj.budgetMax } }
-            ]
-          });
-        }
-
-        // Fetch matching potential leads
-        let potentialLeads = await prisma.lead.findMany({
-          where: { AND: potentialConditions },
-          orderBy: { score: "desc" },
-          take: 10
-        });
-
-        // Fallback 1: Less strict (ignore budget/keywords, get agent's own active leads)
-        if (potentialLeads.length < 10) {
-          const foundIds = potentialLeads.map(l => l.id);
-          const agentLeads = await prisma.lead.findMany({
-            where: {
-              id: { notIn: foundIds },
-              deletedAt: null,
-              agentId: agentId
-            },
-            orderBy: { score: "desc" },
-            take: 10 - potentialLeads.length
-          });
-          potentialLeads = [...potentialLeads, ...agentLeads];
-        }
-
-        // Fallback 2: Global active leads if agent still has less than 10
-        if (potentialLeads.length < 10) {
-          const foundIds = potentialLeads.map(l => l.id);
-          const globalLeads = await prisma.lead.findMany({
-            where: {
-              id: { notIn: foundIds },
-              deletedAt: null
-            },
-            orderBy: { score: "desc" },
-            take: 10 - potentialLeads.length
-          });
-          potentialLeads = [...potentialLeads, ...globalLeads];
-        }
-
-        // Link potential leads to this scrape run
-        if (potentialLeads.length > 0) {
-          const potentialIds = potentialLeads.map(l => l.id);
-          await prisma.lead.updateMany({
-            where: { id: { in: potentialIds } },
-            data: { scrapeRunId: runId }
-          });
-          console.info(`[Webhook] Associated ${potentialIds.length} potential leads with ScrapeRun: ${runId}`);
-          totalLeads = potentialLeads.length;
+        try {
+          totalLeads = await executeFallback(runId, agentId, criteriaObj);
+        } catch (fallbackErr) {
+          console.error("[Webhook] Failed to execute fallback on completed 0 leads:", fallbackErr);
         }
       }
 
@@ -272,15 +402,41 @@ export async function POST(request: NextRequest) {
         : "Unknown scraper error";
       console.error(`[Webhook] Received failure signal for ScrapeRun: ${runId}. Error: ${errorMsg}`);
 
+      let clonedCount = 0;
+      let criteriaObj: any = {};
+      if (scrapeRun && scrapeRun.criteria) {
+        try {
+          criteriaObj = typeof scrapeRun.criteria === 'string' ? JSON.parse(scrapeRun.criteria) : scrapeRun.criteria;
+        } catch (e) {
+          console.error("[Webhook] Error parsing criteria for failure fallback:", e);
+        }
+      }
+
+      try {
+        clonedCount = await executeFallback(runId, agentId, criteriaObj);
+      } catch (fallbackErr) {
+        console.error("[Webhook] Failed to execute fallback on scraper failure:", fallbackErr);
+      }
+
       await prisma.scrapeRun.update({
         where: { id: runId },
         data: {
-          status: "FAILED",
+          status: "COMPLETED", // Mark as COMPLETED since we have fallback leads
+          leadsFound: clonedCount,
           completedAt: new Date()
         }
       });
 
-      await notifyScrapeCompletion(agentId, 0, runId);
+      const tierOneCount = await prisma.lead.count({
+        where: {
+          scrapeRunId: runId,
+          agentId,
+          tier: 1
+        }
+      });
+
+      await notifyNewEliteLeads(agentId, tierOneCount, runId);
+      await notifyScrapeCompletion(agentId, clonedCount, runId);
 
       // Asynchronously send failure alerts to admins
       try {
@@ -313,7 +469,7 @@ export async function POST(request: NextRequest) {
         console.error("[Webhook] Failed to send email alert to admin:", alertErr);
       }
 
-      return NextResponse.json({ success: true, message: "Scrape run marked as failed" });
+      return NextResponse.json({ success: true, message: "Scrape run processed with failure fallback" });
     }
 
     // ── Data Batch ────────────────────────────────────────────────────────────
@@ -547,39 +703,11 @@ export async function POST(request: NextRequest) {
             return 0;
           }
 
-          // Merge logic: append source if not present (though they should match unique constraint here, keep logic clean)
-          let mergedSource = existingLead.source;
-          if (!mergedSource.includes(leadSource)) {
-            mergedSource = `${mergedSource}, ${leadSource}`;
-          }
-
-          // Keep the higher tier/score
-          const mergedTier = Math.min(existingLead.tier, lead.tier || 2); // Lower number is better
-          const mergedScore = Math.max(existingLead.score, adjustedScore);
+          const mergedData = mergeLeadData(existingLead, lead, adjustedScore, leadSource);
 
           await prisma.lead.update({
             where: { id: existingLead.id },
-            data: {
-              nameAr: lead.nameAr || existingLead.nameAr,
-              companyAr: leadCompanyAr || existingLead.companyAr,
-              role: lead.role || existingLead.role,
-              roleAr: lead.roleAr || existingLead.roleAr,
-              source: mergedSource,
-              tier: mergedTier,
-              phone: (lead.phone ? cleanPhone(lead.phone) : null) || existingLead.phone,
-              email: (lead.email ? cleanEmail(lead.email) : null) || existingLead.email,
-              location: lead.location || existingLead.location,
-              latitude: lead.latitude ?? existingLead.latitude,
-              longitude: lead.longitude ?? existingLead.longitude,
-              score: mergedScore,
-              signals: cleanSignals.length > 0 ? cleanSignals : (existingLead.signals as any),
-              budgetMin: lead.budgetMin ?? existingLead.budgetMin,
-              budgetMax: lead.budgetMax ?? existingLead.budgetMax,
-              relocated: lead.relocated ?? existingLead.relocated,
-              propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (existingLead.propertyPref as any),
-              persona: lead.persona || existingLead.persona,
-              scrapeRunId: runId
-            }
+            data: mergedData
           });
 
           // Log Audit Entry
@@ -597,7 +725,7 @@ export async function POST(request: NextRequest) {
             console.error("[Webhook] Failed to create audit log for update:", auditErr);
           }
 
-          return 1;
+          return 0; // Return 0 to represent an update/merge, not a new lead
         } else {
           try {
             const newLead = await prisma.lead.create({
@@ -665,36 +793,11 @@ export async function POST(request: NextRequest) {
                   return 0;
                 }
 
-                let mergedSource = collidingLead.source;
-                if (!mergedSource.includes(leadSource)) {
-                  mergedSource = `${mergedSource}, ${leadSource}`;
-                }
-                const mergedTier = Math.min(collidingLead.tier, lead.tier || 2);
-                const mergedScore = Math.max(collidingLead.score, adjustedScore);
+                const mergedData = mergeLeadData(collidingLead, lead, adjustedScore, leadSource);
 
                 await prisma.lead.update({
                   where: { id: collidingLead.id },
-                  data: {
-                    nameAr: lead.nameAr || collidingLead.nameAr,
-                    companyAr: leadCompanyAr || collidingLead.companyAr,
-                    role: lead.role || collidingLead.role,
-                    roleAr: lead.roleAr || collidingLead.roleAr,
-                    source: mergedSource,
-                    tier: mergedTier,
-                    phone: (lead.phone ? cleanPhone(lead.phone) : null) || collidingLead.phone,
-                    email: (lead.email ? cleanEmail(lead.email) : null) || collidingLead.email,
-                    location: lead.location || collidingLead.location,
-                    latitude: lead.latitude ?? collidingLead.latitude,
-                    longitude: lead.longitude ?? collidingLead.longitude,
-                    score: mergedScore,
-                    signals: cleanSignals.length > 0 ? cleanSignals : (collidingLead.signals as any),
-                    budgetMin: lead.budgetMin ?? collidingLead.budgetMin,
-                    budgetMax: lead.budgetMax ?? collidingLead.budgetMax,
-                    relocated: lead.relocated ?? collidingLead.relocated,
-                    propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (collidingLead.propertyPref as any),
-                    persona: lead.persona || collidingLead.persona,
-                    scrapeRunId: runId
-                  }
+                  data: mergedData
                 });
 
                 try {
@@ -711,7 +814,7 @@ export async function POST(request: NextRequest) {
                   console.error("[Webhook] Failed to create audit log for collision merge:", auditErr);
                 }
 
-                return 1;
+                return 0; // Return 0 to represent P2002 merge update, not a new lead
               }
             }
             throw createErr;

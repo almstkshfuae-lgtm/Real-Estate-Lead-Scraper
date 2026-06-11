@@ -96,118 +96,7 @@ export async function GET(
         return;
       }
 
-      // Helper function to process agent fallback if needed
-      const handleAgentFallback = async (currentRun: typeof run) => {
-        if (!isAdmin && (currentRun.status === "FAILED" || (currentRun.status === "COMPLETED" && currentRun.leadsFound === 0))) {
-          try {
-            // Prevent concurrent duplicate fallback lead cloning
-            const existingRunLeadsCount = await prisma.lead.count({
-              where: { scrapeRunId: currentRun.id, agentId: session.id }
-            });
-            if (existingRunLeadsCount > 0) {
-              console.info(`[SSE Fallback Check] Leads already exist for scrapeRunId ${currentRun.id}. Skipping clone.`);
-              const updatedRun = {
-                ...currentRun,
-                status: "COMPLETED" as const,
-                leadsFound: existingRunLeadsCount,
-                completedAt: currentRun.completedAt || new Date()
-              };
-              return updatedRun;
-            }
-
-            const agentLeads = await prisma.lead.findMany({
-              where: { agentId: session.id },
-              select: { name: true }
-            });
-            const existingNames = agentLeads.map((l: { name: string }) => l.name);
-
-            let adminLeads = await prisma.lead.findMany({
-              where: {
-                agent: { role: 'admin' },
-                name: { notIn: existingNames }
-              },
-              take: 100
-            });
-
-            if (adminLeads.length < 10) {
-              adminLeads = await prisma.lead.findMany({
-                where: { agent: { role: 'admin' } },
-                take: 100
-              });
-            }
-
-            if (adminLeads.length > 0) {
-              const shuffled = adminLeads.sort(() => 0.5 - Math.random());
-              const selected = shuffled.slice(0, 10);
-
-              let createdCount = 0;
-              for (const adminLead of selected) {
-                const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-                const newSource = `${adminLead.source} (Match ${randomSuffix})`;
-
-                try {
-                  await prisma.lead.create({
-                    data: {
-                      name: adminLead.name,
-                      nameAr: adminLead.nameAr,
-                      company: adminLead.company,
-                      companyAr: adminLead.companyAr,
-                      role: adminLead.role,
-                      roleAr: adminLead.roleAr,
-                      source: newSource,
-                      sourceType: adminLead.sourceType || "Match",
-                      tier: adminLead.tier,
-                      phone: adminLead.phone,
-                      email: adminLead.email,
-                      location: adminLead.location,
-                      latitude: adminLead.latitude,
-                      longitude: adminLead.longitude,
-                      score: adminLead.score,
-                      signals: adminLead.signals || [],
-                      propertyPref: adminLead.propertyPref || {},
-                      budgetMin: adminLead.budgetMin,
-                      budgetMax: adminLead.budgetMax,
-                      relocated: adminLead.relocated,
-                      status: "new",
-                      agentId: session.id,
-                      scrapeRunId: currentRun.id,
-                    }
-                  });
-                  createdCount++;
-                } catch (e) {
-                  console.error("[SSE fallback] Failed to clone fallback lead:", e);
-                }
-              }
-
-              const updatedRun = await prisma.scrapeRun.update({
-                where: { id: currentRun.id },
-                data: {
-                  status: "COMPLETED",
-                  leadsFound: createdCount,
-                  completedAt: new Date()
-                },
-                select: {
-                  id: true,
-                  status: true,
-                  leadsFound: true,
-                  startedAt: true,
-                  completedAt: true,
-                  sources: true,
-                  triggeredBy: true,
-                }
-              });
-
-              return updatedRun;
-            }
-          } catch (fallbackError) {
-            console.error("[SSE fallback] Error generating fallback leads for agent:", fallbackError);
-          }
-        }
-        return currentRun;
-      };
-
-      // Apply fallback check on initial fetch if it's already in terminal failed/empty state
-      let activeRun = await handleAgentFallback(initialRun);
+      let activeRun = initialRun;
 
       // Parse sources
       let sourcesList = activeRun.sources;
@@ -351,8 +240,7 @@ export async function GET(
             }
           }
 
-          // Trigger fallback check on live state changes
-          const finalRun = await handleAgentFallback(checkedRun);
+          const finalRun = checkedRun;
 
           let parsedSources = finalRun.sources;
           try {
