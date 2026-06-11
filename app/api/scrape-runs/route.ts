@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const isHostAdmin = session.role.toUpperCase() === 'ADMIN';
+    const isHostAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase());
     const runs = await prisma.scrapeRun.findMany({
       where: isHostAdmin ? {} : { triggeredBy: session.id },
       orderBy: { startedAt: 'desc' },

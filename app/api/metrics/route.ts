@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     // Check for admin session
     try {
       const session = await getSession();
-      if (session && session.role?.toUpperCase() === 'ADMIN') {
+      if (session && ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '')) {
         isAuthorized = true;
       }
     } catch (e) {
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     } catch (e) {
       // Ignore
     }
-    if (sessionUser && sessionUser.role?.toUpperCase() !== 'ADMIN') {
+    if (sessionUser && !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(sessionUser.role?.toUpperCase() || '')) {
       conditions.push({ agentId: sessionUser.id });
     }
 

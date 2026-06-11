@@ -20,7 +20,7 @@ export async function GET(
   }
 
   const encoder = new TextEncoder();
-  const isAdmin = session.role.toUpperCase() === "ADMIN";
+  const isAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase());
 
   // Helper function to process agent fallback if needed
   const handleAgentFallback = async (currentRun: any) => {
@@ -47,7 +47,7 @@ export async function GET(
         const existingNames = agentLeads.map(l => l.name);
         let adminLeads = await prisma.lead.findMany({
           where: {
-            agent: { role: 'admin' },
+            agent: { role: { in: ['admin', 'super admin', 'super_admin', 'superadmin'] } },
             name: { notIn: existingNames },
             deletedAt: null,
           },
@@ -55,7 +55,7 @@ export async function GET(
         });
         if (adminLeads.length < 10) {
           adminLeads = await prisma.lead.findMany({
-            where: { agent: { role: 'admin' }, deletedAt: null },
+            where: { agent: { role: { in: ['admin', 'super admin', 'super_admin', 'superadmin'] } }, deletedAt: null },
             take: 100
           });
         }

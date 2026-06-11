@@ -74,7 +74,7 @@ async function runCleanup(): Promise<NextResponse> {
       where: {
         OR: [
           { email: "admin@brilliance-lead.uk" },
-          { role: "admin" }
+          { role: { in: ["admin", "super admin", "super_admin", "superadmin"] } }
         ]
       },
     });

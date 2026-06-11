@@ -38,8 +38,8 @@ export async function GET(request: Request) {
     const conditions: any[] = [];
 
     // Agents can only see their own leads, Admins see all
-    // Use case-insensitive comparison for role
-    if (session.role?.toUpperCase() !== 'ADMIN') {
+    // Use case-insensitive comparison for role supporting all admin variants
+    if (!['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '')) {
       conditions.push({ agentId: session.id });
     }
 
@@ -156,36 +156,20 @@ export async function GET(request: Request) {
       signals: true, persona: true, notes: true
     } : undefined;
 
-    const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
-
     // Adjust limit dynamically based on payload size
-    let finalLimit = minimal ? Math.min(1000, limit) : Math.min(500, limit);
-    if (isNonAdmin) {
-      finalLimit = Math.min(10, finalLimit);
-    }
+    const finalLimit = minimal ? Math.min(1000, limit) : Math.min(500, limit);
 
     // ─── Sequential read queries ──────────────────────────────────────────────
     // Running queries sequentially allows the first query to warm up the database 
     // connection pool, preventing concurrent handshake conflicts and connection pool timeouts (P2024).
-    let leads: any[] = [];
-    let total = 0;
-
-    if (isNonAdmin && skip >= 10) {
-      leads = [];
-      const realTotal = await prisma.lead.count({ where });
-      total = Math.min(10, realTotal);
-    } else {
-      const takeLimit = isNonAdmin ? Math.min(10 - skip, finalLimit) : finalLimit;
-      leads = await prisma.lead.findMany({
-        where,
-        select: selectFields,
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: takeLimit,
-      });
-      const realTotal = await prisma.lead.count({ where });
-      total = isNonAdmin ? Math.min(10, realTotal) : realTotal;
-    }
+    const leads = await prisma.lead.findMany({
+      where,
+      select: selectFields,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: finalLimit,
+    });
+    const total = await prisma.lead.count({ where });
 
     const parsedLeads = leads.map((lead: any) => {
       let parsedSignals: any[] = [];

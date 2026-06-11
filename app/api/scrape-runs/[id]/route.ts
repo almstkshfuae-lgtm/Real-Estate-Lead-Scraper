@@ -50,7 +50,7 @@ export async function GET(
     }
 
     // Non-admins can only view their own runs
-    const isAdmin = session.role.toUpperCase() === "ADMIN";
+    const isAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase());
     if (!isAdmin && run.triggeredBy !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

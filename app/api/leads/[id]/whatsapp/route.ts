@@ -30,7 +30,7 @@ export async function POST(
     }
 
     // Cross-Tenant Access control: Only the owner (agentId) or an admin can access/action this lead
-    if (session.role.toUpperCase() !== "ADMIN" && lead.agentId !== session.id) {
+    if (!['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase()) && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Unauthorized access to lead data" }, { status: 403 });
     }
 

@@ -353,7 +353,7 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
               <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)]">{t("leads.sidebar.contact")}</h3>
-              {userRole?.toLowerCase() === 'admin' && (
+              {['admin', 'super admin', 'super_admin', 'superadmin'].includes(userRole?.toLowerCase() || '') && (
                 <button
                   onClick={() => setIsEditing(!isEditing)}
                   className="text-xs font-bold text-[var(--color-primary)] hover:underline"

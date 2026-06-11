@@ -8,7 +8,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession();
-    if (!session || session.role.toUpperCase() !== "ADMIN") {
+    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;
@@ -42,7 +42,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getSession();
-    if (!session || session.role.toUpperCase() !== "ADMIN") {
+    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;

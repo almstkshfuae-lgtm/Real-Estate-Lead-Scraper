@@ -12,7 +12,7 @@ export const maxDuration = 30;
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session || session.role.toUpperCase() !== 'ADMIN') {
+    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -63,9 +63,9 @@ export async function POST(request: Request) {
   } catch (error: any) {
     // Log full error server-side only — never expose to client (tokens may be embedded in error.message URLs)
     console.error("Test connection error:", error?.message || error);
-    return NextResponse.json({ 
-      success: false, 
-      error: "Connection test failed. Please verify your credentials and try again." 
+    return NextResponse.json({
+      success: false,
+      error: "Connection test failed. Please verify your credentials and try again."
     }, { status: 500 });
   }
 }

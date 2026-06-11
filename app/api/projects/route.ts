@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth";
 export async function POST(req: Request) {
   try {
     const session = await getSession();
-    if (!session || session.role.toUpperCase() !== "ADMIN") {
+    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

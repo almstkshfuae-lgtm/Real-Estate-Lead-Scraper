@@ -134,7 +134,7 @@ export default function LeadsPage() {
               </button>
             </div>
           )}
-          {user && user.role?.toLowerCase() === 'admin' && <CsvUpload onSuccess={handleRefresh} />}
+          {user && ['admin', 'super admin', 'super_admin', 'superadmin'].includes(user.role?.toLowerCase() || '') && <CsvUpload onSuccess={handleRefresh} />}
 
           <Link 
             href="/search"

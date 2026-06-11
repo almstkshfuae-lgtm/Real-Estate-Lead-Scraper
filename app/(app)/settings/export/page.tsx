@@ -16,7 +16,7 @@ export default function ExportHistoryPage() {
     fetch("/api/auth/me")
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (!data || !data.user || data.user.role?.toLowerCase() !== 'admin') {
+        if (!data || !data.user || !['admin', 'super admin', 'super_admin', 'superadmin'].includes(data.user.role?.toLowerCase() || '')) {
           setForbidden(true);
           setLoading(false);
           return;

@@ -13,7 +13,9 @@ export async function POST(request: NextRequest) {
     }
 
     const role = session.role.toUpperCase();
-    if (role !== 'ADMIN' && role !== 'AGENT') {
+    const isAgent = role === 'AGENT';
+    const isAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(role);
+    if (!isAdmin && !isAgent) {
       return NextResponse.json({ error: "Forbidden: Higher privileges required" }, { status: 403 });
     }
 

@@ -65,7 +65,7 @@ export async function PATCH(
     }
 
     // Non-admins cannot edit core lead info fields
-    const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
+    const isNonAdmin = !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '');
     if (isNonAdmin) {
       const editFields = [name, email, phone, company, role, location, score, budgetMin, budgetMax, tier, source];
       const hasRestrictedEdit = editFields.some(field => field !== undefined);
@@ -226,7 +226,7 @@ export async function DELETE(
     }
 
     // Agents can only delete their own leads
-    const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
+    const isNonAdmin = !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '');
     if (isNonAdmin && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

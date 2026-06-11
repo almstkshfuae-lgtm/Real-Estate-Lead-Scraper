@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
     // Fetch only active leads that belong to the current user (unless admin)
     // Exclude already-soft-deleted records to prevent redundant writes and audit noise
-    const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
+    const isNonAdmin = !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '');
 
     const leadsToDelete = await prisma.lead.findMany({
       where: {
