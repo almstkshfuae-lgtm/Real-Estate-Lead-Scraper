@@ -561,7 +561,7 @@ function GeoMap({
       }, 300);
       return () => clearInterval(interval);
     }
-  }, [leads, activeLayer, language]);
+  }, [leads, projects, activeLayer, language]);
 
   // Geofence drawing
   useEffect(() => {

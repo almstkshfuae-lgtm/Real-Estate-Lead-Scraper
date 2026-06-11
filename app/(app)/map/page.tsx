@@ -210,7 +210,7 @@ export default function MapPage() {
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     try {
-      let url = `/api/leads?limit=1000&minimal=true&scoreMin=${debouncedScoreMin}`;
+      let url = `/api/leads/cluster?limit=1000&scoreMin=${debouncedScoreMin}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (statusFilter) url += `&status=${statusFilter}`;
 
@@ -252,7 +252,7 @@ export default function MapPage() {
       setLoading(true);
 
       try {
-        let url = `/api/leads?limit=1000&minimal=true&north=${bounds.north}&south=${bounds.south}&east=${bounds.east}&west=${bounds.west}`;
+        let url = `/api/leads/cluster?limit=1000&north=${bounds.north}&south=${bounds.south}&east=${bounds.east}&west=${bounds.west}`;
         if (tierFilter) url += `&tier=${tierFilter}`;
         if (statusFilter) url += `&status=${statusFilter}`;
         if (debouncedScoreMin) url += `&scoreMin=${debouncedScoreMin}`;

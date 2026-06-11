@@ -1,9 +1,68 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search") || "";
+    
+    const where: any = {};
+    const conditions: any[] = [];
+
+    if (search) {
+      conditions.push({
+        OR: [
+          { projectName: { contains: search } },
+          { location: { contains: search } },
+          { developer: { contains: search } },
+          { propertyType: { contains: search } },
+        ]
+      });
+    }
+
+    const northParam = searchParams.get("north");
+    const southParam = searchParams.get("south");
+    const eastParam = searchParams.get("east");
+    const westParam = searchParams.get("west");
+
+    if (northParam && southParam && eastParam && westParam) {
+      const north = parseFloat(northParam);
+      const south = parseFloat(southParam);
+      const east = parseFloat(eastParam);
+      const west = parseFloat(westParam);
+
+      if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
+        conditions.push({
+          latitude: {
+            gte: south,
+            lte: north,
+          }
+        });
+
+        if (west <= east) {
+          conditions.push({
+            longitude: {
+              gte: west,
+              lte: east,
+            }
+          });
+        } else {
+          conditions.push({
+            OR: [
+              { longitude: { gte: west } },
+              { longitude: { lte: east } }
+            ]
+          });
+        }
+      }
+    }
+
+    if (conditions.length > 0) {
+      where.AND = conditions;
+    }
+
     const projects = await prisma.projectHeatmap.findMany({
+      where,
       orderBy: { createdAt: "desc" },
     });
 
