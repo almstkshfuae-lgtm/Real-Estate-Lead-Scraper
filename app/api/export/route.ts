@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import ExcelJS from "exceljs";
 import { put } from "@vercel/blob";
 import { parseSignals } from "@/lib/signals";
+import { buildSearchConditions } from "@/lib/search";
 
 export async function GET(request: Request) {
   try {
@@ -18,28 +19,42 @@ export async function GET(request: Request) {
     const status = searchParams.get("status") || "";
     const tier = searchParams.get("tier") || "";
     const scrapeRunId = searchParams.get("scrapeRunId") || "";
+    const scoreMin = searchParams.get("scoreMin") || "";
+    const excludeRental = searchParams.get("excludeRental") || "";
+    const recentlyRelocated = searchParams.get("recentlyRelocated") || searchParams.get("relocated") || "";
     const format = (searchParams.get("format") || "xlsx").toLowerCase();
 
-    const where: any = { deletedAt: null };
+    const conditions: any[] = [{ deletedAt: null }];
     if (session.role?.toUpperCase() !== 'ADMIN') {
-      where.agentId = session.id;
+      conditions.push({ agentId: session.id });
     }
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { company: { contains: search } },
-        { nameAr: { contains: search } },
-        { companyAr: { contains: search } },
-      ];
+      const searchFields = ["name", "company", "nameAr", "companyAr"];
+      conditions.push(...buildSearchConditions(search, searchFields));
     }
-    if (status) where.status = status;
+    if (status) conditions.push({ status });
     if (tier) {
       const parsedTier = parseInt(tier);
       if (!isNaN(parsedTier)) {
-        where.tier = parsedTier;
+        conditions.push({ tier: parsedTier });
       }
     }
-    if (scrapeRunId) where.scrapeRunId = scrapeRunId;
+    if (scrapeRunId) conditions.push({ scrapeRunId });
+
+    if (scoreMin) {
+      const parsedScoreMin = parseInt(scoreMin);
+      if (!isNaN(parsedScoreMin)) {
+        conditions.push({ score: { gte: parsedScoreMin } });
+      }
+    }
+    if (excludeRental === "true") {
+      conditions.push({ rentalFlag: false });
+    }
+    if (recentlyRelocated === "true") {
+      conditions.push({ relocated: true });
+    }
+
+    const where: any = conditions.length > 0 ? { AND: conditions } : {};
 
     const leads = await prisma.lead.findMany({
       where,
@@ -106,7 +121,7 @@ export async function GET(request: Request) {
       data: {
         agentId: session.id,
         format: format.toUpperCase(),
-        filters: JSON.stringify({ search, status, tier, scrapeRunId }),
+        filters: JSON.stringify({ search, status, tier, scrapeRunId, scoreMin, excludeRental, recentlyRelocated }),
         recordCount: leads.length,
         fileUrl: blob.url,
       }

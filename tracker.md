@@ -246,6 +246,9 @@
 - [🔄] **Query Optimization inside Batches** — Add composite index on `[name, company, agentId]` to prevent full table scans in webhook. <!-- id: 12.11 -->
 - [x] **Hardened: Soft-Delete Security Leak** — Added `deletedAt: null` filter to all `prisma.lead.findMany` queries that were missing it: `api/ai/score/validate`, `api/campaigns`, `api/campaigns/outreach`, `api/leads/bulk-push`, `api/leads/bulk-delete` (findMany + updateMany), `api/export`, and `api/scrape-runs/[id]/sse` (all 3 fallback fetches). Prevents ghost/deleted records from appearing in metrics, exports, CRM pushes, and campaign outreach. <!-- id: 12.12 -->
 - [x] **Metrics & Counts Alignment** — Resolve mismatches in Manual Import exclusions, soft deletes, query filters, and failure alerts between Backend Metrics API and Frontend Lead Table. <!-- id: 12.13 -->
+- [x] **Hardened: Bilingual spelling tolerance and search normalization** — Created `lib/search.ts` utility implementing prefix-aware first-Alif normalization, Ta Marbouta/Haa toggles, and Yaa/Alif Maqsoora normalization. Refactored all search-enabled routes (`api/leads`, `api/leads/cluster`, `api/metrics`, `api/export`, `api/projects/heatmap`, and scraper webhook fallback) to use the robust spelling-tolerant tokenizer, ensuring flexible case-insensitive English/Arabic matching on MySQL. <!-- id: 12.14 -->
+- [x] **Expose AI & Quality Filters** — Linked backend quality filters (`scoreMin`, `excludeRental`, `relocated`) to the frontend Lead Table and Kanban views via a collapsible advanced filter panel, synced with the export route. <!-- id: 12.15 -->
+
 
 
 ## Legend

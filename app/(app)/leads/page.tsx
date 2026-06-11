@@ -15,7 +15,8 @@ import {
   Loader2,
   RefreshCw,
   Thermometer,
-  AlertCircle
+  AlertCircle,
+  Check
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
@@ -36,6 +37,10 @@ export default function LeadsPage() {
   const [tierFilter, setTierFilter] = useState<number | "">("");
   const [scrapeRunIdFilter, setScrapeRunIdFilter] = useState(searchParams?.get("scrapeRunId") || "");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [scoreMinFilter, setScoreMinFilter] = useState<number>(0);
+  const [excludeRentalFilter, setExcludeRentalFilter] = useState<boolean>(false);
+  const [relocatedFilter, setRelocatedFilter] = useState<boolean>(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
   const { status: runStatus, leadsFound, isPolling } = useScrapeRunStatus(scrapeRunIdFilter || null);
 
@@ -71,6 +76,9 @@ export default function LeadsPage() {
       if (statusFilter) url += "&status=" + statusFilter;
       if (tierFilter) url += "&tier=" + tierFilter;
       if (scrapeRunIdFilter) url += "&scrapeRunId=" + scrapeRunIdFilter;
+      if (scoreMinFilter > 0) url += "&scoreMin=" + scoreMinFilter;
+      if (excludeRentalFilter) url += "&excludeRental=true";
+      if (relocatedFilter) url += "&recentlyRelocated=true";
       const res = await fetch(url);
       const data = await res.json();
       if (data.url) {
@@ -111,7 +119,18 @@ export default function LeadsPage() {
           </div>
 
           <button 
+            onClick={() => {
+              setSearchTerm("");
+              setStatusFilter("");
+              setTierFilter("");
+              setScoreMinFilter(0);
+              setExcludeRentalFilter(false);
+              setRelocatedFilter(false);
+              setScrapeRunIdFilter("");
+              handleRefresh();
+            }}
             className="p-2 bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl hover:bg-[var(--color-bg-surface)] transition-all"
+            title={t('common.clear', 'Clear Filters')}
           >
             <RotateCcw className="w-4 h-4 text-[var(--color-text-secondary)]" />
           </button>
@@ -147,42 +166,126 @@ export default function LeadsPage() {
       </div>
 
       {/* Global Filter Bar */}
-      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute inset-inline-start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-secondary)]" />
-          <input
-            type="text"
-            placeholder={t('leads.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full ps-10 pe-4 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/30 text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
-          />
+      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-2xl p-4 shadow-sm flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row gap-4 items-center w-full">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute inset-inline-start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-secondary)]" />
+            <input
+              type="text"
+              placeholder={t('leads.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full ps-10 pe-4 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/30 text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+            />
+          </div>
+          <div className="flex gap-3 w-full md:w-auto">
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="flex-1 md:w-40 px-3 py-2.5 border border-[var(--color-border)] rounded-xl text-sm font-medium bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+            >
+              <option value="">{t('leads.status.all', 'All Statuses')}</option>
+              <option value="new">{t('leads.status.new')}</option>
+              <option value="contacted">{t('leads.status.contacted')}</option>
+              <option value="qualified">{t('leads.status.qualified')}</option>
+              <option value="proposal">{t('leads.status.proposal')}</option>
+              <option value="closed">{t('leads.status.closed')}</option>
+            </select>
+            
+            <select 
+              value={tierFilter}
+              onChange={(e) => setTierFilter(e.target.value ? parseInt(e.target.value) : "")}
+              className="flex-1 md:w-40 px-3 py-2.5 border border-[var(--color-border)] rounded-xl text-sm font-medium bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+            >
+              <option value="">{t('leads.tiers.all', 'All Tiers')}</option>
+              <option value="1">{t('leads.tiers.t1')}</option>
+              <option value="2">{t('leads.tiers.t2')}</option>
+              <option value="3">{t('leads.tiers.t3')}</option>
+            </select>
+
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${
+                showAdvanced || scoreMinFilter > 0 || excludeRentalFilter || relocatedFilter
+                  ? "bg-[var(--color-primary-subtle)] border-[var(--color-primary)] text-[var(--color-primary)]"
+                  : "bg-[var(--color-bg-surface)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span className="hidden sm:inline">{t('leads.filters', 'Filters')}</span>
+              {(scoreMinFilter > 0 || excludeRentalFilter || relocatedFilter) && (
+                <span className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
+              )}
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
-          <select 
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="flex-1 md:w-40 px-3 py-2.5 border border-[var(--color-border)] rounded-xl text-sm font-medium bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
-          >
-            <option value="">{t('leads.status.all', 'All Statuses')}</option>
-            <option value="new">{t('leads.status.new')}</option>
-            <option value="contacted">{t('leads.status.contacted')}</option>
-            <option value="qualified">{t('leads.status.qualified')}</option>
-            <option value="proposal">{t('leads.status.proposal')}</option>
-            <option value="closed">{t('leads.status.closed')}</option>
-          </select>
-          
-          <select 
-            value={tierFilter}
-            onChange={(e) => setTierFilter(e.target.value ? parseInt(e.target.value) : "")}
-            className="flex-1 md:w-40 px-3 py-2.5 border border-[var(--color-border)] rounded-xl text-sm font-medium bg-[var(--color-bg-surface)] outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
-          >
-            <option value="">{t('leads.tiers.all', 'All Tiers')}</option>
-            <option value="1">{t('leads.tiers.t1')}</option>
-            <option value="2">{t('leads.tiers.t2')}</option>
-            <option value="3">{t('leads.tiers.t3')}</option>
-          </select>
-        </div>
+
+        {/* Collapsible Advanced Filters Section */}
+        {showAdvanced && (
+          <div className="pt-4 border-t border-[var(--color-border)] grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-200">
+            {/* AI Min Score Slider */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs font-bold text-[var(--color-text-secondary)]">
+                <span>{t('map.filter.minScore', 'Min Score')}</span>
+                <span className="text-[var(--color-primary)] bg-[var(--color-primary-subtle)] px-2 py-0.5 rounded-md text-[11px] font-black">
+                  {scoreMinFilter > 0 ? `≥ ${scoreMinFilter}` : t('leads.status.all', 'All')}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={scoreMinFilter}
+                onChange={(e) => setScoreMinFilter(Number(e.target.value))}
+                className="w-full accent-[var(--color-primary)] bg-[var(--color-bg-surface)] h-2 rounded-lg cursor-pointer appearance-none"
+              />
+            </div>
+
+            {/* Exclude Rental behavior */}
+            <div className="flex flex-col justify-end">
+              <button
+                onClick={() => setExcludeRentalFilter(!excludeRentalFilter)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-bold transition-all text-start ${
+                  excludeRentalFilter
+                    ? "border-[var(--color-primary)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
+                    : "border-[var(--color-border)] bg-[var(--color-bg-surface)]/30 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                }`}
+              >
+                <div>
+                  <p>{t('search.excludeRental', 'Exclude Rental Behavior')}</p>
+                  <p className="text-[9px] font-normal text-[var(--color-text-secondary)] mt-0.5">
+                    {t('search.excludeRentalDesc', 'Hide leads with rental history')}
+                  </p>
+                </div>
+                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${excludeRentalFilter ? 'bg-[var(--color-primary)] border-[var(--color-primary)]' : 'border-[var(--color-border)]'}`}>
+                  {excludeRentalFilter && <Check className="w-3 h-3 text-white" />}
+                </div>
+              </button>
+            </div>
+
+            {/* Recently Relocated */}
+            <div className="flex flex-col justify-end">
+              <button
+                onClick={() => setRelocatedFilter(!relocatedFilter)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-bold transition-all text-start ${
+                  relocatedFilter
+                    ? "border-[var(--color-primary)] bg-[var(--color-primary-subtle)] text-[var(--color-primary)]"
+                    : "border-[var(--color-border)] bg-[var(--color-bg-surface)]/30 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                }`}
+              >
+                <div>
+                  <p>{t('search.relocated', 'Recently Relocated')}</p>
+                  <p className="text-[9px] font-normal text-[var(--color-text-secondary)] mt-0.5">
+                    {t('search.relocatedDesc', 'Filter for leads new to UAE')}
+                  </p>
+                </div>
+                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${relocatedFilter ? 'bg-[var(--color-primary)] border-[var(--color-primary)]' : 'border-[var(--color-border)]'}`}>
+                  {relocatedFilter && <Check className="w-3 h-3 text-white" />}
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Active Scrape Progress Banner */}
@@ -246,12 +349,30 @@ export default function LeadsPage() {
         {view === 'list' ? (
           <LeadTable 
             onSelectLead={(lead) => setSelectedLead(lead)} 
-            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter, refreshTrigger: refreshKey }}
+            filters={{ 
+              searchTerm, 
+              statusFilter, 
+              tierFilter, 
+              scrapeRunId: scrapeRunIdFilter, 
+              refreshTrigger: refreshKey,
+              scoreMin: scoreMinFilter,
+              excludeRental: excludeRentalFilter,
+              recentlyRelocated: relocatedFilter
+            }}
           />
         ) : (
           <LeadPipeline 
             onSelectLead={(lead) => setSelectedLead(lead)} 
-            filters={{ searchTerm, statusFilter, tierFilter, scrapeRunId: scrapeRunIdFilter, refreshTrigger: refreshKey }}
+            filters={{ 
+              searchTerm, 
+              statusFilter, 
+              tierFilter, 
+              scrapeRunId: scrapeRunIdFilter, 
+              refreshTrigger: refreshKey,
+              scoreMin: scoreMinFilter,
+              excludeRental: excludeRentalFilter,
+              recentlyRelocated: relocatedFilter
+            }}
           />
         )}
       </div>

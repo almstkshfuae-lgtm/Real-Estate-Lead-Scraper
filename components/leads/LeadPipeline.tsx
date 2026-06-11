@@ -22,6 +22,9 @@ interface LeadPipelineProps {
     tierFilter: number | "";
     scrapeRunId?: string;
     refreshTrigger?: number;
+    scoreMin?: number;
+    excludeRental?: boolean;
+    recentlyRelocated?: boolean;
   };
 }
 
@@ -35,11 +38,14 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
   const fetchLeads = async () => {
     try {
       setLoading(true);
-      const { searchTerm, statusFilter, tierFilter, scrapeRunId } = filters;
+      const { searchTerm, statusFilter, tierFilter, scrapeRunId, scoreMin, excludeRental, recentlyRelocated } = filters;
       let url = `/api/leads?search=${encodeURIComponent(searchTerm)}&limit=500`;
       if (statusFilter) url += `&status=${statusFilter}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (scrapeRunId) url += `&scrapeRunId=${scrapeRunId}`;
+      if (scoreMin !== undefined && scoreMin > 0) url += `&scoreMin=${scoreMin}`;
+      if (excludeRental) url += `&excludeRental=true`;
+      if (recentlyRelocated) url += `&recentlyRelocated=true`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch leads");

@@ -30,6 +30,7 @@ import { mlAdjustScore } from "@/lib/ml/lead-model";
 import { sendEmail } from "@/lib/mail";
 import { parsePreferences } from "@/lib/auth";
 import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
+import { buildSearchConditions } from "@/lib/search";
 
 // Schema for individual lead validation
 const leadSchema = z.object({
@@ -139,16 +140,17 @@ async function executeFallback(runId: string, agentId: string, criteriaObj: any)
   if (criteriaObj?.keywords) {
     const keywordsString = criteriaObj.keywords;
     const keywordList = typeof keywordsString === 'string'
-      ? keywordsString.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
+      ? keywordsString.split(',').map((k: string) => k.trim()).filter(Boolean)
       : [];
     if (keywordList.length > 0) {
-      potentialConditions.push({
-        OR: keywordList.flatMap((k: string) => [
-          { name: { contains: k } },
-          { company: { contains: k } },
-          { location: { contains: k } }
-        ])
-      });
+      const keywordConditions = keywordList.flatMap((k: string) => 
+        buildSearchConditions(k, ["name", "company", "location"])
+      );
+      if (keywordConditions.length > 0) {
+        potentialConditions.push({
+          OR: keywordConditions.flatMap((cond: any) => cond.OR || cond)
+        });
+      }
     }
   }
 
@@ -170,11 +172,14 @@ async function executeFallback(runId: string, agentId: string, criteriaObj: any)
   }
 
   if (criteriaObj?.emirates && Array.isArray(criteriaObj.emirates) && criteriaObj.emirates.length > 0) {
-    potentialConditions.push({
-      OR: criteriaObj.emirates.map((emirate: string) => ({
-        location: { contains: emirate }
-      }))
-    });
+    const emirateConditions = criteriaObj.emirates.flatMap((emirate: string) => 
+      buildSearchConditions(emirate, ["location"])
+    );
+    if (emirateConditions.length > 0) {
+      potentialConditions.push({
+        OR: emirateConditions.flatMap((cond: any) => cond.OR || cond)
+      });
+    }
   }
 
   if (criteriaObj?.relocated === true) {

@@ -59,6 +59,9 @@ interface LeadTableProps {
     tierFilter: number | "";
     scrapeRunId?: string;
     refreshTrigger?: number;
+    scoreMin?: number;
+    excludeRental?: boolean;
+    recentlyRelocated?: boolean;
   };
 }
 
@@ -79,11 +82,14 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
   const fetchLeads = async (targetPage = page) => {
     try {
       setLoading(true);
-      const { searchTerm, statusFilter, tierFilter, scrapeRunId } = filters;
+      const { searchTerm, statusFilter, tierFilter, scrapeRunId, scoreMin, excludeRental, recentlyRelocated } = filters;
       let url = `/api/leads?search=${encodeURIComponent(searchTerm)}&page=${targetPage}&limit=${limit}`;
       if (statusFilter) url += `&status=${statusFilter}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (scrapeRunId) url += `&scrapeRunId=${scrapeRunId}`;
+      if (scoreMin !== undefined && scoreMin > 0) url += `&scoreMin=${scoreMin}`;
+      if (excludeRental) url += `&excludeRental=true`;
+      if (recentlyRelocated) url += `&recentlyRelocated=true`;
 
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch leads");

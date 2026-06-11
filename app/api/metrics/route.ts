@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getSecret } from "@/lib/secrets";
+import { buildSearchConditions } from "@/lib/search";
+import { getAreasInBounds } from "@/lib/areas";
+
 
 // Force dynamic rendering
 export const dynamic = "force-dynamic";
@@ -73,17 +76,8 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      conditions.push({
-        OR: [
-          { name: { contains: search } },
-          { nameAr: { contains: search } },
-          { company: { contains: search } },
-          { companyAr: { contains: search } },
-          { phone: { contains: search } },
-          { email: { contains: search } },
-          { location: { contains: search } },
-        ]
-      });
+      const searchFields = ["name", "nameAr", "company", "companyAr", "phone", "email", "location"];
+      conditions.push(...buildSearchConditions(search, searchFields));
     }
 
     if (status) {
@@ -127,10 +121,15 @@ export async function GET(request: Request) {
       }
     }
 
+    // Retrieve location text parameter as fallback
+    const locationParam = searchParams.get("location") || searchParams.get("locationText") || searchParams.get("city") || searchParams.get("area") || "";
+
     const northParam = searchParams.get("north");
     const southParam = searchParams.get("south");
     const eastParam = searchParams.get("east");
     const westParam = searchParams.get("west");
+
+    let hasGeofence = false;
 
     if (northParam && southParam && eastParam && westParam) {
       const north = parseFloat(northParam);
@@ -139,7 +138,10 @@ export async function GET(request: Request) {
       const west = parseFloat(westParam);
 
       if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
-        conditions.push({
+        hasGeofence = true;
+
+        const coordConditions: any[] = [];
+        coordConditions.push({
           latitude: {
             gte: south,
             lte: north,
@@ -147,21 +149,47 @@ export async function GET(request: Request) {
         });
 
         if (west <= east) {
-          conditions.push({
+          coordConditions.push({
             longitude: {
               gte: west,
               lte: east,
             }
           });
         } else {
-          conditions.push({
+          coordConditions.push({
             OR: [
               { longitude: { gte: west } },
               { longitude: { lte: east } }
             ]
           });
         }
+
+        // Add fallback to text matching for leads without precise coordinates
+        const geoOrConditions: any[] = [{ AND: coordConditions }];
+        const areasInBounds = getAreasInBounds(north, south, east, west);
+
+        if (areasInBounds.length > 0) {
+          const textMatches = areasInBounds.flatMap(areaName => [
+            { location: { contains: areaName } },
+            { locationAr: { contains: areaName } }
+          ]);
+          geoOrConditions.push({
+            AND: [
+              { OR: [{ latitude: null }, { longitude: null }] },
+              { OR: textMatches }
+            ]
+          });
+        }
+
+        conditions.push({ OR: geoOrConditions });
       }
+    }
+
+    // Fallback: If no geofence filter was applied but a location parameter was provided
+    if (!hasGeofence && locationParam) {
+      conditions.push({
+        OR: buildSearchConditions(locationParam, ["location", "locationAr"])
+      });
     }
 
     const leadWhere: any = conditions.length > 0 ? { AND: conditions } : {};
