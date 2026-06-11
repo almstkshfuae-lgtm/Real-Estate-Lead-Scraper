@@ -4,6 +4,7 @@ import { getScraperClient, getWebhookUrl } from "@/lib/scraper-client";
 import { put } from "@vercel/blob";
 
 import { getSessionWithDBVerify } from "@/lib/auth";
+import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
         status: "PENDING",
       }
     });
+    await notifyScrapeRunUpdate(scrapeRun.id);
 
     let totalLeadsFound = 0;
     const logs: any[] = [];
@@ -82,6 +84,7 @@ export async function GET(request: Request) {
           logUrl: logUrl,
         }
       });
+      await notifyScrapeRunUpdate(scrapeRun.id);
     } else {
       // If async scraper failed to trigger, complete it here
       await prisma.scrapeRun.update({
@@ -93,6 +96,7 @@ export async function GET(request: Request) {
           completedAt: new Date(),
         } as any
       });
+      await notifyScrapeRunUpdate(scrapeRun.id);
     }
 
     return NextResponse.json({ success: true, leadsFound: totalLeadsFound });

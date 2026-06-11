@@ -15,12 +15,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No lead IDs provided" }, { status: 400 });
     }
 
-    // Delete leads that belong to the current user (unless admin)
+    // Fetch only active leads that belong to the current user (unless admin)
+    // Exclude already-soft-deleted records to prevent redundant writes and audit noise
     const isNonAdmin = session.role?.toUpperCase() !== 'ADMIN';
 
     const leadsToDelete = await prisma.lead.findMany({
       where: {
         id: { in: ids },
+        deletedAt: null,
         ...(isNonAdmin && { agentId: session.id })
       },
       select: { id: true, name: true, company: true }
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
     const deleteResult = await prisma.lead.updateMany({
       where: {
         id: { in: ids },
+        deletedAt: null,
         ...(isNonAdmin && { agentId: session.id })
       },
       data: {

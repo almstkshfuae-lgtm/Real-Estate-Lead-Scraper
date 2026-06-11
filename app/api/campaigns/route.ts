@@ -13,7 +13,10 @@ export async function GET(request: NextRequest) {
     const groupBy = searchParams.get("groupBy") || "propertyType"; // 'propertyType' or 'tier'
 
     const leads = await prisma.lead.findMany({
-      where: session.role.toUpperCase() !== "ADMIN" ? { agentId: session.id } : {},
+      where: {
+        ...(session.role.toUpperCase() !== "ADMIN" ? { agentId: session.id } : {}),
+        deletedAt: null,
+      },
       select: {
         id: true,
         name: true,

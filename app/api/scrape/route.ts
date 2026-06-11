@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionWithDBVerify } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getScraperClient, getWebhookUrl } from "@/lib/scraper-client";
+import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
         status: "PENDING",
       }
     });
+    await notifyScrapeRunUpdate(scrapeRun.id);
 
     const scraperClient = await getScraperClient();
     const webhookUrl = getWebhookUrl(request.nextUrl.origin);
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest) {
         where: { id: scrapeRun.id },
         data: { status: "FAILED" }
       });
+      await notifyScrapeRunUpdate(scrapeRun.id);
 
       return NextResponse.json(
         { error: "Scraper service is unavailable or failed: " + triggerError.message },

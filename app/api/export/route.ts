@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const scrapeRunId = searchParams.get("scrapeRunId") || "";
     const format = (searchParams.get("format") || "xlsx").toLowerCase();
 
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (session.role?.toUpperCase() !== 'ADMIN') {
       where.agentId = session.id;
     }

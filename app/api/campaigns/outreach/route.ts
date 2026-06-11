@@ -68,10 +68,11 @@ export async function POST(req: NextRequest) {
       decryptedSmtpPass = decrypt(smtpPass);
     }
 
-    // 2. Query the target leads
+    // 2. Query the target leads — exclude soft-deleted records
     const leads = await prisma.lead.findMany({
       where: {
         id: { in: leadIds },
+        deletedAt: null,
       },
     });
 

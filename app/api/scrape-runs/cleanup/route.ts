@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
 const ZOMBIE_AGE_MINUTES = 10;
 
@@ -63,6 +64,9 @@ async function runCleanup(): Promise<NextResponse> {
         `[Cleanup] Marked ${result.count} zombie runs as FAILED:`,
         zombieIds
       );
+      for (const id of zombieIds) {
+        await notifyScrapeRunUpdate(id);
+      }
     }
 
     // ── GDPR Lead Retention Policy ───────────────────────────────────────────

@@ -25,6 +25,47 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+// Blacklist patterns for internal technical indicators/signals
+export const TECHNICAL_SIGNAL_BLACKLIST = [
+  /manual[-_ ]?import/i,
+  /scraper?/i,
+  /scraping/i,
+  /webhook/i,
+  /ingestion/i,
+  /source[-_ ]?config/i,
+  /raw[-_ ]?data/i,
+  /payload/i,
+  /dummy/i,
+  /mock/i,
+  /placeholder/i,
+  /internal/i,
+  /technical/i,
+  /metadata/i,
+  /system/i,
+  /cron/i,
+  /watchdog/i,
+  /run[-_ ]?id/i,
+  /task[-_ ]?type/i,
+  /api[-_ ]?endpoint/i,
+  /db[-_ ]?writer/i,
+  /test[-_ ]?lead/i,
+];
+
+/**
+ * Filters out internal/technical indicators from a list of signals.
+ */
+export function scrubSignals(signals: string[]): string[] {
+  return signals.filter(sig => {
+    const clean = sig.trim();
+    if (!clean) return false;
+    const isTechnical = TECHNICAL_SIGNAL_BLACKLIST.some(pattern => pattern.test(clean));
+    if (isTechnical) {
+      console.log(`[Signal Scrubbing] Scrubbed technical signal: "${clean}"`);
+    }
+    return !isTechnical;
+  });
+}
+
 /**
  * Safely parse the `signals` field from a Prisma Lead record.
  * Returns a clean `string[]` regardless of what Prisma returns.
@@ -34,27 +75,28 @@ export function parseSignals(raw: unknown): string[] {
     // Null / undefined → empty
     if (raw === null || raw === undefined) return [];
 
+    let parsed: string[] = [];
+
     // Already a proper array
     if (Array.isArray(raw)) {
-      return raw
+      parsed = raw
         .map((item) => (typeof item === "string" ? item.trim() : String(item)))
         .filter(Boolean);
     }
-
     // Plain string — could be:
     //   a) JSON array  e.g.  '["UHNW","Investor"]'
     //   b) CSV string  e.g.  "UHNW, Investor"
     //   c) Single tag  e.g.  "UHNW"
-    if (typeof raw === "string") {
+    else if (typeof raw === "string") {
       const trimmed = raw.trim();
       if (!trimmed) return [];
 
       if (trimmed.startsWith("[")) {
         // Try JSON parse first
         try {
-          const parsed = JSON.parse(trimmed);
-          if (Array.isArray(parsed)) {
-            return parsed
+          const jsonParsed = JSON.parse(trimmed);
+          if (Array.isArray(jsonParsed)) {
+            parsed = jsonParsed
               .map((s) => (typeof s === "string" ? s.trim() : String(s)))
               .filter(Boolean);
           }
@@ -63,22 +105,23 @@ export function parseSignals(raw: unknown): string[] {
         }
       }
 
-      // CSV / single value
-      return trimmed
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      if (parsed.length === 0) {
+        // CSV / single value
+        parsed = trimmed
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
     }
-
     // Object with string/numeric keys (e.g. { "0": "UHNW", "1": "Investor" })
-    if (typeof raw === "object") {
+    else if (typeof raw === "object") {
       const values = Object.values(raw as Record<string, unknown>);
-      return values
+      parsed = values
         .map((v) => (typeof v === "string" ? v.trim() : String(v)))
         .filter(Boolean);
     }
 
-    return [];
+    return scrubSignals(parsed);
   } catch {
     // Belt-and-suspenders — never crash the calling API
     return [];

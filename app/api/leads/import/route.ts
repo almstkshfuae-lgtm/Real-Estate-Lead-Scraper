@@ -334,12 +334,9 @@ export async function POST(request: Request) {
           }
         }
 
-        let finalSignals: string[] = ["Manual Import"];
+        let finalSignals: string[] = [];
         if (row.signals) {
-          const parsed = parseSignals(row.signals);
-          if (parsed.length > 0) {
-            finalSignals = parsed;
-          }
+          finalSignals = parseSignals(row.signals);
         }
 
         let finalPersona: string | null = null;

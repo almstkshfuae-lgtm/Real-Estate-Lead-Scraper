@@ -42,7 +42,7 @@ export const viewport = {
 };
 
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 
 export default async function RootLayout({
   children,
@@ -53,12 +53,9 @@ export default async function RootLayout({
   let lang = cookieStore.get('i18next')?.value;
 
   if (!lang) {
-    const token = cookieStore.get('auth_token')?.value;
-    if (token) {
-      const payload = await verifyToken(token);
-      if (payload && payload.language) {
-        lang = payload.language;
-      }
+    const session = await getSession();
+    if (session && session.language) {
+      lang = session.language;
     }
   }
 

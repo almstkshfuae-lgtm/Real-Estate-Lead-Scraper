@@ -11,8 +11,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Performance optimization: select only columns required for statistical validation
+    // Exclude soft-deleted leads to prevent ghost data from skewing statistical metrics
     const leads = await prisma.lead.findMany({
       where: {
+        deletedAt: null,
         status: {
           in: ["won", "lost"]
         }

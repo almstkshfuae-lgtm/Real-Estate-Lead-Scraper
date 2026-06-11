@@ -165,8 +165,14 @@ export function useScrapeRunStatus(
       };
 
       es.onerror = (err) => {
-        console.warn("[useScrapeRunStatus] SSE stream error. Falling back to HTTP polling.", err);
-        startPollingFallback();
+        setState((prev) => {
+          if (prev.status === "COMPLETED" || prev.status === "FAILED") {
+            return prev;
+          }
+          console.warn("[useScrapeRunStatus] SSE stream error. Falling back to HTTP polling.", err);
+          setTimeout(() => startPollingFallback(), 0);
+          return prev;
+        });
       };
     } else {
       console.warn("[useScrapeRunStatus] EventSource is not supported. Falling back to HTTP polling.");

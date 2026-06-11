@@ -7,7 +7,7 @@ import {
   isLikelyTruncated,
   extractTextFromAIResponse,
 } from "./ai-utils";
-import { cleanPersonaPreamble } from "./signals";
+import { cleanPersonaPreamble, scrubSignals } from "./signals";
 
 // Re-export shared utilities for backward compatibility
 export { withRetry, safeParseJson, isLikelyTruncated, extractTextFromAIResponse, BudgetExceededError };
@@ -386,8 +386,10 @@ export function deduplicateSignals(signals: any[]): string[] {
   const unique: string[] = [];
   const seen = new Set<string>();
 
-  for (const sig of signals) {
-    if (!sig || typeof sig !== 'string') continue;
+  const mappedSignals = signals.map(s => typeof s === 'string' ? s : String(s));
+  const scrubbed = scrubSignals(mappedSignals);
+
+  for (const sig of scrubbed) {
     const cleanSig = sig.trim();
     if (!cleanSig) continue;
     const lower = cleanSig.toLowerCase();

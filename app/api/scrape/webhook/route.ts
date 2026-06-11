@@ -29,6 +29,7 @@ import { cleanPhone, cleanEmail } from "@/lib/sanitizer";
 import { mlAdjustScore } from "@/lib/ml/lead-model";
 import { sendEmail } from "@/lib/mail";
 import { parsePreferences } from "@/lib/auth";
+import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
 // Schema for individual lead validation
 const leadSchema = z.object({
@@ -341,6 +342,7 @@ export async function POST(request: NextRequest) {
           status: "PROCESSING"
         }
       });
+      await notifyScrapeRunUpdate(runId);
       return NextResponse.json({ success: true, message: "Scrape run marked as processing" });
     }
 
@@ -380,6 +382,7 @@ export async function POST(request: NextRequest) {
           completedAt: new Date()
         }
       });
+      await notifyScrapeRunUpdate(runId);
 
       const tierOneCount = await prisma.lead.count({
         where: {
@@ -426,6 +429,7 @@ export async function POST(request: NextRequest) {
           completedAt: new Date()
         }
       });
+      await notifyScrapeRunUpdate(runId);
 
       const tierOneCount = await prisma.lead.count({
         where: {
@@ -588,6 +592,7 @@ export async function POST(request: NextRequest) {
           }
         }
       });
+      await notifyScrapeRunUpdate(runId);
 
       return NextResponse.json({
         success: true,
@@ -653,16 +658,21 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < cleanLeadsPayload.length; i += BATCH_SIZE) {
       const batch = cleanLeadsPayload.slice(i, i + BATCH_SIZE);
 
-      // Bulk fetch existing leads for this batch to prevent O(N) DB query storms
-      // unique constraint check: name, company, source, agentId
+      // ── Index-aligned batch dedup lookup ───────────────────────────────────
+      // The composite index on (agentId, name, company) requires:
+      //   1. agentId equality first  → narrows to one agent's row space
+      //   2. name IN [...]           → B-tree range scan within that space
+      //   3. company IN [...]        → further narrows; MySQL applies as filter
+      // This avoids the full-table scan caused by OR-array on mixed text columns.
+      // Source-level disambiguation is done in-memory after the DB round-trip.
+      const batchNames = [...new Set(batch.map((lead: any) => lead.name as string))];
+      const batchCompanies = [...new Set(batch.map((lead: any) => (lead.company || "Not Specified") as string))];
+
       const existingLeads = await prisma.lead.findMany({
         where: {
           agentId: agentId,
-          OR: batch.map((lead: any) => ({
-            name: lead.name,
-            company: lead.company || "Not Specified",
-            source: lead.source || "HNWI Sources"
-          }))
+          name: { in: batchNames },
+          company: { in: batchCompanies },
         }
       });
 
@@ -846,6 +856,7 @@ export async function POST(request: NextRequest) {
         }
       }
     });
+    await notifyScrapeRunUpdate(runId);
 
     return NextResponse.json({
       success: true,

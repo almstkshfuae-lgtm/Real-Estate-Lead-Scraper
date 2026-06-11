@@ -44,6 +44,7 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
 ### 1. Security & Network Session Boundary (`proxy.ts`)
 - **Purpose**: Unified route guard and request interceptor.
 - **Session Extraction**: Extract session tokens from incoming cookies (`auth_token`) and fall back to HTTP headers (`Authorization: Bearer <token>`).
+- **Unified Session Verification**: All protected API endpoints and Server Components consume a unified session retrieval interface via `getSession()` from `lib/auth.ts`, ensuring that all APIs retrieve user credentials identically and avoiding authorization bypasses or mismatch issues.
 - **Enforcement Rules**: 
   - Restricts public access strictly to `/`, `/login`, `/api/auth/login`, and `/install` along with static assets.
   - Protects all other paths, including `/api/auth/me`, `/api/leads`, and `/api/leads/cluster`.
@@ -168,6 +169,7 @@ To resolve identified security vulnerabilities, legal risks, and data leakage ve
 ### 3. API & Webhook Hardening
 - **Cron Authorization**: The weekly digest notification cron route (`/api/cron/notifications/weekly-digest`) is secured using a Bearer token verification check against `process.env.CRON_SECRET`.
 - **Zod Schema Sanitization**: Input validation schemas defined in Zod are applied in hot paths (`/api/leads/[id]` and `/api/leads/import`), cleaning up formatting anomalies in emails/phones, rejecting malformed structures, and preventing SQL injection vectors before database persistence.
+- **Signal Scrubbing Filter**: Ingestion pipelines (webhooks and CSV imports) execute automated backend signal scrubbing via `deduplicateSignals` and `parseSignals` using regular expression matching against a technical signal blacklist (e.g. `Manual Import`, `scraper`, `webhook`). This prevents internal technical metadata and system-generated labels from leaking into the `signals` JSON array of the `Lead` model.
 
 ### 4. Service Worker Cache Isolation
 - **Client-Side Data Prevention**: To prevent data storage leakage of personal identifiable information (PII) on shared browsers/mobile devices, the Service Worker cache (`sw.js`) explicitly bypasses caching for all sensitive application shell paths (`/leads`, `/map`, `/search`, `/campaigns`, `/settings`).
@@ -175,6 +177,17 @@ To resolve identified security vulnerabilities, legal risks, and data leakage ve
 ### 5. Soft Delete & GDPR Retention Policy
 - **Soft Deletion & Merging**: Lead deletions execute via soft deletes (`deletedAt` timestamp). Webhook re-ingestions of soft-deleted leads restore and merge details seamlessly while creating structured audit entries.
 - **Data Pruning**: An automated retention cleanup policy runs hard deletions on expired lead records older than 90 days, complying with global and regional data protection regulations (e.g. UAE PDPL).
+
+---
+
+## 📡 Real-Time Progress Tracking via Event-Driven SSE
+
+To resolve the "Query Storm" database connection stress issue under concurrent user activity, LeadPulse has migrated from database polling to a real-time event-driven Server-Sent Events (SSE) tracking system:
+
+1. **Global In-Memory Event Broker**: A centralized event emitter singleton [scrape-events.ts](file:///c:/projects/Real-Estate-Lead-Scraper/lib/scrape-events.ts) propagates scrape run updates.
+2. **Prisma Mutation Triggers**: Anytime a scrape run is created, updated, or when batch lead increments occur, the application triggers `notifyScrapeRunUpdate()`. This reads the latest run details and emits an event in-memory.
+3. **SSE Connection Subscriptions**: The SSE handler [route.ts](file:///c:/projects/Real-Estate-Lead-Scraper/app/api/scrape-runs/%5Bid%5D/sse/route.ts) subscribes to `run:{id}` events. Instead of executing periodic database queries inside a loop, it yields the Node.js event loop and waits for events, which are pushed to the client instantly.
+4. **Resilient Frontend Failbacks**: The `useScrapeRunStatus` React hook connects to the SSE route and safely falls back to standard HTTP polling only if the stream encounters a connection error *before* reaching a terminal state. If the stream closes normally after the run completes or fails, the hook terminates tracking immediately without entering a polling loop.
 
 ---
 

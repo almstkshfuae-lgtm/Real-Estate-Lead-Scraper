@@ -71,6 +71,7 @@ model Lead {
   @@index([score])
   @@index([location])
   @@index([deletedAt])
+  @@index([agentId, name, company], map: "leads_agentId_name_company_idx")
   @@map("leads")
 }
 

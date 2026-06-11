@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
-import { cookies } from "next/headers";
+import { getSession } from "@/lib/auth";
+import { safeParseJson } from "@/lib/safe-fetch";
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    const session = token ? await verifyToken(token) : null;
+    const session = await getSession();
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,9 +30,7 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    const session = token ? await verifyToken(token) : null;
+    const session = await getSession();
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,9 +44,7 @@ export async function GET() {
 
     const parsedSearches = searches.map((search) => ({
       ...search,
-      criteria: typeof search.criteria === 'string'
-        ? JSON.parse(search.criteria)
-        : search.criteria,
+      criteria: safeParseJson(search.criteria, {}, 'search.criteria'),
     }));
 
     return NextResponse.json(parsedSearches);
@@ -62,9 +56,7 @@ export async function GET() {
 
 export async function DELETE(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token")?.value;
-    const session = token ? await verifyToken(token) : null;
+    const session = await getSession();
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

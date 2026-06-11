@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,7 @@ export async function GET(
             completedAt: new Date()
           }
         });
+        await notifyScrapeRunUpdate(id);
         finalStatus = "FAILED";
         finalCompletedAt = updated.completedAt;
       } catch (dbErr) {

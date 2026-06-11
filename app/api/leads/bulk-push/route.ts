@@ -39,11 +39,12 @@ export async function POST(request: Request) {
       }, { status: 401 });
     }
 
-    // 2. Get the leads
+    // 2. Get the leads — exclude soft-deleted to prevent ghost CRM pushes
     const leads = await prisma.lead.findMany({
       where: {
         id: { in: ids },
-        agentId: session.id // Ensure agents only push their own leads
+        agentId: session.id, // Ensure agents only push their own leads
+        deletedAt: null,
       }
     });
 
