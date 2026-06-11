@@ -16,6 +16,8 @@
 - [x] Mobile navigation drawer (Responsive EN/AR)
 - [x] **Hardened**: JWT-based secure session management.
 - [x] **Hardened**: RBAC implemented (relaxed to allow agents for scrapes).
+- [x] **Hardened**: Unified session verification across all API routes & layouts (Auth Verification Redundancy)
+
 
 ## Phase 2: High-Value Lead Discovery 🔍
 - [x] Global UAE Real Estate Search Interface
@@ -241,11 +243,7 @@
 - [x] **Hardened**: Translation caching optimization & DB synchronization for SSR parity.
 - [x] **Database Hardening & GDPR Retention Policy** — Added performance indexes (including soft-delete index on `deletedAt`), soft deletes, mutation audit logs, safe webhook restoration/P2002 handling, CSV import duplicate safety, and automated GDPR retention pruning.
 - [x] **Hardened: Performance & Scalability Gaps** — Capped scraper DB pool size (`connection_limit=3`) and shared single client; parallelized ScrapeQueueManager (`MAX_CONCURRENT_SCRAPES=2`); added browser close watchdog watchdogs; replaced TensorFlow.js with Gradient Descent JS ML model (saving 30MB+ package bloat); optimized lead imports and webhooks with bulk query batching (reducing query overhead by 90%); resolved watchdog state desynchronization by removing redundant Next.js passive checks.
-
-
-
-
-
+- [🔄] **Query Optimization inside Batches** — Add composite index on `[name, company, agentId]` to prevent full table scans in webhook. <!-- id: 12.11 -->
 
 ## Legend
 
