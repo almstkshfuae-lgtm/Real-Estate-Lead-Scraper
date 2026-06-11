@@ -88,29 +88,45 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
       });
       setIsEditing(false);
 
-      if (lead.persona) {
-        setDynamicPersona(lead.persona);
-      } else {
-        setPersonaLoading(true);
-        fetch(`/api/leads/${lead.id}/persona?lang=${lang}`)
-          .then((res) => {
-            if (!res.ok) throw new Error();
-            return res.json();
-          })
-          .then((data) => {
-            if (active && data && data.persona) {
-              setDynamicPersona(data.persona);
-            }
-          })
-          .catch((err) => {
-            console.error("Failed to load persona:", err);
-          })
-          .finally(() => {
-            if (active) {
-              setPersonaLoading(false);
-            }
-          });
-      }
+      // Load cached/stored persona
+      setPersonaLoading(true);
+      fetch(`/api/leads/${lead.id}/persona?lang=${lang}`)
+        .then((res) => {
+          if (!res.ok) throw new Error();
+          return res.json();
+        })
+        .then((data) => {
+          if (active && data && data.persona) {
+            setDynamicPersona(data.persona);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load persona:", err);
+        })
+        .finally(() => {
+          if (active) {
+            setPersonaLoading(false);
+          }
+        });
+
+      // Load cached signals
+      fetch("/api/ai/signals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id, generate: false, lang })
+      })
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then((data) => {
+        if (active && data && data.summary) {
+          setSignals(data);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load cached signals:", err);
+      });
     }
     return () => {
       active = false;
@@ -223,7 +239,7 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
       const res = await fetch("/api/ai/signals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lead, lang }),
+        body: JSON.stringify({ leadId: lead.id, generate: true, lang }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -233,6 +249,25 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
       toast.error(t("ai.signalsError", "Failed to extract signals"));
     } finally {
       setSignalsLoading(false);
+    }
+  };
+
+  const generatePersona = async () => {
+    setPersonaLoading(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/persona?lang=${lang}&generate=true`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data && data.persona) {
+        setDynamicPersona(data.persona);
+        toast.success(t("ai.personaGenerated", "Persona profile generated successfully"));
+      } else {
+        throw new Error("Empty response");
+      }
+    } catch (err: any) {
+      toast.error(t("ai.personaError", "Failed to generate persona"));
+    } finally {
+      setPersonaLoading(false);
     }
   };
 
@@ -538,8 +573,23 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             {t("ai.generating", "Generating...")}
                           </span>
+                        ) : dynamicPersona ? (
+                          <span>{dynamicPersona}</span>
                         ) : (
-                          <span>{dynamicPersona || t("leads.sidebar.recentActivityText", { company: lead.company })}</span>
+                          <div className="mt-1 flex flex-col gap-2">
+                            <span className="text-amber-700 dark:text-amber-400 italic">
+                              {t("ai.noPersona", "No investor persona profile has been generated yet for this lead.")}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={generatePersona}
+                              disabled={personaLoading}
+                              className="text-xs font-bold text-amber-900 dark:text-amber-200 hover:underline self-start flex items-center gap-1 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 px-2.5 py-1 rounded-md transition-all disabled:opacity-60"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              {t("ai.generatePersonaBtn", "Generate Persona Profile")}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -555,7 +605,37 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
           <div className="space-y-5 text-start">
 
             {/* Persona Analysis Section */}
-            {lead.persona && (
+            {(dynamicPersona || personaLoading) ? (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-[var(--color-text-primary)]">{t("ai.personaAnalysis", "Persona Analysis")}</h4>
+                    <p className="text-xs text-[var(--color-text-secondary)]">{t("ai.personaDesc", "Comprehensive AI profile analysis")}</p>
+                  </div>
+                  {dynamicPersona && (
+                    <button
+                      onClick={generatePersona}
+                      disabled={personaLoading}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-all disabled:opacity-60"
+                    >
+                      {personaLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      {t("common.regenerate", "Regenerate")}
+                    </button>
+                  )}
+                </div>
+                {personaLoading ? (
+                  <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm flex items-center justify-center gap-2 py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-[var(--color-primary)]" />
+                    <span className="text-[var(--color-text-secondary)]">{t("ai.generating", "Generating...")}</span>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-900/20 text-sm text-[var(--color-text-primary)] whitespace-pre-wrap leading-relaxed">
+                    {dynamicPersona}
+                  </div>
+                )}
+                <div className="border-t border-[var(--color-border)] mt-5" />
+              </div>
+            ) : (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -563,8 +643,22 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
                     <p className="text-xs text-[var(--color-text-secondary)]">{t("ai.personaDesc", "Comprehensive AI profile analysis")}</p>
                   </div>
                 </div>
-                <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/30 bg-blue-50 dark:bg-blue-900/20 text-sm text-[var(--color-text-primary)] whitespace-pre-wrap leading-relaxed">
-                  {lead.persona}
+                <div className="p-6 rounded-xl border-2 border-dashed border-[var(--color-border)] flex flex-col items-center justify-center text-center space-y-3">
+                  <Brain className="w-8 h-8 text-[var(--color-text-disabled)]" />
+                  <div>
+                    <p className="text-sm font-bold text-[var(--color-text-primary)]">{t("ai.noPersonaTitle", "No Persona Profile Yet")}</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] max-w-xs mt-1">
+                      {t("ai.noPersonaDesc", "Analyze the lead's company and background to construct their investor persona.")}
+                    </p>
+                  </div>
+                  <button
+                    onClick={generatePersona}
+                    disabled={personaLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-60"
+                  >
+                    {personaLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {t("ai.generatePersonaBtn", "Generate Persona Profile")}
+                  </button>
                 </div>
                 <div className="border-t border-[var(--color-border)] mt-5" />
               </div>
@@ -727,20 +821,29 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
                   {t("ai.scanBtn", "Scan")}
                 </button>
               </div>
-              {signals && (
-                <div className="p-4 rounded-xl border border-violet-200 bg-violet-50 space-y-3">
+              {signals ? (
+                <div className="p-4 rounded-xl border border-violet-200 dark:border-violet-900/30 bg-violet-50 dark:bg-violet-900/20 space-y-3">
                   <div className="flex flex-wrap gap-1.5">
                     {signals.extractedSignals.map((s, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-[10px] font-bold">{s}</span>
+                      <span key={i} className="px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-300 text-[10px] font-bold">{s}</span>
                     ))}
                   </div>
-                  <p className="text-xs text-violet-900 leading-relaxed">{signals.summary}</p>
+                  <p className="text-xs text-violet-950 dark:text-violet-200 leading-relaxed">{signals.summary}</p>
                   <p className="text-[10px] text-violet-500">{t("ai.confidence", "Confidence")}: {signals.confidenceScore}%</p>
-                  <div className="space-y-1 pt-1 border-t border-violet-200">
-                    {signals.newsSnippets.map((s, i) => (
-                      <p key={i} className="text-[10px] text-violet-700 leading-relaxed">• {s}</p>
-                    ))}
-                  </div>
+                  {signals.newsSnippets?.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-violet-200 dark:border-violet-900/30">
+                      {signals.newsSnippets.map((s, i) => (
+                        <p key={i} className="text-[10px] text-violet-700 dark:text-violet-300 leading-relaxed">• {s}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-6 rounded-xl border-2 border-dashed border-[var(--color-border)] flex flex-col items-center justify-center text-center space-y-2 bg-[var(--color-bg-surface)]/20">
+                  <TrendingUp className="w-6 h-6 text-[var(--color-text-disabled)]" />
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {t("ai.noSignalsDesc", "No intelligence signals scanned yet. Click Scan to search for relevant news and indicators.")}
+                  </p>
                 </div>
               )}
             </div>

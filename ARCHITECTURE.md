@@ -74,7 +74,7 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
 - **Technology**: Google Gemini Developer API.
 - **Raw Text Cleaning**: The `cleanScrapedText` utility strips scripts, stylesheets, boilerplate footers, terms of use, and collapses spaces. It truncates text to 15,000 characters to optimize context windows and prevent attention drift.
 - **Lead Extraction**: Gemini parses cleaned text using a single-roundtrip prompt, translating name, company, and role fields to both English and Arabic.
-- **Behavioral Profiling**: Automatically generates a 2-3 sentence `persona` behavioral analysis paragraph.
+- **Behavioral Profiling & Signals Extraction**: Generated strictly on-demand. Initial ingestion (scrapers and CSV imports) saves leads with `persona: null` and simple tags, avoiding expensive LLM calls. The user triggers full persona profiling and news signal extraction on-demand from the Lead Sidebar UI, which calls Gemini, applies automated boilerplate/preamble cleaning, and caches the results back to the database.
 - **JSON Parsing Resilience**: `safeParseJson` scrubs ASCII control characters (`\x00-\x1F`) and repairs trailing commas or smart curly quotes before executing JSON parsing.
 
 ### 4. Interactive AI Chat & SSE Abort Propagation (`app/api/ai/chat/route.ts`)

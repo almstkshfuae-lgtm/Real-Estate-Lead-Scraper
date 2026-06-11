@@ -93,3 +93,42 @@ export function signalsToString(raw: unknown): string {
   const signals = parseSignals(raw);
   return signals.length > 0 ? signals.join(", ") : "None";
 }
+
+/**
+ * Strips common repetitive preambles or boilerplate intros from LLM-generated personas.
+ */
+export function cleanPersonaPreamble(text: string | null | undefined): string | null {
+  if (!text) return null;
+  let cleaned = text.trim();
+
+  // Remove common Arabic preambles
+  const arabicPreambles = [
+    /^بناءً على تحليل البيانات المتاحة،\s*/,
+    /^بناءً على البيانات المتاحة،\s*/,
+    /^بناءً على تحليل البيانات،\s*/,
+    /^وفقًا للبيانات المتاحة،\s*/,
+    /^تشير البيانات المتاحة إلى أن\s*/
+  ];
+
+  // Remove common English preambles
+  const englishPreambles = [
+    /^Based on the analysis of the available data,\s*/i,
+    /^Based on the available data,\s*/i,
+    /^Based on the analysis of available data,\s*/i,
+    /^Based on the lead's profile,\s*/i,
+    /^Based on the lead data,\s*/i,
+    /^According to the available data,\s*/i,
+    /^Based on the provided information,\s*/i
+  ];
+
+  for (const regex of [...arabicPreambles, ...englishPreambles]) {
+    cleaned = cleaned.replace(regex, "");
+  }
+
+  // Capitalize first letter if English
+  if (cleaned && /^[a-zA-Z]/.test(cleaned)) {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  return cleaned.trim() || null;
+}

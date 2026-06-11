@@ -5,6 +5,7 @@ import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications
 import { normalizeLocation, resolveCoords } from "@/lib/ai";
 import { cleanPhone, cleanEmail } from "@/lib/sanitizer";
 import { z } from "zod";
+import { cleanPersonaPreamble, parseSignals } from "@/lib/signals";
 
 const leadImportSchema = z.object({
   name: z.string().trim().optional(),
@@ -13,6 +14,8 @@ const leadImportSchema = z.object({
   company: z.string().trim().optional(),
   role: z.string().trim().optional(),
   location: z.string().trim().optional(),
+  persona: z.string().trim().optional(),
+  signals: z.any().optional(),
 });
 
 // ─── Flexible Column name mapping ─────────────────────────────────────────────
@@ -20,6 +23,13 @@ const leadImportSchema = z.object({
 function getCanonicalHeader(header: string): string | null {
   if (!header) return null;
   const normalized = header.toLowerCase().replace(/[\s\-_]/g, "");
+
+  if (normalized.includes("persona") || normalized.includes("buyerpersona") || normalized.includes("تحليل") || normalized.includes("شخصية")) {
+    return "persona";
+  }
+  if (normalized.includes("signals") || normalized.includes("tags") || normalized.includes("علامات") || normalized.includes("إشارات")) {
+    return "signals";
+  }
 
   // 0. Social media / link check (to prevent matching standard columns and ensure routing to metadata)
   const lowerHeader = header.toLowerCase().trim();
@@ -316,12 +326,25 @@ export async function POST(request: Request) {
         const coords = resolveCoords(location);
 
         // Extract extra/metadata fields
-        const standardKeys = ["name", "email", "phone", "company", "role", "location"];
+        const standardKeys = ["name", "email", "phone", "company", "role", "location", "persona", "signals"];
         const metadata: Record<string, any> = {};
         for (const [key, val] of Object.entries(row)) {
           if (!standardKeys.includes(key)) {
             metadata[key] = val;
           }
+        }
+
+        let finalSignals: string[] = ["Manual Import"];
+        if (row.signals) {
+          const parsed = parseSignals(row.signals);
+          if (parsed.length > 0) {
+            finalSignals = parsed;
+          }
+        }
+
+        let finalPersona: string | null = null;
+        if (row.persona) {
+          finalPersona = cleanPersonaPreamble(row.persona);
         }
 
         // ── 3. Minimum viability check ──────────────────────────────────────
@@ -360,6 +383,8 @@ export async function POST(request: Request) {
                 location,
                 latitude: coords.lat,
                 longitude: coords.lng,
+                ...(finalPersona && { persona: finalPersona }),
+                ...(row.signals && { signals: finalSignals }),
                 metadata: Object.keys(metadata).length > 0 ? {
                   ...(existingByUnique.metadata as Record<string, any> || {}),
                   ...metadata
@@ -462,7 +487,8 @@ export async function POST(request: Request) {
               latitude: coords.lat,
               longitude: coords.lng,
               score: computedScore,
-              signals: ["Manual Import"],
+              signals: finalSignals,
+              persona: finalPersona,
               propertyPref: { type: "apartment" },
               status: "new",
               agentId: session.id,
@@ -509,6 +535,8 @@ export async function POST(request: Request) {
                   location,
                   latitude: coords.lat,
                   longitude: coords.lng,
+                  ...(finalPersona && { persona: finalPersona }),
+                  ...(row.signals && { signals: finalSignals }),
                   metadata: Object.keys(metadata).length > 0 ? {
                     ...(collidingLead.metadata as Record<string, any> || {}),
                     ...metadata

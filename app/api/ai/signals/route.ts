@@ -3,6 +3,7 @@ import { generateGeminiText, deduplicateSignals } from "@/lib/ai";
 import { signalsToString } from "@/lib/signals";
 import { parseAIJson, AIJsonParseError } from "@/lib/ai-json";
 import { getSession } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 // Predefined news signals for UAE high-profile individuals (simulated)
 const UAE_SIGNALS_DB = [
@@ -26,10 +27,50 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { lead, lang = "en" } = body;
+    const { lead: bodyLead, leadId, lang = "en", generate = false } = body;
+
+    const targetLeadId = leadId || bodyLead?.id;
+
+    if (!targetLeadId) {
+      return NextResponse.json({ error: "Lead ID or lead data is required" }, { status: 400 });
+    }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id: String(targetLeadId) }
+    });
 
     if (!lead) {
-      return NextResponse.json({ error: "Lead data is required" }, { status: 400 });
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+
+    // Agents can only access their own leads
+    if (session.role?.toUpperCase() !== 'ADMIN' && lead.agentId !== session.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Check cached signals
+    const cachedSignals = (lead.metadata as any)?.aiSignals;
+    if (!generate && cachedSignals) {
+      return NextResponse.json({
+        leadId: lead.id,
+        extractedSignals: cachedSignals.extractedSignals || [],
+        summary: cachedSignals.summary || "",
+        confidenceScore: cachedSignals.confidenceScore || 75,
+        newsSnippets: cachedSignals.newsSnippets || [],
+        timestamp: cachedSignals.timestamp || new Date().toISOString(),
+        isCached: true
+      });
+    }
+
+    if (!generate) {
+      return NextResponse.json({
+        leadId: lead.id,
+        extractedSignals: [],
+        summary: null,
+        confidenceScore: null,
+        newsSnippets: [],
+        isCached: false
+      });
     }
 
     // Simulate news retrieval (in production this would query news APIs)
@@ -46,6 +87,9 @@ ${newsContext}
 
 Extract 2-4 concise investment signal tags (max 4 words each) that indicate purchase intent or wealth indicators.
 Also provide a brief intelligence summary (2 sentences max).
+
+CRITICAL PREAMBLE RULE:
+Do NOT use generic, repetitive introductory templates or boilerplate prefixes (such as "Based on the news...", "بناءً على الأخبار...", "According to the...", etc.). Jump directly into the specific motivational, behavioral, and profile characteristics. Ensure each response is highly customized and specific.
 
 ${lang === "ar" ? "أجب باللغة العربية للملخص، لكن الوسوم يجب أن تكون بالإنجليزية." : ""}
 
@@ -70,13 +114,52 @@ Respond ONLY with valid JSON: {"signals": ["signal1", "signal2"], "summary": "<i
       throw err;
     }
 
-    return NextResponse.json({
-      leadId: lead.id,
-      extractedSignals: deduplicateSignals(parsed.signals || []),
+    const cleanSignals = deduplicateSignals(parsed.signals || []);
+    const newsSnippets = relevantSignals;
+    const aiSignalsCache = {
+      extractedSignals: cleanSignals,
       summary: parsed.summary || "",
       confidenceScore: parsed.confidenceScore || 75,
-      newsSnippets: relevantSignals,
-      timestamp: new Date().toISOString(),
+      newsSnippets,
+      timestamp: new Date().toISOString()
+    };
+
+    // Update lead record with new signals and cached metadata
+    const existingMetadata = (lead.metadata as Record<string, any>) || {};
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        signals: cleanSignals,
+        metadata: {
+          ...existingMetadata,
+          aiSignals: aiSignalsCache
+        }
+      }
+    });
+
+    // Create Audit Log
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: "UPDATE",
+          entityType: "Lead",
+          entityId: lead.id,
+          agentId: session.id,
+          details: `Extracted and saved AI signals: ${cleanSignals.join(", ")}`
+        }
+      });
+    } catch (auditErr) {
+      console.error("[AI Signals] Failed to create audit log:", auditErr);
+    }
+
+    return NextResponse.json({
+      leadId: lead.id,
+      extractedSignals: cleanSignals,
+      summary: parsed.summary || "",
+      confidenceScore: parsed.confidenceScore || 75,
+      newsSnippets,
+      timestamp: aiSignalsCache.timestamp,
+      isCached: false
     });
   } catch (error: any) {
     console.error("[AI Signals Error]", error?.message || error);

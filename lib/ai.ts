@@ -6,11 +6,8 @@ import {
   safeParseJson,
   isLikelyTruncated,
   extractTextFromAIResponse,
-  extractTokenUsage,
-  estimateCost,
-  getMaxOutputTokens,
-  TASK_TOKEN_DEFAULTS,
 } from "./ai-utils";
+import { cleanPersonaPreamble } from "./signals";
 
 // Re-export shared utilities for backward compatibility
 export { withRetry, safeParseJson, isLikelyTruncated, extractTextFromAIResponse, BudgetExceededError };
@@ -649,8 +646,8 @@ REQUIRED FIELDS FOR EACH LEAD:
 - relocated (Boolean or null) - Mention of relocation or incoming move
 - source (String) - "${scrapedData.name}"
 - sourceType (String) - "${scrapedData.type}"
-- signals (Array) - Business context clues
-- persona (String) - REQUIRED: Full behavioral and investor profile analysis paragraph in the active language (English or Arabic). Limit to 2-3 sentences describing motivation, risk profile, and lifestyle/property alignment.
+- signals (Array of 1-3 simple keyword tags like ["Founder", "Real Estate"], do NOT include narrative text or summaries)
+- Do NOT generate a "persona" field at this stage. Keep persona as null.
 
 SCORING GUIDELINES (0-100) - EVALUATE TO ENSURE DIVERSE, CONTINUOUS SCORES:
 Assign a specific, highly varied investment score based on this precise scale:
@@ -762,7 +759,8 @@ Output ONLY the JSON array. No other text.`,
       )
       .map((lead: any) => ({
         ...lead,
-        signals: deduplicateSignals(lead.signals)
+        signals: deduplicateSignals(lead.signals),
+        persona: null
       }))
     : [];
 }
@@ -919,13 +917,13 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
     - longitude (Number or null) - Approximate longitude coordinate of the location if international or specific, otherwise null
     - tier (1, 2, or 3)
     - score (0-100)
-    - signals (Array of strings)
+    - signals (Array of 1-3 simple keyword tags like ["Founder", "Real Estate"], do NOT include narrative text or summaries)
     - email (String or null)
     - phone (String or null)
     - budgetMin (Number or null)
     - budgetMax (Number or null)
     - relocated (Boolean or null)
-    - persona (String) - REQUIRED: Full behavioral and investor profile analysis paragraph in the active language (English or Arabic). Limit to 2-3 sentences describing motivation, risk profile, and lifestyle/property alignment.
+    - Do NOT generate a "persona" field at this stage. Keep persona as null.
 
     SCORING GUIDELINES (0-100) - EVALUATE TO ENSURE DIVERSE, CONTINUOUS SCORES:
     Assign a specific, highly varied investment score based on this precise scale:
@@ -968,7 +966,8 @@ export async function extractLeadsFromText(text: string, criteria?: any) {
       )
       .map((lead: any) => ({
         ...lead,
-        signals: deduplicateSignals(lead.signals)
+        signals: deduplicateSignals(lead.signals),
+        persona: null
       }))
     : [];
 }
@@ -1075,6 +1074,9 @@ export async function generatePersonaAnalysis(lead: any, lang = "en", agentId?: 
 Analyze the following lead data and create a buyer persona.
 CRITICAL: The lead's "location" field refers to their targeted investment area in the UAE, NOT their current residential location. They are a high-profile global/international investor who may be based anywhere in the world (e.g., Canada, Europe, etc.). Do NOT assume or write that they currently reside in the UAE or the target area unless explicitly confirmed by notes. Frame the persona around an international investor expanding their portfolio in the UAE.
 
+CRITICAL PREAMBLE RULE:
+Do NOT use generic, repetitive introductory templates or boilerplate prefixes (such as "Based on the available data...", "بناءً على تحليل البيانات المتاحة...", "Based on the lead's profile...", "The lead is a...", etc.). Jump directly into the specific motivational, behavioral, and profile characteristics. Ensure each response is highly customized and specific.
+
 Focus on:
 1. Investment Motivation (Why they buy in the UAE from abroad)
 2. Risk Profile (Conservative vs Aggressive)
@@ -1110,7 +1112,7 @@ Do not use placeholders. Use the data provided.`,
     return "AI Analysis Unavailable";
   }
 
-  return content;
+  return cleanPersonaPreamble(content) || "AI Analysis Unavailable";
 }
 
 /**

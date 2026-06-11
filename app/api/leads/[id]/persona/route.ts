@@ -30,6 +30,12 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const generate = searchParams.get("generate") === "true";
+
+    if (!generate) {
+      return NextResponse.json({ persona: lead.persona || null });
+    }
+
     const persona = await generatePersonaAnalysis(lead, lang, session.id);
 
     // Cache the newly generated/regenerated persona back in the database
