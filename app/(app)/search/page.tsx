@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import QualificationForm from "@/components/search/QualificationForm";
-import { Clock, History, ChevronRight, Download, Save, Trash2, Check } from "lucide-react";
+import { Clock, History, ChevronRight, Download, Save, Trash2, Check, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -14,6 +14,10 @@ export default function SearchPage() {
   const [selectedCriteria, setSelectedCriteria] = useState<any>(null);
   const [loadedCriteriaId, setLoadedCriteriaId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"runs" | "criteria">("runs");
+
+  // Compute high failure alert locally on the first 5 runs (Point 4)
+  const failedRunsCount = recentSearches.filter(r => r.status === "FAILED").length;
+  const isHighFailureAlert = recentSearches.length >= 3 && (failedRunsCount / recentSearches.length) >= 0.5;
 
   const fetchRecent = async () => {
     try {
@@ -103,6 +107,20 @@ export default function SearchPage() {
           {t('search.subtitle')}
         </p>
       </div>
+
+      {isHighFailureAlert && (
+        <div className="max-w-4xl mx-auto bg-red-50 dark:bg-red-955/20 border border-red-200 dark:border-red-900/30 rounded-2xl p-5 flex items-start gap-3 text-start animate-in fade-in duration-300">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-500 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="font-bold text-red-800 dark:text-red-300">
+              {t('settings.scraper.highFailureAlert.title', 'High Scraper Failure Rate Alert')}
+            </h4>
+            <p className="text-sm text-red-700 dark:text-red-400">
+              {t('settings.scraper.highFailureAlert.desc', 'Warning: {{failedCount}} of the last {{totalCount}} scrape runs have failed. Please check the scraper service connection, verify source configurations, or review the execution logs.', { failedCount: failedRunsCount, totalCount: recentSearches.length })}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto mb-12">
         <QualificationForm initialData={selectedCriteria} onSaveSuccess={fetchSaved} />

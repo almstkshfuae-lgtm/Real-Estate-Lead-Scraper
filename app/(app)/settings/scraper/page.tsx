@@ -160,6 +160,11 @@ export default function ScraperSettingsPage() {
     }
   };
 
+  // Compute high failure alert locally on the first 5 runs (Point 4)
+  const recentRunsForAlert = runs.slice(0, 5);
+  const failedRunsCount = recentRunsForAlert.filter(r => r.status === "FAILED").length;
+  const isHighFailureAlert = recentRunsForAlert.length >= 3 && (failedRunsCount / recentRunsForAlert.length) >= 0.5;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -176,6 +181,20 @@ export default function ScraperSettingsPage() {
           {isTriggering ? t('settings.scraper.triggering', 'Triggering...') : t('settings.scraper.triggerBtn', 'Run Scraper Now')}
         </button>
       </div>
+
+      {isHighFailureAlert && (
+        <div className="bg-red-50 dark:bg-red-955/20 border border-red-200 dark:border-red-900/30 rounded-2xl p-5 flex items-start gap-3 text-start animate-in fade-in duration-300">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-500 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="font-bold text-red-800 dark:text-red-300">
+              {t('settings.scraper.highFailureAlert.title', 'High Scraper Failure Rate Alert')}
+            </h4>
+            <p className="text-sm text-red-700 dark:text-red-400">
+              {t('settings.scraper.highFailureAlert.desc', 'Warning: {{failedCount}} of the last {{totalCount}} scrape runs have failed. Please check the scraper service connection, verify source configurations, or review the execution logs.', { failedCount: failedRunsCount, totalCount: recentRunsForAlert.length })}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-sm">
         <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]">

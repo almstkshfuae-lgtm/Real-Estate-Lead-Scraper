@@ -245,6 +245,8 @@
 - [x] **Hardened: Performance & Scalability Gaps** — Capped scraper DB pool size (`connection_limit=3`) and shared single client; parallelized ScrapeQueueManager (`MAX_CONCURRENT_SCRAPES=2`); added browser close watchdog watchdogs; replaced TensorFlow.js with Gradient Descent JS ML model (saving 30MB+ package bloat); optimized lead imports and webhooks with bulk query batching (reducing query overhead by 90%); resolved watchdog state desynchronization by removing redundant Next.js passive checks.
 - [🔄] **Query Optimization inside Batches** — Add composite index on `[name, company, agentId]` to prevent full table scans in webhook. <!-- id: 12.11 -->
 - [x] **Hardened: Soft-Delete Security Leak** — Added `deletedAt: null` filter to all `prisma.lead.findMany` queries that were missing it: `api/ai/score/validate`, `api/campaigns`, `api/campaigns/outreach`, `api/leads/bulk-push`, `api/leads/bulk-delete` (findMany + updateMany), `api/export`, and `api/scrape-runs/[id]/sse` (all 3 fallback fetches). Prevents ghost/deleted records from appearing in metrics, exports, CRM pushes, and campaign outreach. <!-- id: 12.12 -->
+- [x] **Metrics & Counts Alignment** — Resolve mismatches in Manual Import exclusions, soft deletes, query filters, and failure alerts between Backend Metrics API and Frontend Lead Table. <!-- id: 12.13 -->
+
 
 ## Legend
 

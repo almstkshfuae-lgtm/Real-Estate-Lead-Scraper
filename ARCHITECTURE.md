@@ -189,6 +189,19 @@ To resolve the "Query Storm" database connection stress issue under concurrent u
 3. **SSE Connection Subscriptions**: The SSE handler [route.ts](file:///c:/projects/Real-Estate-Lead-Scraper/app/api/scrape-runs/%5Bid%5D/sse/route.ts) subscribes to `run:{id}` events. Instead of executing periodic database queries inside a loop, it yields the Node.js event loop and waits for events, which are pushed to the client instantly.
 4. **Resilient Frontend Failbacks**: The `useScrapeRunStatus` React hook connects to the SSE route and safely falls back to standard HTTP polling only if the stream encounters a connection error *before* reaching a terminal state. If the stream closes normally after the run completes or fails, the hook terminates tracking immediately without entering a polling loop.
 
+
+---
+
+## 📊 Metrics, Diagnostics & Alarm Alignment
+
+To enable robust system monitoring and dashboard alignment, LeadPulse exposes a secure telemetry endpoint and real-time failure indicators:
+
+1. **Telemetry Endpoint (`/api/metrics`)**: Serves Prometheus-compatible metrics and JSON diagnostics.
+2. **Filters & Parameter Alignment**: The metrics queries support all primary search and filtering parameters (`search`, `status`, `tier`, `scrapeRunId`, etc.) matching the Leads API. This guarantees that total lead telemetry exactly mirrors active filtered dashboard numbers on the frontend.
+3. **Manual Import Exclusions**: Manually imported leads (`source: "Manual Import"`) are filtered out from the `leadsBySource` telemetry group to match the UI behavior of hiding internal manual import labels.
+4. **Active Scrape Runs Filter**: Scrape runs metrics exclude completed runs where all associated leads have been soft-deleted, keeping historical logs metrics reflective of the active database state.
+5. **High Failure Rate Alarm**: If the failure rate across the 5 most recent scrape runs is $\ge 50\%$, the metrics endpoint triggers a high failure alarm (`brilliance_scraper_high_failure_alert 1`). The same calculation is run on the Search and Scraper Settings pages to display a prominent warning banner (EN/AR) before new scrapes are started.
+
 ---
 
 ## 🛠️ Operations & Maintenance

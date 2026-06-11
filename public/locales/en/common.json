@@ -292,6 +292,10 @@
         "leadsFound": "Leads Found",
         "duration": "Duration"
       },
+      "highFailureAlert": {
+        "title": "High Scraper Failure Rate Alert",
+        "desc": "Warning: {{failedCount}} of the last {{totalCount}} scrape runs have failed. Please check the scraper service connection, verify source configurations, or review the execution logs."
+      },
       "validation": {
         "title": "Lead Scoring & Tiering Validation",
         "subtitle": "Validate scoring accuracy and statistical correlation against real won/lost outcomes.",

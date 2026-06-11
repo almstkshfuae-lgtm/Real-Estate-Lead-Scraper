@@ -43,32 +43,157 @@ export async function GET(request: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // 2. Fetch metrics data from database
+    // 2. Parse query parameters for leads/metrics filtering (Point 3)
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search") || searchParams.get("searchTerm") || "";
+    const status = searchParams.get("status") || searchParams.get("statusFilter") || "";
+    const tier = searchParams.get("tier") || searchParams.get("tierFilter") || "";
+    const scrapeRunId = searchParams.get("scrapeRunId") || "";
+
+    const conditions: any[] = [];
+    conditions.push({ deletedAt: null });
+
+    // Handle session agent filters if user is agent (non-admin session)
+    let sessionUser: any = null;
+    try {
+      const session = await getSession();
+      if (session) {
+        sessionUser = session;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    if (sessionUser && sessionUser.role?.toUpperCase() !== 'ADMIN') {
+      conditions.push({ agentId: sessionUser.id });
+    }
+
+    if (search) {
+      conditions.push({
+        OR: [
+          { name: { contains: search } },
+          { nameAr: { contains: search } },
+          { company: { contains: search } },
+          { companyAr: { contains: search } },
+          { phone: { contains: search } },
+          { email: { contains: search } },
+          { location: { contains: search } },
+        ]
+      });
+    }
+
+    if (status) {
+      conditions.push({ status });
+    }
+
+    if (tier) {
+      const parsedTier = parseInt(tier);
+      if (!isNaN(parsedTier)) {
+        conditions.push({ tier: parsedTier });
+      }
+    }
+
+    if (scrapeRunId) {
+      conditions.push({ scrapeRunId });
+    }
+
+    const recentlyRelocatedParam = searchParams.get("recentlyRelocated") || searchParams.get("relocated");
+    if (recentlyRelocatedParam === "true") {
+      conditions.push({ relocated: true });
+    }
+
+    const excludeRentalParam = searchParams.get("excludeRental");
+    if (excludeRentalParam === "true") {
+      conditions.push({ rentalFlag: false });
+    }
+
+    const scoreMin = searchParams.get("scoreMin") || "";
+    if (scoreMin) {
+      const parsedScoreMin = parseInt(scoreMin);
+      if (!isNaN(parsedScoreMin)) {
+        conditions.push({ score: { gte: parsedScoreMin } });
+      }
+    }
+
+    const northParam = searchParams.get("north");
+    const southParam = searchParams.get("south");
+    const eastParam = searchParams.get("east");
+    const westParam = searchParams.get("west");
+
+    if (northParam && southParam && eastParam && westParam) {
+      const north = parseFloat(northParam);
+      const south = parseFloat(southParam);
+      const east = parseFloat(eastParam);
+      const west = parseFloat(westParam);
+
+      if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
+        conditions.push({
+          latitude: {
+            gte: south,
+            lte: north,
+          }
+        });
+
+        if (west <= east) {
+          conditions.push({
+            longitude: {
+              gte: west,
+              lte: east,
+            }
+          });
+        } else {
+          conditions.push({
+            OR: [
+              { longitude: { gte: west } },
+              { longitude: { lte: east } }
+            ]
+          });
+        }
+      }
+    }
+
+    const leadWhere: any = conditions.length > 0 ? { AND: conditions } : {};
+
     // Lead status counts
     const leadsByStatus = await prisma.lead.groupBy({
       by: ["status"],
       _count: { id: true },
-      where: { deletedAt: null }
+      where: leadWhere
     });
 
     // Lead tier counts
     const leadsByTier = await prisma.lead.groupBy({
       by: ["tier"],
       _count: { id: true },
-      where: { deletedAt: null }
+      where: leadWhere
     });
 
-    // Lead source counts
+    // Lead source counts excluding "Manual Import" (Point 1)
+    const leadWhereExcludingManual = {
+      ...leadWhere,
+      AND: [
+        ...(leadWhere.AND || []),
+        { source: { not: "Manual Import" } }
+      ]
+    };
     const leadsBySource = await prisma.lead.groupBy({
       by: ["source"],
       _count: { id: true },
-      where: { deletedAt: null }
+      where: leadWhereExcludingManual
     });
+
+    // Scrape runs active filter (Point 2)
+    const scrapeRunWhere = {
+      OR: [
+        { leadsFound: 0 },
+        { leads: { some: { deletedAt: null } } }
+      ]
+    };
 
     // Scrape runs status counts
     const runsByStatus = await prisma.scrapeRun.groupBy({
       by: ["status"],
-      _count: { id: true }
+      _count: { id: true },
+      where: scrapeRunWhere
     });
 
     // Check last 5 runs for failure alert rate
@@ -81,12 +206,11 @@ export async function GET(request: Request) {
     const highFailureAlert = (lastRuns.length >= 3 && (failedCount / lastRuns.length) >= 0.5) ? 1 : 0;
 
     // Total counts
-    const totalLeads = await prisma.lead.count({ where: { deletedAt: null } });
+    const totalLeads = await prisma.lead.count({ where: leadWhere });
     const totalProjects = await prisma.projectHeatmap.count();
-    const totalRuns = await prisma.scrapeRun.count();
+    const totalRuns = await prisma.scrapeRun.count({ where: scrapeRunWhere });
 
     // 3. Format output based on request Accept header or query params
-    const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "";
 
     if (format === "json" || request.headers.get("accept")?.includes("application/json")) {
