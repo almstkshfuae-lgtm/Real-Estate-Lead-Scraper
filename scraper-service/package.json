@@ -15,7 +15,7 @@
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.7",
     "express": "^4.21.1",
-    "playwright": "1.60.1",
+    "playwright": "1.49.1",
     "prisma": "^5.22.0"
   }
 }
