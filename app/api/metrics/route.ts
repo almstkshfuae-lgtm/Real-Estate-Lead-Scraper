@@ -51,7 +51,12 @@ export async function GET(request: Request) {
     const scrapeRunId = searchParams.get("scrapeRunId") || "";
 
     const conditions: any[] = [];
-    conditions.push({ deletedAt: null });
+    
+    // Exclude soft deleted leads by default, unless includeDeleted is explicitly "true"
+    const includeDeleted = searchParams.get("includeDeleted") === "true";
+    if (!includeDeleted) {
+      conditions.push({ deletedAt: null });
+    }
 
     // Handle session agent filters if user is agent (non-admin session)
     let sessionUser: any = null;
@@ -89,6 +94,14 @@ export async function GET(request: Request) {
       const parsedTier = parseInt(tier);
       if (!isNaN(parsedTier)) {
         conditions.push({ tier: parsedTier });
+      }
+    }
+
+    const tierMinParam = searchParams.get("tierMin");
+    if (tierMinParam) {
+      const parsedTierMin = parseInt(tierMinParam);
+      if (!isNaN(parsedTierMin)) {
+        conditions.push({ tier: { lte: parsedTierMin } });
       }
     }
 

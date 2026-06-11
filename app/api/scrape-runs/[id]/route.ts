@@ -55,14 +55,28 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Dynamically calculate count of active, non-deleted leads in this run
+    const activeLeadsCount = await prisma.lead.count({
+      where: {
+        scrapeRunId: id,
+        deletedAt: null,
+        ...(isAdmin ? {} : { agentId: session.id })
+      }
+    });
+
     // Passive self-healing watchdog check
     const ZOMBIE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
     let finalStatus = run.status;
-    let finalLeadsFound = run.leadsFound;
     let finalCompletedAt = run.completedAt;
 
-    if ((run.status === "PENDING" || run.status === "PROCESSING") &&
-        Date.now() - new Date(run.startedAt).getTime() > ZOMBIE_TIMEOUT_MS) {
+    const isActive = run.status === "PENDING" || run.status === "PROCESSING";
+    let finalLeadsFound = activeLeadsCount;
+    // For active runs, fallback to run.leadsFound if active lead count is 0
+    if (isActive && activeLeadsCount === 0) {
+      finalLeadsFound = run.leadsFound;
+    }
+
+    if (isActive && Date.now() - new Date(run.startedAt).getTime() > ZOMBIE_TIMEOUT_MS) {
       console.warn(`[Watchdog] Passive check: ScrapeRun ${id} has timed out. Force-marking as FAILED.`);
       try {
         const updated = await prisma.scrapeRun.update({

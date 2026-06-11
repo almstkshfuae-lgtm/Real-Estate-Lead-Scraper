@@ -28,7 +28,7 @@ export async function GET(
       try {
         // Prevent concurrent duplicate fallback lead cloning
         const existingRunLeadsCount = await prisma.lead.count({
-          where: { scrapeRunId: currentRun.id, agentId: session.id }
+          where: { scrapeRunId: currentRun.id, agentId: session.id, deletedAt: null }
         });
         if (existingRunLeadsCount > 0) {
           console.info(`[SSE Fallback Check] Leads already exist for scrapeRunId ${currentRun.id}. Skipping clone.`);

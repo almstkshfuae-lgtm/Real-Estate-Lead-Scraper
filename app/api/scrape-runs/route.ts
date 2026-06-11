@@ -16,6 +16,23 @@ export async function GET() {
       take: 20
     });
 
+    // Dynamically calculate active lead counts for the retrieved runs
+    const runIds = runs.map(r => r.id);
+    const activeLeadCounts = await prisma.lead.groupBy({
+      by: ['scrapeRunId'],
+      where: {
+        scrapeRunId: { in: runIds },
+        deletedAt: null,
+        ...(isHostAdmin ? {} : { agentId: session.id })
+      },
+      _count: { id: true }
+    });
+
+    const countsMap = activeLeadCounts.reduce((acc, curr) => {
+      acc[curr.scrapeRunId] = curr._count.id;
+      return acc;
+    }, {} as Record<string, number>);
+
     const parsedRuns = runs.map((run) => {
       let parsedCriteria = run.criteria;
 
@@ -45,8 +62,14 @@ export async function GET() {
         }
       }
 
+      const isActive = run.status === 'PENDING' || run.status === 'PROCESSING';
+      const leadsFound = countsMap[run.id] !== undefined
+        ? countsMap[run.id]
+        : (isActive ? run.leadsFound : 0);
+
       return {
         ...run,
+        leadsFound,
         criteria: parsedCriteria,
         sources: parsedSources,
       };
