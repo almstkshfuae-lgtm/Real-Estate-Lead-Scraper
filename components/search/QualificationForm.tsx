@@ -78,9 +78,12 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   const searchParams = useSearchParams();
   const queryKeywords = searchParams?.get("keywords") || "";
 
+  const defaultMinBudget = Number(process.env.NEXT_PUBLIC_DEFAULT_BUDGET_MIN) || 1000000;
+  const defaultMaxBudget = Number(process.env.NEXT_PUBLIC_DEFAULT_BUDGET_MAX) || 10000000;
+
   const [propertyTypes, setPropertyTypes] = useState<string[]>(initialData?.propertyTypes || []);
-  const [budgetMin, setBudgetMin] = useState<number>(initialData?.budgetMin || 1000000);
-  const [budgetMax, setBudgetMax] = useState<number>(initialData?.budgetMax || 10000000);
+  const [budgetMin, setBudgetMin] = useState<number>(initialData?.budgetMin || defaultMinBudget);
+  const [budgetMax, setBudgetMax] = useState<number>(initialData?.budgetMax || defaultMaxBudget);
   const [emirates, setEmirates] = useState<string[]>(initialData?.emirates || []);
   const [relocated, setRelocated] = useState(initialData?.relocated || false);
   const [excludeRental, setExcludeRental] = useState(initialData?.excludeRental || true);
@@ -91,14 +94,14 @@ export default function QualificationForm({ initialData, onSaveSuccess }: { init
   useEffect(() => {
     if (initialData) {
       setPropertyTypes(initialData.propertyTypes || []);
-      setBudgetMin(initialData.budgetMin || 1000000);
-      setBudgetMax(initialData.budgetMax || 10000000);
+      setBudgetMin(initialData.budgetMin || defaultMinBudget);
+      setBudgetMax(initialData.budgetMax || defaultMaxBudget);
       setEmirates(initialData.emirates || []);
       setRelocated(initialData.relocated || false);
       setExcludeRental(initialData.excludeRental || true);
       setKeywords(initialData.keywords || "");
     }
-  }, [initialData]);
+  }, [initialData, defaultMinBudget, defaultMaxBudget]);
 
   useEffect(() => {
     if (queryKeywords) {

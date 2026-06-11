@@ -136,9 +136,111 @@ export async function POST(request: NextRequest) {
     if (isCompletedSignal) {
       console.info(`[Webhook] Received completion signal for ScrapeRun: ${runId}`);
 
-      const totalLeads = await prisma.lead.count({
+      let totalLeads = await prisma.lead.count({
         where: { scrapeRunId: runId }
       });
+
+      // Auto-fallback: if 0 leads found, pull 10 potential leads matching the criteria from DB
+      if (totalLeads === 0) {
+        console.info(`[Webhook] 0 leads found for run ${runId}. Pulling 10 potential leads from database...`);
+        
+        let criteriaObj: any = {};
+        if (scrapeRun && scrapeRun.criteria) {
+          try {
+            criteriaObj = typeof scrapeRun.criteria === 'string' ? JSON.parse(scrapeRun.criteria) : scrapeRun.criteria;
+          } catch (e) {
+            console.error("[Webhook] Error parsing scrapeRun criteria for potential leads:", e);
+          }
+        }
+
+        // Build potential conditions
+        const potentialConditions: any[] = [
+          { deletedAt: null },
+          { agentId: agentId } // Filter by the current agent's leads
+        ];
+
+        // 1. Keywords filter
+        if (criteriaObj?.keywords) {
+          const keywordsString = criteriaObj.keywords;
+          const keywordList = typeof keywordsString === 'string'
+            ? keywordsString.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
+            : [];
+          if (keywordList.length > 0) {
+            potentialConditions.push({
+              OR: keywordList.flatMap((k: string) => [
+                { name: { contains: k } },
+                { company: { contains: k } },
+                { location: { contains: k } }
+              ])
+            });
+          }
+        }
+
+        // 2. Budget filter
+        if (criteriaObj?.budgetMin) {
+          potentialConditions.push({
+            OR: [
+              { budgetMin: { gte: criteriaObj.budgetMin } },
+              { budgetMax: { gte: criteriaObj.budgetMin } }
+            ]
+          });
+        }
+        if (criteriaObj?.budgetMax) {
+          potentialConditions.push({
+            OR: [
+              { budgetMin: { lte: criteriaObj.budgetMax } },
+              { budgetMax: { lte: criteriaObj.budgetMax } }
+            ]
+          });
+        }
+
+        // Fetch matching potential leads
+        let potentialLeads = await prisma.lead.findMany({
+          where: { AND: potentialConditions },
+          orderBy: { score: "desc" },
+          take: 10
+        });
+
+        // Fallback 1: Less strict (ignore budget/keywords, get agent's own active leads)
+        if (potentialLeads.length < 10) {
+          const foundIds = potentialLeads.map(l => l.id);
+          const agentLeads = await prisma.lead.findMany({
+            where: {
+              id: { notIn: foundIds },
+              deletedAt: null,
+              agentId: agentId
+            },
+            orderBy: { score: "desc" },
+            take: 10 - potentialLeads.length
+          });
+          potentialLeads = [...potentialLeads, ...agentLeads];
+        }
+
+        // Fallback 2: Global active leads if agent still has less than 10
+        if (potentialLeads.length < 10) {
+          const foundIds = potentialLeads.map(l => l.id);
+          const globalLeads = await prisma.lead.findMany({
+            where: {
+              id: { notIn: foundIds },
+              deletedAt: null
+            },
+            orderBy: { score: "desc" },
+            take: 10 - potentialLeads.length
+          });
+          potentialLeads = [...potentialLeads, ...globalLeads];
+        }
+
+        // Link potential leads to this scrape run
+        if (potentialLeads.length > 0) {
+          const potentialIds = potentialLeads.map(l => l.id);
+          await prisma.lead.updateMany({
+            where: { id: { in: potentialIds } },
+            data: { scrapeRunId: runId }
+          });
+          console.info(`[Webhook] Associated ${potentialIds.length} potential leads with ScrapeRun: ${runId}`);
+          totalLeads = potentialLeads.length;
+        }
+      }
 
       await prisma.scrapeRun.update({
         where: { id: runId },
@@ -396,19 +498,21 @@ export async function POST(request: NextRequest) {
       const batch = cleanLeadsPayload.slice(i, i + BATCH_SIZE);
 
       // Bulk fetch existing leads for this batch to prevent O(N) DB query storms
+      // unique constraint check: name, company, source, agentId
       const existingLeads = await prisma.lead.findMany({
         where: {
           agentId: agentId,
           OR: batch.map((lead: any) => ({
             name: lead.name,
-            company: lead.company || "Not Specified"
+            company: lead.company || "Not Specified",
+            source: lead.source || "HNWI Sources"
           }))
         }
       });
 
       const existingMap = new Map();
       for (const el of existingLeads) {
-        const key = `${el.name.trim().toLowerCase()}|${el.company.trim().toLowerCase()}`;
+        const key = `${el.name.trim().toLowerCase()}|${el.company.trim().toLowerCase()}|${el.source.trim().toLowerCase()}`;
         existingMap.set(key, el);
       }
 
@@ -432,21 +536,26 @@ export async function POST(request: NextRequest) {
           console.error(`[Webhook] ML score adjustment failed for lead ${lead.name}:`, mlErr);
         }
 
-        const lookupKey = `${lead.name.trim().toLowerCase()}|${leadCompany.trim().toLowerCase()}`;
+        const leadSource = lead.source || "HNWI Sources";
+        const lookupKey = `${lead.name.trim().toLowerCase()}|${leadCompany.trim().toLowerCase()}|${leadSource.trim().toLowerCase()}`;
         const existingLead = existingMap.get(lookupKey);
 
         if (existingLead) {
-          // Merge logic: append source if not present
+          // If the lead was soft-deleted, do NOT restore or update it during automated scraping webhook
+          if (existingLead.deletedAt !== null) {
+            console.info(`[Webhook] Skipping update/restoration for soft-deleted lead: ${lead.name} (${leadCompany}) from source ${leadSource}`);
+            return 0;
+          }
+
+          // Merge logic: append source if not present (though they should match unique constraint here, keep logic clean)
           let mergedSource = existingLead.source;
-          const newSource = lead.source || "HNWI Sources";
-          if (!mergedSource.includes(newSource)) {
-            mergedSource = `${mergedSource}, ${newSource}`;
+          if (!mergedSource.includes(leadSource)) {
+            mergedSource = `${mergedSource}, ${leadSource}`;
           }
 
           // Keep the higher tier/score
           const mergedTier = Math.min(existingLead.tier, lead.tier || 2); // Lower number is better
           const mergedScore = Math.max(existingLead.score, adjustedScore);
-          const wasDeleted = existingLead.deletedAt !== null;
 
           await prisma.lead.update({
             where: { id: existingLead.id },
@@ -469,8 +578,7 @@ export async function POST(request: NextRequest) {
               relocated: lead.relocated ?? existingLead.relocated,
               propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (existingLead.propertyPref as any),
               persona: lead.persona || existingLead.persona,
-              scrapeRunId: runId,
-              deletedAt: null // Restore if soft deleted
+              scrapeRunId: runId
             }
           });
 
@@ -478,17 +586,15 @@ export async function POST(request: NextRequest) {
           try {
             await prisma.auditLog.create({
               data: {
-                action: wasDeleted ? "MERGE" : "UPDATE",
+                action: "UPDATE",
                 entityType: "Lead",
                 entityId: existingLead.id,
                 agentId: agentId,
-                details: wasDeleted 
-                  ? `Restored and merged soft-deleted lead from scrape run: ${runId}`
-                  : `Merged details for existing lead from scrape run: ${runId}`
+                details: `Merged details for existing lead from scrape run: ${runId}`
               }
             });
           } catch (auditErr) {
-            console.error("[Webhook] Failed to create audit log for merge/restore:", auditErr);
+            console.error("[Webhook] Failed to create audit log for update:", auditErr);
           }
 
           return 1;
@@ -502,7 +608,7 @@ export async function POST(request: NextRequest) {
                 companyAr: leadCompanyAr,
                 role: lead.role || "Professional",
                 roleAr: lead.roleAr || null,
-                source: lead.source || "HNWI Sources",
+                source: leadSource,
                 sourceType: lead.sourceType || "Unknown",
                 tier: lead.tier || 2,
                 phone: lead.phone ? cleanPhone(lead.phone) : null,
@@ -547,19 +653,24 @@ export async function POST(request: NextRequest) {
                 where: {
                   name: lead.name,
                   company: leadCompany,
+                  source: leadSource,
                   agentId: agentId
                 }
               });
 
               if (collidingLead) {
+                // If colliding lead was soft-deleted, do NOT restore or update it
+                if (collidingLead.deletedAt !== null) {
+                  console.info(`[Webhook] Skipping update/restoration for soft-deleted colliding lead: ${lead.name} (${leadCompany})`);
+                  return 0;
+                }
+
                 let mergedSource = collidingLead.source;
-                const newSource = lead.source || "HNWI Sources";
-                if (!mergedSource.includes(newSource)) {
-                  mergedSource = `${mergedSource}, ${newSource}`;
+                if (!mergedSource.includes(leadSource)) {
+                  mergedSource = `${mergedSource}, ${leadSource}`;
                 }
                 const mergedTier = Math.min(collidingLead.tier, lead.tier || 2);
                 const mergedScore = Math.max(collidingLead.score, adjustedScore);
-                const wasDeleted = collidingLead.deletedAt !== null;
 
                 await prisma.lead.update({
                   where: { id: collidingLead.id },
@@ -582,15 +693,14 @@ export async function POST(request: NextRequest) {
                     relocated: lead.relocated ?? collidingLead.relocated,
                     propertyPref: Object.keys(lead.propertyPref || {}).length > 0 ? lead.propertyPref : (collidingLead.propertyPref as any),
                     persona: lead.persona || collidingLead.persona,
-                    scrapeRunId: runId,
-                    deletedAt: null
+                    scrapeRunId: runId
                   }
                 });
 
                 try {
                   await prisma.auditLog.create({
                     data: {
-                      action: wasDeleted ? "MERGE" : "UPDATE",
+                      action: "UPDATE",
                       entityType: "Lead",
                       entityId: collidingLead.id,
                       agentId: agentId,
