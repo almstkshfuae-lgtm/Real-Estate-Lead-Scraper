@@ -70,6 +70,7 @@ model Lead {
   @@index([tier])
   @@index([score])
   @@index([location])
+  @@index([deletedAt])
   @@map("leads")
 }
 

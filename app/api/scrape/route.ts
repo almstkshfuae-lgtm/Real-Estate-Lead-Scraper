@@ -39,26 +39,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'sources array required' }, { status: 400 });
     }
 
-    // Passive self-healing: mark any timed out runs (older than 10 minutes) as FAILED
-    const ZOMBIE_TIMEOUT_MS = 10 * 60 * 1000;
-    const cutoff = new Date(Date.now() - ZOMBIE_TIMEOUT_MS);
-    try {
-      const result = await prisma.scrapeRun.updateMany({
-        where: {
-          status: { in: ["PENDING", "PROCESSING"] },
-          startedAt: { lt: cutoff }
-        },
-        data: {
-          status: "FAILED",
-          completedAt: new Date()
-        }
-      });
-      if (result.count > 0) {
-        console.log(`[Watchdog] Passive scrape check: Marked ${result.count} timed out runs as FAILED.`);
-      }
-    } catch (cleanErr) {
-      console.error("[Watchdog] Failed to clean up zombie runs on scrape init:", cleanErr);
-    }
 
     // Create a ScrapeRun record
     const scrapeRun = await prisma.scrapeRun.create({

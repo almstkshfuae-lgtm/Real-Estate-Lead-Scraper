@@ -8,6 +8,7 @@ import { launchBrowser } from '../browser-launcher.js';
 import { callGeminiForLeads, callGeminiForProjects, withRetryJS } from './ai-enricher.js';
 import { resolveRobustLocator, checkContentSelectors, isValidPlaywrightSelector } from './selector-validator.js';
 import { PAGINATION_END_SIGNALS, CONSENT_ACCEPT_SELECTORS, CONSENT_MODAL_SELECTORS } from './ui-strings.js';
+import { encryptJson, decryptJson } from '../crypto-helper.js';
 
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === 'true';
 const ACTIVE_PROXY_PROVIDER = process.env.ACTIVE_PROXY_PROVIDER || 'dataimpulse';
@@ -317,8 +318,8 @@ export async function getSourceConfigMap() {
       acc[config.key] = {
         ...config,
         signals: typeof config.signals === 'string' ? JSON.parse(config.signals) : config.signals,
-        navigationSelectors: typeof config.navigationSelectors === 'string' ? JSON.parse(config.navigationSelectors) : config.navigationSelectors,
-        contentSelectors: typeof config.contentSelectors === 'string' ? JSON.parse(config.contentSelectors) : config.contentSelectors
+        navigationSelectors: decryptJson(config.navigationSelectors),
+        contentSelectors: decryptJson(config.contentSelectors)
       };
       return acc;
     }, {});
@@ -342,8 +343,8 @@ export async function seedDefaultSources() {
         name: source.name,
         type: source.type,
         signals: source.signals,
-        navigationSelectors: source.navigationSelectors,
-        contentSelectors: source.contentSelectors,
+        navigationSelectors: encryptJson(source.navigationSelectors),
+        contentSelectors: encryptJson(source.contentSelectors),
         crawlDepth: source.crawlDepth,
         maxPages: source.maxPages,
         delayBetweenPages: source.delayBetweenPages,
@@ -355,8 +356,8 @@ export async function seedDefaultSources() {
         name: source.name,
         type: source.type,
         signals: source.signals,
-        navigationSelectors: source.navigationSelectors,
-        contentSelectors: source.contentSelectors,
+        navigationSelectors: encryptJson(source.navigationSelectors),
+        contentSelectors: encryptJson(source.contentSelectors),
         crawlDepth: source.crawlDepth,
         maxPages: source.maxPages,
         delayBetweenPages: source.delayBetweenPages,

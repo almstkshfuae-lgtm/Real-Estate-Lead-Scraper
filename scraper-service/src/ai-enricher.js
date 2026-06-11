@@ -60,17 +60,24 @@ async function checkScraperDailyBudget() {
         }
       }
     } catch (dbErr) {
-      console.warn('[ScraperAI] Failed to read budget from DB preferences, using env/default:', dbErr.message);
+      console.error('[ScraperAI] Failed to read budget from DB preferences:', dbErr.message);
+      throw dbErr;
     }
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const result = await prisma.aiUsageLog.aggregate({
-      _sum: { estimatedCostUsd: true },
-      where: { createdAt: { gte: todayStart } }
-    });
-    const currentSpend = result._sum?.estimatedCostUsd || 0;
+    let currentSpend = 0;
+    try {
+      const result = await prisma.aiUsageLog.aggregate({
+        _sum: { estimatedCostUsd: true },
+        where: { createdAt: { gte: todayStart } }
+      });
+      currentSpend = result._sum?.estimatedCostUsd || 0;
+    } catch (dbErr) {
+      console.error('[ScraperAI] Failed to aggregate AI usage from database:', dbErr.message);
+      throw dbErr;
+    }
 
     return {
       exceeded: currentSpend >= budgetLimit,
@@ -79,7 +86,7 @@ async function checkScraperDailyBudget() {
     };
   } catch (err) {
     console.error('[ScraperAI] Error checking daily budget:', err.message);
-    return { exceeded: false, currentSpend: 0, limit: 3.0 };
+    throw new Error(`Failed to check daily budget: ${err.message}`);
   }
 }
 

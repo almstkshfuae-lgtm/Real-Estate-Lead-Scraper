@@ -119,7 +119,7 @@ export async function GET(
               where: { agentId: session.id },
               select: { name: true }
             });
-            const existingNames = agentLeads.map(l => l.name);
+            const existingNames = agentLeads.map((l: { name: string }) => l.name);
 
             let adminLeads = await prisma.lead.findMany({
               where: {

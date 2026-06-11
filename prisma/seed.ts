@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { DEFAULT_SCRAPER_SOURCES } from '../scraper-service/default-sources.js';
+import { encryptJson } from '../lib/crypto';
 
 const prisma = new PrismaClient();
 
@@ -20,8 +21,8 @@ async function main() {
         name: source.name,
         type: source.type,
         signals: source.signals,
-        navigationSelectors: source.navigationSelectors,
-        contentSelectors: source.contentSelectors,
+        navigationSelectors: encryptJson(source.navigationSelectors),
+        contentSelectors: encryptJson(source.contentSelectors),
         crawlDepth: source.crawlDepth,
         maxPages: source.maxPages,
         delayBetweenPages: source.delayBetweenPages,
@@ -32,8 +33,8 @@ async function main() {
         name: source.name,
         type: source.type,
         signals: source.signals,
-        navigationSelectors: source.navigationSelectors,
-        contentSelectors: source.contentSelectors,
+        navigationSelectors: encryptJson(source.navigationSelectors),
+        contentSelectors: encryptJson(source.contentSelectors),
         crawlDepth: source.crawlDepth,
         maxPages: source.maxPages,
         delayBetweenPages: source.delayBetweenPages,

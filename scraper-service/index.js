@@ -7,6 +7,7 @@ import { validateSelectors } from './src/selector-validator.js';
 import { scrapeMultipleSources, scrapeSource, getSourceConfigMap, seedDefaultSources, PROXY_CONFIG } from './src/scraper-engine.js';
 import { verifySourceCompletePipeline } from './verification-pipeline.js';
 import { maskProxyUrl, parseProxyUrl } from './proxy-validator.js';
+import { encryptJson } from './crypto-helper.js';
 
 // 1. Initialize environment variables & configuration
 const env = loadEnv();
@@ -281,8 +282,8 @@ app.post('/create-source', async (req, res) => {
         name,
         type,
         signals: signals || [],
-        navigationSelectors: navigationSelectors || {},
-        contentSelectors: contentSelectors || {},
+        navigationSelectors: encryptJson(navigationSelectors || {}),
+        contentSelectors: encryptJson(contentSelectors || {}),
         verificationStatus: 'verified',
         verifiedAt: new Date(),
         active: true

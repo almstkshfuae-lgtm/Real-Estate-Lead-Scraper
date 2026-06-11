@@ -239,8 +239,8 @@
 - [x] **Hardened: Prisma Proxy caching** — Implement WeakMap caching of model and method proxies in `lib/prisma.ts` and `lib/prisma.js` to eliminate memory leaks and GC overhead under high traffic.
 - [x] **Map Project Creation** — Enabled super admin users (role === "admin") to add new projects with geographic details directly from the map page interface.
 - [x] **Hardened**: Translation caching optimization & DB synchronization for SSR parity.
-- [x] **Database Hardening & GDPR Retention Policy** — Added performance indexes, soft deletes, mutation audit logs, safe webhook restoration/P2002 handling, CSV import duplicate safety, and automated GDPR retention pruning.
-- [x] **Hardened: Performance & Scalability Gaps** — Capped scraper DB pool size (`connection_limit=3`) and shared single client; parallelized ScrapeQueueManager (`MAX_CONCURRENT_SCRAPES=2`); added browser close watchdog watchdogs; replaced TensorFlow.js with Gradient Descent JS ML model (saving 30MB+ package bloat); optimized lead imports and webhooks with bulk query batching (reducing query overhead by 90%).
+- [x] **Database Hardening & GDPR Retention Policy** — Added performance indexes (including soft-delete index on `deletedAt`), soft deletes, mutation audit logs, safe webhook restoration/P2002 handling, CSV import duplicate safety, and automated GDPR retention pruning.
+- [x] **Hardened: Performance & Scalability Gaps** — Capped scraper DB pool size (`connection_limit=3`) and shared single client; parallelized ScrapeQueueManager (`MAX_CONCURRENT_SCRAPES=2`); added browser close watchdog watchdogs; replaced TensorFlow.js with Gradient Descent JS ML model (saving 30MB+ package bloat); optimized lead imports and webhooks with bulk query batching (reducing query overhead by 90%); resolved watchdog state desynchronization by removing redundant Next.js passive checks.
 
 
 

@@ -183,7 +183,11 @@ export async function POST(request: NextRequest) {
       // Asynchronously send failure alerts to admins
       try {
         const admins = await prisma.user.findMany({
-          where: { role: { equals: "admin" } }
+          where: {
+            role: {
+              in: ["admin", "ADMIN"]
+            }
+          }
         });
         for (const admin of admins) {
           const prefs = parsePreferences((admin as any).preferences).integrations || {};

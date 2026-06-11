@@ -54,3 +54,44 @@ export function decrypt(encryptedText) {
     return encryptedText; // Fallback to raw value on error
   }
 }
+
+/**
+ * Encrypts a JSON object or array to a string.
+ *
+ * @param {any} data
+ * @returns {any} Encrypted string
+ */
+export function encryptJson(data) {
+  if (!data) return data;
+  const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+  return encrypt(jsonStr);
+}
+
+/**
+ * Decrypts an encrypted string back to a JSON object or array.
+ * If data is already an object/array, returns it as-is for backward compatibility.
+ *
+ * @param {any} data
+ * @returns {any} Decrypted object/array
+ */
+export function decryptJson(data) {
+  if (!data) return data;
+  if (typeof data !== 'string') {
+    return data; // Already an object or array (legacy plaintext)
+  }
+  if (!data.includes(':')) {
+    // String, but not in our iv:encrypted format (e.g. raw JSON stored as string)
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      return data;
+    }
+  }
+  try {
+    const decryptedStr = decrypt(data);
+    return JSON.parse(decryptedStr);
+  } catch (err) {
+    console.error('[decryptJson] Failed to decrypt JSON string:', err);
+    return data;
+  }
+}

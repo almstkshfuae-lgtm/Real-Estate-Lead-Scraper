@@ -67,7 +67,7 @@ Respond ONLY with valid JSON: {"refinedScore": <number>, "delta": <number>, "rea
 
     try {
       parsed = parseAIJson<typeof parsed>(responseText ?? "");
-    } catch (err) {
+    } catch (err: any) {
       if (err instanceof AIJsonParseError) {
         console.error("[AI Score] JSON parse failed:", err.message, "| snippet:", err.rawSnippet);
         return NextResponse.json({ error: "AI returned an unstructured response. Please retry." }, { status: 502 });

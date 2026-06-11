@@ -73,7 +73,11 @@ export async function checkDailyBudget(): Promise<{ exceeded: boolean; currentSp
 
     try {
       const admin = await prisma.user.findFirst({
-        where: { role: "admin" },
+        where: {
+          role: {
+            in: ["admin", "ADMIN"]
+          }
+        },
         select: { preferences: true },
       });
       if (admin?.preferences) {
@@ -84,8 +88,9 @@ export async function checkDailyBudget(): Promise<{ exceeded: boolean; currentSp
           if (!isNaN(parsed) && parsed > 0) budgetLimit = parsed;
         }
       }
-    } catch {
-      // DB not available during build — use env/default
+    } catch (err) {
+      console.error("[AI Gateway] Database error while fetching preferences:", err);
+      throw err;
     }
 
     // Sum today's spend
@@ -99,9 +104,9 @@ export async function checkDailyBudget(): Promise<{ exceeded: boolean; currentSp
         where: { createdAt: { gte: todayStart } },
       });
       currentSpend = result._sum.estimatedCostUsd || 0;
-    } catch {
-      // Table might not exist yet during migration — allow through
-      return { exceeded: false, currentSpend: 0, limit: budgetLimit };
+    } catch (err) {
+      console.error("[AI Gateway] Database error while aggregating AI usage:", err);
+      throw err;
     }
 
     return {
@@ -109,9 +114,9 @@ export async function checkDailyBudget(): Promise<{ exceeded: boolean; currentSp
       currentSpend,
       limit: budgetLimit,
     };
-  } catch {
-    // If anything fails, don't block — allow the call
-    return { exceeded: false, currentSpend: 0, limit: DEFAULT_DAILY_BUDGET_USD };
+  } catch (err) {
+    console.error("[AI Gateway] Error checking daily budget:", err);
+    throw new Error(`Failed to verify AI daily budget: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -242,8 +247,8 @@ export async function callGemini(opts: GeminiCallOptions): Promise<GeminiCallRes
     const usage = extractTokenUsage(result);
     const costUsd = estimateCost(config.model, usage.promptTokens, usage.completionTokens);
 
-    // Log usage asynchronously — don't await to avoid blocking response
-    logUsage({
+    // Log usage and await to ensure it is written before Vercel terminates the execution context
+    await logUsage({
       taskType: opts.taskType,
       model: config.model,
       usage,
@@ -266,8 +271,8 @@ export async function callGemini(opts: GeminiCallOptions): Promise<GeminiCallRes
   } catch (err: any) {
     const durationMs = Date.now() - startTime;
 
-    // Log failed calls too
-    logUsage({
+    // Log failed calls too and await to ensure it is written before Vercel terminates the execution context
+    await logUsage({
       taskType: opts.taskType,
       model: config.model,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
