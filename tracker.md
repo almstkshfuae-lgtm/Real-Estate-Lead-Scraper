@@ -248,7 +248,7 @@
 - [x] **Metrics & Counts Alignment** — Resolve mismatches in Manual Import exclusions, soft deletes, query filters, and failure alerts between Backend Metrics API and Frontend Lead Table. <!-- id: 12.13 -->
 - [x] **Hardened: Bilingual spelling tolerance and search normalization** — Created `lib/search.ts` utility implementing prefix-aware first-Alif normalization, Ta Marbouta/Haa toggles, and Yaa/Alif Maqsoora normalization. Refactored all search-enabled routes (`api/leads`, `api/leads/cluster`, `api/metrics`, `api/export`, `api/projects/heatmap`, and scraper webhook fallback) to use the robust spelling-tolerant tokenizer, ensuring flexible case-insensitive English/Arabic matching on MySQL. <!-- id: 12.14 -->
 - [x] **Expose AI & Quality Filters** — Linked backend quality filters (`scoreMin`, `excludeRental`, `relocated`) to the frontend Lead Table and Kanban views via a collapsible advanced filter panel, synced with the export route. <!-- id: 12.15 -->
-- [🔄] **Hardened: Soft-Delete Bypass in Single Lead Fetches** — Add `deletedAt: null` filter to all `prisma.lead.findUnique` and individual queries across 10 API routes to secure AI signals, scoring, whatsapp, push, persona, followup, and email. <!-- id: 12.16 -->
+- [x] **Hardened: Soft-Delete Bypass in Single Lead Fetches** — Add `deletedAt: null` filter to all `prisma.lead.findUnique` and individual queries across 10 API routes to secure AI signals, scoring, whatsapp, push, persona, followup, and email. <!-- id: 12.16 -->
 
 
 ## Legend
