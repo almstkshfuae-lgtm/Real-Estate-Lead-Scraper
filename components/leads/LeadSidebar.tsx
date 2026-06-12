@@ -7,14 +7,16 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { isAdmin } from "@/lib/roles";
 import { toast } from "sonner";
 import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 import { Lead } from "./LeadTable";
 import { safeJson } from "@/lib/safe-fetch";
 
-export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | null; userRole?: string; onClose: () => void }) {
+export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lead: Lead | null; userRole?: string; onClose: () => void; onUpdate?: (updatedLead?: Lead) => void }) {
   const { t, i18n } = useTranslation("common");
   const lang = i18n.language === "ar" ? "ar" : "en";
+  const isAdminUser = isAdmin(userRole);
   const [copied, setCopied] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "ai" | "notes" | "followup">("details");
   const [notes, setNotes] = useState(lead?.notes || "");
@@ -62,6 +64,7 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
     budgetMax: "",
     tier: 3,
     source: "",
+    signals: "",
   });
 
   useEffect(() => {
@@ -85,6 +88,7 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
         budgetMax: lead.budgetMax?.toString() || "",
         tier: lead.tier ?? 3,
         source: lead.source || "",
+        signals: Array.isArray(lead.signals) ? lead.signals.join(", ") : "",
       });
       setIsEditing(false);
 
@@ -138,10 +142,43 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
     if (!lead) return;
     setSaving(true);
     try {
+      const signalsArray = editForm.signals
+        ? editForm.signals.split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+      
+      const payload: any = {};
+      if (editForm.name !== lead.name) payload.name = editForm.name;
+      if (editForm.email !== lead.email) payload.email = editForm.email || null;
+      if (editForm.phone !== lead.phone) payload.phone = editForm.phone || null;
+      if (editForm.company !== lead.company) payload.company = editForm.company;
+      if (editForm.role !== lead.role) payload.role = editForm.role;
+      if (editForm.location !== lead.location) payload.location = editForm.location;
+      if (editForm.score !== lead.score) payload.score = editForm.score;
+      if (editForm.source !== lead.source) payload.source = editForm.source;
+      
+      const budgetMinVal = editForm.budgetMin !== "" ? parseFloat(editForm.budgetMin) : null;
+      if (budgetMinVal !== lead.budgetMin) payload.budgetMin = budgetMinVal;
+      
+      const budgetMaxVal = editForm.budgetMax !== "" ? parseFloat(editForm.budgetMax) : null;
+      if (budgetMaxVal !== lead.budgetMax) payload.budgetMax = budgetMaxVal;
+
+      if (editForm.tier !== lead.tier) payload.tier = editForm.tier;
+
+      const currentSignals = Array.isArray(lead.signals) ? lead.signals : [];
+      const signalsChanged = signalsArray.length !== currentSignals.length || 
+        signalsArray.some((sig, idx) => sig !== currentSignals[idx]);
+      if (signalsChanged) payload.signals = signalsArray;
+
+      if (Object.keys(payload).length === 0) {
+        setIsEditing(false);
+        setSaving(false);
+        return;
+      }
+
       const res = await fetch(`/api/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -149,9 +186,14 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
         throw new Error(data.error || "Failed to update lead");
       }
 
+      const data = await safeJson(res);
+      const updatedLead = data.lead;
+
       toast.success(t("common.saved", "Lead updated successfully"));
       setIsEditing(false);
-      window.location.reload();
+      if (onUpdate) {
+        onUpdate(updatedLead);
+      }
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -287,9 +329,9 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
 
       toast.success(t('common.deleted', { name: lead.name, defaultValue: "Lead deleted successfully" }));
       onClose();
-      // We should probably trigger a refresh of the leads list here, 
-      // but since we don't have a global state, we'll rely on the user refreshing or the next fetch.
-      window.location.reload();
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -353,7 +395,7 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
               <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)]">{t("leads.sidebar.contact")}</h3>
-              {['admin', 'super admin', 'super_admin', 'superadmin'].includes(userRole?.toLowerCase() || '') && (
+              {isAdminUser && (
                 <button
                   onClick={() => setIsEditing(!isEditing)}
                   className="text-xs font-bold text-[var(--color-primary)] hover:underline"
@@ -479,6 +521,16 @@ export default function LeadSidebar({ lead, userRole, onClose }: { lead: Lead | 
                       className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
                     />
                   </div>
+                </div>
+                <div className="space-y-1.5 text-start">
+                  <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("leads.sidebar.signals", "Signals (comma separated)")}</label>
+                  <input
+                    type="text"
+                    value={editForm.signals}
+                    onChange={(e) => setEditForm({ ...editForm, signals: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                    placeholder="e.g. UHNW, Investor, Executive"
+                  />
                 </div>
                 <button
                   type="submit"

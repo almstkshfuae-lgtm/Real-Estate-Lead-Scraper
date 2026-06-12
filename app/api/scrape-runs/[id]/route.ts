@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin as checkIsAdmin } from "@/lib/auth";
 import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +50,7 @@ export async function GET(
     }
 
     // Non-admins can only view their own runs
-    const isAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase());
+    const isAdmin = checkIsAdmin(session.role);
     if (!isAdmin && run.triggeredBy !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

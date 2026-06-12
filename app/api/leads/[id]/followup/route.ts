@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionWithDBVerify, parsePreferences } from "@/lib/auth";
+import { getSessionWithDBVerify, parsePreferences, isAdmin } from "@/lib/auth";
 import { scheduleFollowUp } from "@/lib/bitrix24";
 
 export async function POST(
@@ -22,8 +22,8 @@ export async function POST(
     }
 
     // 1. Get the lead
-    const lead = await prisma.lead.findUnique({
-      where: { id },
+    const lead = await prisma.lead.findFirst({
+      where: { id, deletedAt: null },
     });
 
     if (!lead) {
@@ -31,7 +31,7 @@ export async function POST(
     }
 
     // Cross-Tenant Access control: Only the owner (agentId) or an admin can access/action this lead
-    if (session.role.toUpperCase() !== "ADMIN" && lead.agentId !== session.id) {
+    if (!isAdmin(session.role) && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Unauthorized access to lead data" }, { status: 403 });
     }
 

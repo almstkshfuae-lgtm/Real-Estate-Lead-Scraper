@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import { getScraperClient, getWebhookUrl } from "@/lib/scraper-client";
 import { put } from "@vercel/blob";
 
-import { getSessionWithDBVerify } from "@/lib/auth";
+import { getSessionWithDBVerify, isAdmin } from "@/lib/auth";
 import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
 export async function GET(request: Request) {
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   } else {
     try {
       const session = await getSessionWithDBVerify();
-      if (session && session.role.toUpperCase() === 'ADMIN') {
+      if (session && isAdmin(session.role)) {
         isAuthorized = true;
       }
     } catch (e) {

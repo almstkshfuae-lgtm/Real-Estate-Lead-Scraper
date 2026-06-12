@@ -114,7 +114,22 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
   useEffect(() => {
     setPage(1);
     fetchLeads(1);
-  }, [filters, limit]);
+  }, [
+    filters.searchTerm,
+    filters.statusFilter,
+    filters.tierFilter,
+    filters.scrapeRunId,
+    filters.scoreMin,
+    filters.excludeRental,
+    filters.recentlyRelocated,
+    limit
+  ]);
+
+  useEffect(() => {
+    if (filters.refreshTrigger) {
+      fetchLeads(page);
+    }
+  }, [filters.refreshTrigger]);
 
   useEffect(() => {
     if (page !== 1) {
@@ -138,19 +153,23 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
   const handleBulkStatusUpdate = async (newStatus: string) => {
     setBulkUpdating(true);
     try {
-      await Promise.all(selectedIds.map(id =>
-        fetch(`/api/leads/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: newStatus }),
-        })
-      ));
+      const res = await fetch("/api/leads/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds, status: newStatus })
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update leads");
+      }
 
       toast.success(t('common.bulkStatusUpdated', { count: selectedIds.length }));
-      fetchLeads();
       setSelectedIds([]);
-    } catch (err) {
-      toast.error("Failed to update leads");
+      setPage(1);
+      fetchLeads(1);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update leads");
     } finally {
       setBulkUpdating(false);
     }
@@ -205,7 +224,8 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
 
       toast.success(t('common.bulkDeleted', { count: selectedIds.length, defaultValue: `Successfully deleted ${selectedIds.length} leads` }));
       setSelectedIds([]);
-      fetchLeads();
+      setPage(1);
+      fetchLeads(1);
     } catch (err: any) {
       toast.error(err.message);
     } finally {

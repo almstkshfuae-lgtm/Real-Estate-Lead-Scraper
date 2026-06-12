@@ -137,6 +137,7 @@
 | 9A.7 | WhatsApp Business API client (`lib/whatsapp.ts`) | ✅ Done | High | Send template messages |
 | 9A.8 | Send WhatsApp message from lead sidebar | ✅ Done | High | Uses lead phone number |
 | 9A.9 | Email outreach — compose + send via SMTP | ✅ Done | Medium | Resend or nodemailer |
+| 9A.10 | CRM Sync error tracking (Fire & Forget Vulnerability fix) | ✅ Done | High | Save status in metadata + notify admins |
 
 ### Phase 9B — Deals Push (Post-launch, after 9A stable) ✅ (COMPLETED)
 
@@ -249,6 +250,8 @@
 - [x] **Hardened: Bilingual spelling tolerance and search normalization** — Created `lib/search.ts` utility implementing prefix-aware first-Alif normalization, Ta Marbouta/Haa toggles, and Yaa/Alif Maqsoora normalization. Refactored all search-enabled routes (`api/leads`, `api/leads/cluster`, `api/metrics`, `api/export`, `api/projects/heatmap`, and scraper webhook fallback) to use the robust spelling-tolerant tokenizer, ensuring flexible case-insensitive English/Arabic matching on MySQL. <!-- id: 12.14 -->
 - [x] **Expose AI & Quality Filters** — Linked backend quality filters (`scoreMin`, `excludeRental`, `relocated`) to the frontend Lead Table and Kanban views via a collapsible advanced filter panel, synced with the export route. <!-- id: 12.15 -->
 - [x] **Hardened: Soft-Delete Bypass in Single Lead Fetches** — Add `deletedAt: null` filter to all `prisma.lead.findUnique` and individual queries across 10 API routes to secure AI signals, scoring, whatsapp, push, persona, followup, and email. <!-- id: 12.16 -->
+- [x] **Hardened: Safe Data Cast in Lead Update API** — Moved hybrid schema validation (`score`, `budgetMin`, `budgetMax`, `tier`) to Zod transformations in `lib/schemas.ts`, preventing Prisma validation crashes on invalid inputs and parsing text representations (like values with commas) safely. <!-- id: 12.17 -->
+- [x] **Hardened: Unified Admin Role Parity** — Created client-safe `lib/roles.ts` to centralize allowed admin role formats (`['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN']`) and `isAdmin()` helper. Refactored all manual duplicate checks in 11 backend API routes and 6 frontend pages/components to prevent authorization issues and potential user account lockouts. <!-- id: 12.18 -->
 
 
 ## Legend

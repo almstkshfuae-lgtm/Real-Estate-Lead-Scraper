@@ -185,3 +185,9 @@ export async function shouldRefreshAndCreateNewToken(token: string): Promise<str
   }
   return null;
 }
+
+import { isAdmin as rolesIsAdmin, ADMIN_ROLES } from './roles';
+export { ADMIN_ROLES };
+export function isAdmin(role?: string): boolean {
+  return rolesIsAdmin(role);
+}

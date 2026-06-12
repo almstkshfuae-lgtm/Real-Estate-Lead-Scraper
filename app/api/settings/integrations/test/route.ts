@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { testConnection } from "@/lib/bitrix24";
 import { testMailConnection } from "@/lib/mail";
 import { testWhatsAppConnection } from "@/lib/whatsapp";
@@ -12,7 +12,7 @@ export const maxDuration = 30;
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
+    if (!session || !isAdmin(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

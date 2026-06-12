@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
     const session = await getSession();
-    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
+    if (!session || !isAdmin(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

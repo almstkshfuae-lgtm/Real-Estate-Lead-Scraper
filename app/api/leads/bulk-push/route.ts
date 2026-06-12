@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionWithDBVerify, parsePreferences } from "@/lib/auth";
+import { getSessionWithDBVerify, parsePreferences, isAdmin } from "@/lib/auth";
 import { pushContact, pushDeal, testConnection } from "@/lib/bitrix24";
 
 export async function POST(request: Request) {
@@ -69,16 +69,58 @@ export async function POST(request: Request) {
           }
         }
         
-        // Update lead with Bitrix ID
+        // Update lead with Bitrix ID and success metadata
+        const currentMetadata = (lead.metadata as Record<string, any>) || {};
         await prisma.lead.update({
           where: { id: lead.id },
-          data: { bitrix24Id: String(bitrixId) }
+          data: {
+            bitrix24Id: String(bitrixId),
+            metadata: {
+              ...currentMetadata,
+              bitrixSyncStatus: "SUCCESS",
+              bitrixSyncError: null,
+              bitrixSyncUpdatedAt: new Date().toISOString()
+            }
+          }
         });
         
         results.success++;
       } catch (error: any) {
         results.failed++;
         results.errors.push(`Lead ${lead.name}: ${error.message}`);
+
+        // Update metadata to indicate failure
+        try {
+          const currentMetadata = (lead.metadata as Record<string, any>) || {};
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: {
+              metadata: {
+                ...currentMetadata,
+                bitrixSyncStatus: "FAILED",
+                bitrixSyncError: error.message || String(error),
+                bitrixSyncUpdatedAt: new Date().toISOString()
+              }
+            }
+          });
+
+          // Notify admins
+          const allUsers = await prisma.user.findMany();
+          const admins = allUsers.filter(u => isAdmin(u.role));
+          for (const admin of admins) {
+            await prisma.notification.create({
+              data: {
+                agentId: admin.id,
+                title: `CRM Sync Failed (Bulk)`,
+                body: `Failed to push lead "${lead.name}" (${lead.company}) to Bitrix24 during bulk push: ${error.message || String(error)}`,
+                type: "error",
+                data: JSON.stringify({ leadId: lead.id, error: error.message || String(error) })
+              }
+            });
+          }
+        } catch (dbErr) {
+          console.error(`Failed to update failure metadata/notification for lead ${lead.id}:`, dbErr);
+        }
 
         // If it's a token authorization/expired error, abort subsequent loop items to prevent partial pipeline sync issues
         const isAuthError = 

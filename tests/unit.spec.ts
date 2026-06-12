@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { parseAIJson, AIJsonParseError } from '../lib/ai-json';
 import { parseSignals } from '../lib/signals';
 import { cleanPhone, cleanEmail } from '../lib/sanitizer';
+import { leadUpdateSchema } from '../lib/schemas';
 
 test.describe('Unit Tests — Core Logic Hardening', () => {
 
@@ -121,6 +122,98 @@ test.describe('Unit Tests — Core Logic Hardening', () => {
 
     test('should return null for invalid email string', () => {
       expect(cleanEmail('broken-email-no-at')).toBeNull();
+    });
+  });
+
+  test.describe('leadUpdateSchema validation and casting', () => {
+    test('should parse valid numbers for score, budgetMin, budgetMax, and tier', () => {
+      const input = {
+        score: 95,
+        budgetMin: 1500000,
+        budgetMax: 3000000,
+        tier: 1
+      };
+      const result = leadUpdateSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.score).toBe(95);
+        expect(result.data.budgetMin).toBe(1500000);
+        expect(result.data.budgetMax).toBe(3000000);
+        expect(result.data.tier).toBe(1);
+      }
+    });
+
+    test('should parse and transform string representations of numbers', () => {
+      const input = {
+        score: '95',
+        budgetMin: '1,500,000',
+        budgetMax: '3,000,000',
+        tier: '1'
+      };
+      const result = leadUpdateSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.score).toBe(95);
+        expect(result.data.budgetMin).toBe(1500000);
+        expect(result.data.budgetMax).toBe(3000000);
+        expect(result.data.tier).toBe(1);
+      }
+    });
+
+    test('should transform invalid numeric strings to safe fallbacks (null or default)', () => {
+      const input = {
+        score: 'abc', // should fallback to 50
+        budgetMin: 'abc', // should fallback to null
+        budgetMax: 'abc', // should fallback to null
+        tier: 'abc' // should fallback to undefined (ignored in PATCH)
+      };
+      const result = leadUpdateSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.score).toBe(50);
+        expect(result.data.budgetMin).toBeNull();
+        expect(result.data.budgetMax).toBeNull();
+        expect(result.data.tier).toBeUndefined();
+      }
+    });
+
+    test('should handle empty or null values correctly', () => {
+      const input = {
+        score: '', // fallback to undefined
+        budgetMin: '', // fallback to null
+        budgetMax: null, // fallback to null
+        tier: null // fallback to undefined
+      };
+      const result = leadUpdateSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.score).toBeUndefined();
+        expect(result.data.budgetMin).toBeNull();
+        expect(result.data.budgetMax).toBeNull();
+        expect(result.data.tier).toBeUndefined();
+      }
+    });
+  });
+
+  test.describe('CRM Sync Metadata updates', () => {
+    test('should preserve existing metadata fields when updating sync status', () => {
+      const existingMetadata = { aiSignals: ['UHNW'], csvImportLabel: 'Import-1' };
+      const syncStatus = 'FAILED';
+      const syncError = 'Invalid Token';
+      const syncTime = new Date().toISOString();
+
+      const updatedMetadata = {
+        ...existingMetadata,
+        bitrixSyncStatus: syncStatus,
+        bitrixSyncError: syncError,
+        bitrixSyncUpdatedAt: syncTime
+      };
+
+      expect(updatedMetadata.aiSignals).toEqual(['UHNW']);
+      expect(updatedMetadata.csvImportLabel).toBe('Import-1');
+      expect(updatedMetadata.bitrixSyncStatus).toBe('FAILED');
+      expect(updatedMetadata.bitrixSyncError).toBe('Invalid Token');
+      expect(updatedMetadata.bitrixSyncUpdatedAt).toBe(syncTime);
     });
   });
 

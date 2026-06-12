@@ -12,8 +12,8 @@ export async function GET(request, { params }) {
         const { id } = await params;
         const { searchParams } = new URL(request.url);
         const lang = searchParams.get("lang") || "en";
-        const lead = await prisma.lead.findUnique({
-            where: { id },
+        const lead = await prisma.lead.findFirst({
+            where: { id, deletedAt: null },
         });
         if (!lead) {
             return NextResponse.json({ error: "Lead not found" }, { status: 404 });

@@ -2,6 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
+import { isAdmin } from "@/lib/roles";
 import { Download, FileSpreadsheet, FileText, Calendar, Filter } from "lucide-react";
 import Link from "next/link";
 
@@ -16,7 +17,7 @@ export default function ExportHistoryPage() {
     fetch("/api/auth/me")
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (!data || !data.user || !['admin', 'super admin', 'super_admin', 'superadmin'].includes(data.user.role?.toLowerCase() || '')) {
+        if (!data || !data.user || !isAdmin(data.user.role)) {
           setForbidden(true);
           setLoading(false);
           return;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { getSecret } from "@/lib/secrets";
 import { buildSearchConditions } from "@/lib/search";
 import { getAreasInBounds } from "@/lib/areas";
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     // Check for admin session
     try {
       const session = await getSession();
-      if (session && ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '')) {
+      if (session && isAdmin(session.role)) {
         isAuthorized = true;
       }
     } catch (e) {
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     } catch (e) {
       // Ignore
     }
-    if (sessionUser && !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(sessionUser.role?.toUpperCase() || '')) {
+    if (sessionUser && !isAdmin(sessionUser.role)) {
       conditions.push({ agentId: sessionUser.id });
     }
 
@@ -258,16 +258,36 @@ export async function GET(request: Request) {
       return NextResponse.json({
         leads: {
           total: totalLeads,
-          byStatus: leadsByStatus.reduce((acc, curr) => ({ ...acc, [curr.status]: curr._count.id }), {}),
-          byTier: leadsByTier.reduce((acc, curr) => ({ ...acc, [`T${curr.tier}`]: curr._count.id }), {}),
-          bySource: leadsBySource.reduce((acc, curr) => ({ ...acc, [curr.source]: curr._count.id }), {})
+          byStatus: leadsByStatus.reduce((acc, curr) => {
+            if (curr.status !== null && curr.status !== undefined && curr.status !== "") {
+              acc[curr.status] = curr._count.id;
+            }
+            return acc;
+          }, {} as Record<string, number>),
+          byTier: leadsByTier.reduce((acc, curr) => {
+            if (curr.tier !== null && curr.tier !== undefined) {
+              acc[`T${curr.tier}`] = curr._count.id;
+            }
+            return acc;
+          }, {} as Record<string, number>),
+          bySource: leadsBySource.reduce((acc, curr) => {
+            if (curr.source !== null && curr.source !== undefined && curr.source !== "") {
+              acc[curr.source] = curr._count.id;
+            }
+            return acc;
+          }, {} as Record<string, number>)
         },
         projects: {
           total: totalProjects
         },
         runs: {
           total: totalRuns,
-          byStatus: runsByStatus.reduce((acc, curr) => ({ ...acc, [curr.status]: curr._count.id }), {}),
+          byStatus: runsByStatus.reduce((acc, curr) => {
+            if (curr.status !== null && curr.status !== undefined && curr.status !== "") {
+              acc[curr.status] = curr._count.id;
+            }
+            return acc;
+          }, {} as Record<string, number>),
           failureAlertActive: highFailureAlert === 1
         }
       });
@@ -285,7 +305,9 @@ export async function GET(request: Request) {
     prometheusText += `# HELP brilliance_leads_by_status Leads count grouped by status.\n`;
     prometheusText += `# TYPE brilliance_leads_by_status gauge\n`;
     leadsByStatus.forEach(item => {
-      prometheusText += `brilliance_leads_by_status{status="${item.status}"} ${item._count.id}\n`;
+      if (item.status !== null && item.status !== undefined && item.status !== "") {
+        prometheusText += `brilliance_leads_by_status{status="${item.status}"} ${item._count.id}\n`;
+      }
     });
     prometheusText += `\n`;
 
@@ -293,7 +315,9 @@ export async function GET(request: Request) {
     prometheusText += `# HELP brilliance_leads_by_tier Leads count grouped by source tier.\n`;
     prometheusText += `# TYPE brilliance_leads_by_tier gauge\n`;
     leadsByTier.forEach(item => {
-      prometheusText += `brilliance_leads_by_tier{tier="T${item.tier}"} ${item._count.id}\n`;
+      if (item.tier !== null && item.tier !== undefined) {
+        prometheusText += `brilliance_leads_by_tier{tier="T${item.tier}"} ${item._count.id}\n`;
+      }
     });
     prometheusText += `\n`;
 
@@ -301,9 +325,11 @@ export async function GET(request: Request) {
     prometheusText += `# HELP brilliance_leads_by_source_total Leads count grouped by primary scraping source.\n`;
     prometheusText += `# TYPE brilliance_leads_by_source_total gauge\n`;
     leadsBySource.forEach(item => {
-      // Clean source names for safe Prometheus labels
-      const safeSource = item.source.replace(/["\\]/g, "");
-      prometheusText += `brilliance_leads_by_source_total{source="${safeSource}"} ${item._count.id}\n`;
+      if (item.source !== null && item.source !== undefined && item.source !== "") {
+        // Clean source names for safe Prometheus labels
+        const safeSource = item.source.replace(/["\\]/g, "");
+        prometheusText += `brilliance_leads_by_source_total{source="${safeSource}"} ${item._count.id}\n`;
+      }
     });
     prometheusText += `\n`;
 
@@ -316,7 +342,9 @@ export async function GET(request: Request) {
     prometheusText += `# HELP brilliance_scrape_runs_total Scraper runs count grouped by status.\n`;
     prometheusText += `# TYPE brilliance_scrape_runs_total gauge\n`;
     runsByStatus.forEach(item => {
-      prometheusText += `brilliance_scrape_runs_total{status="${item.status}"} ${item._count.id}\n`;
+      if (item.status !== null && item.status !== undefined && item.status !== "") {
+        prometheusText += `brilliance_scrape_runs_total{status="${item.status}"} ${item._count.id}\n`;
+      }
     });
     prometheusText += `\n`;
 

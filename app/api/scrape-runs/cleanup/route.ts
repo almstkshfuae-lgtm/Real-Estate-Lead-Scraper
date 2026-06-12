@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
+import { ADMIN_ROLES } from "@/lib/auth";
 
 const ZOMBIE_AGE_MINUTES = 10;
 
@@ -74,7 +75,7 @@ async function runCleanup(): Promise<NextResponse> {
       where: {
         OR: [
           { email: "admin@brilliance-lead.uk" },
-          { role: { in: ["admin", "super admin", "super_admin", "superadmin"] } }
+          { role: { in: ADMIN_ROLES.map(r => r.toLowerCase()) } }
         ]
       },
     });

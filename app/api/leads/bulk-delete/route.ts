@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionWithDBVerify } from "@/lib/auth";
+import { getSessionWithDBVerify, isAdmin } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
     // Fetch only active leads that belong to the current user (unless admin)
     // Exclude already-soft-deleted records to prevent redundant writes and audit noise
-    const isNonAdmin = !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '');
+    const isNonAdmin = !isAdmin(session.role);
 
     const leadsToDelete = await prisma.lead.findMany({
       where: {

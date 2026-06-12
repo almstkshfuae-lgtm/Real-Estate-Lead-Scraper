@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import LeadTable, { Lead } from "@/components/leads/LeadTable";
 import LeadPipeline from "@/components/leads/LeadPipeline";
 import LeadSidebar from "@/components/leads/LeadSidebar";
+import { isAdmin } from "@/lib/roles";
 import { 
   Download, 
   Plus, 
@@ -67,7 +68,12 @@ export default function LeadsPage() {
       .catch((err) => console.error(err));
   }, []);
 
-  const handleRefresh = () => setRefreshKey(prev => prev + 1);
+  const handleRefresh = (updatedLead?: Lead) => {
+    setRefreshKey(prev => prev + 1);
+    if (updatedLead && selectedLead && selectedLead.id === updatedLead.id) {
+      setSelectedLead(updatedLead);
+    }
+  };
 
   const exportLeads = async (format: 'csv' | 'xlsx') => {
     try {
@@ -153,7 +159,7 @@ export default function LeadsPage() {
               </button>
             </div>
           )}
-          {user && ['admin', 'super admin', 'super_admin', 'superadmin'].includes(user.role?.toLowerCase() || '') && <CsvUpload onSuccess={handleRefresh} />}
+          {user && isAdmin(user.role) && <CsvUpload onSuccess={handleRefresh} />}
 
           <Link 
             href="/search"
@@ -381,6 +387,7 @@ export default function LeadsPage() {
         lead={selectedLead} 
         userRole={user?.role}
         onClose={() => setSelectedLead(null)} 
+        onUpdate={handleRefresh}
       />
     </div>
   );

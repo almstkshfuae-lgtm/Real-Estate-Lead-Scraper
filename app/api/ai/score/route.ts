@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "leadId is required" }, { status: 400 });
     }
 
-    const lead = await prisma.lead.findUnique({ where: { id: String(leadId) } });
+    const lead = await prisma.lead.findFirst({
+      where: { id: String(leadId), deletedAt: null }
+    });
     if (!lead) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     }

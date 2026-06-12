@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { buildSearchConditions } from "@/lib/search";
 import { getAreasInBounds } from "@/lib/areas";
 
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     const conditions: any[] = [];
 
     // Enforce data access control: non-admins only see their own leads
-    if (session.role?.toUpperCase() !== "ADMIN") {
+    if (!isAdmin(session.role)) {
       conditions.push({ agentId: session.id });
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionWithDBVerify } from "@/lib/auth";
+import { getSessionWithDBVerify, isAdmin as checkIsAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getScraperClient, getWebhookUrl } from "@/lib/scraper-client";
 import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const role = session.role.toUpperCase();
     const isAgent = role === 'AGENT';
-    const isAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(role);
+    const isAdmin = checkIsAdmin(role);
     if (!isAdmin && !isAgent) {
       return NextResponse.json({ error: "Forbidden: Higher privileges required" }, { status: 403 });
     }

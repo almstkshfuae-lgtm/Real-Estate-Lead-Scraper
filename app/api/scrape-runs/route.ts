@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from "@/lib/prisma";
-import { getSessionWithDBVerify } from "@/lib/auth";
+import { getSessionWithDBVerify, isAdmin } from "@/lib/auth";
 
 export async function GET() {
   try {
@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const isHostAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase());
+    const isHostAdmin = isAdmin(session.role);
     const runs = await prisma.scrapeRun.findMany({
       where: isHostAdmin ? {} : { triggeredBy: session.id },
       orderBy: { startedAt: 'desc' },

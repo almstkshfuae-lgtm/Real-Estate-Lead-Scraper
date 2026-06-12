@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionWithDBVerify } from "@/lib/auth";
+import { getSessionWithDBVerify, isAdmin as isAdminRole } from "@/lib/auth";
 import { notifyNewEliteLeads, notifyScrapeCompletion } from "@/lib/notifications";
 import { normalizeLocation, resolveCoords } from "@/lib/ai";
 import { cleanPhone, cleanEmail } from "@/lib/sanitizer";
@@ -213,7 +213,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const isAdmin = session.role?.toUpperCase() === 'ADMIN';
+    const isAdmin = isAdminRole(session.role);
 
     const body = await request.json();
     const { leads: rawLeads } = body;

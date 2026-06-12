@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isAdmin } from "@/lib/roles";
 import { Users, UserPlus, Trash2, Shield, Mail, KeyRound, Loader2, Save, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
@@ -164,7 +165,7 @@ export default function UserManagementPage() {
                       <div className="text-sm font-bold text-text-primary flex items-center gap-2">
                         {isRtl && u.nameAr ? u.nameAr : u.name}
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          ['admin', 'super admin', 'super_admin', 'superadmin'].includes(u.role?.toLowerCase() || '') 
+                          isAdmin(u.role) 
                             ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' 
                             : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                         }`}>

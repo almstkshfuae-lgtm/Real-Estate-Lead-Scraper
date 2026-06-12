@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin as checkIsAdmin, ADMIN_ROLES } from "@/lib/auth";
 import { scrapeEvents } from "@/lib/scrape-events";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function GET(
   }
 
   const encoder = new TextEncoder();
-  const isAdmin = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase());
+  const isAdmin = checkIsAdmin(session.role);
 
   // Helper function to process agent fallback if needed
   const handleAgentFallback = async (currentRun: any) => {
@@ -47,7 +47,7 @@ export async function GET(
         const existingNames = agentLeads.map(l => l.name);
         let adminLeads = await prisma.lead.findMany({
           where: {
-            agent: { role: { in: ['admin', 'super admin', 'super_admin', 'superadmin'] } },
+            agent: { role: { in: ADMIN_ROLES.map(r => r.toLowerCase()) } },
             name: { notIn: existingNames },
             deletedAt: null,
           },
@@ -55,7 +55,7 @@ export async function GET(
         });
         if (adminLeads.length < 10) {
           adminLeads = await prisma.lead.findMany({
-            where: { agent: { role: { in: ['admin', 'super admin', 'super_admin', 'superadmin'] } }, deletedAt: null },
+            where: { agent: { role: { in: ADMIN_ROLES.map(r => r.toLowerCase()) } }, deletedAt: null },
             take: 100
           });
         }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const leads = await prisma.lead.findMany({
       where: {
-        ...(session.role.toUpperCase() !== "ADMIN" ? { agentId: session.id } : {}),
+        ...(!isAdmin(session.role) ? { agentId: session.id } : {}),
         deletedAt: null,
       },
       select: {

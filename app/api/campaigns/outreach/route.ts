@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession, parsePreferences } from "@/lib/auth";
+import { getSession, parsePreferences, isAdmin } from "@/lib/auth";
 import { decrypt } from "@/lib/crypto";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 import { sendEmail } from "@/lib/mail";
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     // 3. Sequential rate-limited loop
     for (const lead of leads) {
       // Access Control check
-      if (session.role.toUpperCase() !== "ADMIN" && lead.agentId !== session.id) {
+      if (!isAdmin(session.role) && lead.agentId !== session.id) {
         results.failed++;
         results.details.push({
           leadId: lead.id,

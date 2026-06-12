@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { isAdmin } from "@/lib/roles";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -20,6 +21,7 @@ export default function NavSidebar() {
   const { t, i18n } = useTranslation('common');
   const isRtl = i18n.language === "ar";
   const [userRole, setUserRole] = useState<string | null>(null);
+  const isAdminUser = isAdmin(userRole || undefined);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -82,7 +84,7 @@ export default function NavSidebar() {
       </nav>
 
       <div className="p-4 border-t border-[var(--color-border)] space-y-2">
-        {['admin', 'super admin', 'super_admin', 'superadmin'].includes(userRole?.toLowerCase() || '') && (
+        {isAdminUser && (
           <Link
             href="/settings/users"
             className={`flex items-center gap-3 p-3 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface)] hover:text-[var(--color-text-primary)] transition-all ${
@@ -111,7 +113,7 @@ export default function NavSidebar() {
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           <span className="font-medium text-sm">{t('nav.notifications', 'Notifications')}</span>
         </Link>
-        {['admin', 'super admin', 'super_admin', 'superadmin'].includes(userRole?.toLowerCase() || '') && (
+        {isAdminUser && (
           <Link
             href="/settings/integrations"
             className={`flex items-center gap-3 p-3 rounded-xl text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface)] hover:text-[var(--color-text-primary)] transition-all ${
@@ -131,7 +133,7 @@ export default function NavSidebar() {
           <Search className="w-5 h-5" />
           <span className="font-medium text-sm">{t('nav.scraperSettings', 'Scraper Settings')}</span>
         </Link>
-        {['admin', 'super admin', 'super_admin', 'superadmin'].includes(userRole?.toLowerCase() || '') && (
+        {isAdminUser && (
           <>
             <Link
               href="/settings/export"

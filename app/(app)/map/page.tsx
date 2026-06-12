@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import dynamic from "next/dynamic";
+import { isAdmin as checkIsAdmin } from "@/lib/roles";
 import { useTranslation } from "react-i18next";
 import {
   MapPin,
@@ -71,6 +72,7 @@ export default function MapPage() {
   const [debouncedScoreMin, setDebouncedScoreMin] = useState<number>(0);
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<string | undefined>(undefined);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newProject, setNewProject] = useState({
     projectName: "",
@@ -93,8 +95,11 @@ export default function MapPage() {
         const res = await fetch("/api/auth/me");
         if (res.ok) {
           const data = await res.json();
-          if (data.user && data.user.role.toUpperCase() === "ADMIN") {
-            setIsAdmin(true);
+          if (data.user) {
+            setUserRole(data.user.role);
+            if (checkIsAdmin(data.user.role)) {
+              setIsAdmin(true);
+            }
           }
         }
       } catch (err) {
@@ -244,6 +249,13 @@ export default function MapPage() {
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
+
+  const handleMapRefresh = (updatedLead?: Lead) => {
+    fetchLeads();
+    if (updatedLead && sidebarLead && sidebarLead.id === updatedLead.id) {
+      setSidebarLead(updatedLead);
+    }
+  };
 
   const handleGeofenceDrawn = useCallback(
     async (bounds: { north: number; south: number; east: number; west: number }) => {
@@ -653,7 +665,9 @@ export default function MapPage() {
           {/* Full Lead Sidebar */}
           <LeadSidebar
             lead={sidebarLead}
+            userRole={userRole}
             onClose={() => setSidebarLead(null)}
+            onUpdate={handleMapRefresh}
           />
 
           {/* Full Project Sidebar */}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 
 export async function PATCH(
   req: Request,
@@ -8,7 +8,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession();
-    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
+    if (!session || !isAdmin(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;
@@ -42,7 +42,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getSession();
-    if (!session || !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role.toUpperCase())) {
+    if (!session || !isAdmin(session.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const { id } = await params;

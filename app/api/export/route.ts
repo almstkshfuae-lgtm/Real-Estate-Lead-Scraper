@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import Papa from "papaparse";
 import ExcelJS from "exceljs";
 import { put } from "@vercel/blob";
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const format = (searchParams.get("format") || "xlsx").toLowerCase();
 
     const conditions: any[] = [{ deletedAt: null }];
-    if (session.role?.toUpperCase() !== 'ADMIN') {
+    if (!isAdmin(session.role)) {
       conditions.push({ agentId: session.id });
     }
     if (search) {

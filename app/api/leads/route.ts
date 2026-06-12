@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { buildSearchConditions } from "@/lib/search";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { getAreasInBounds } from "@/lib/areas";
 
 
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
 
     // Agents can only see their own leads, Admins see all
     // Use case-insensitive comparison for role supporting all admin variants
-    if (!['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '')) {
+    if (!isAdmin(session.role)) {
       conditions.push({ agentId: session.id });
     }
 

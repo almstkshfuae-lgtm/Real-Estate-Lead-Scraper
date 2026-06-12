@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import { generatePersonaAnalysis } from "@/lib/ai";
 
 export async function GET(
@@ -17,8 +17,8 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const lang = searchParams.get("lang") || "en";
 
-    const lead = await prisma.lead.findUnique({
-      where: { id },
+    const lead = await prisma.lead.findFirst({
+      where: { id, deletedAt: null },
     });
 
     if (!lead) {
@@ -26,7 +26,7 @@ export async function GET(
     }
 
     // Agents can only access their own leads
-    if (session.role?.toUpperCase() !== 'ADMIN' && lead.agentId !== session.id) {
+    if (!isAdmin(session.role) && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

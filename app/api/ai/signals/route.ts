@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateGeminiText, deduplicateSignals } from "@/lib/ai";
 import { signalsToString } from "@/lib/signals";
 import { parseAIJson, AIJsonParseError } from "@/lib/ai-json";
-import { getSession } from "@/lib/auth";
+import { getSession, isAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 // Predefined news signals for UAE high-profile individuals (simulated)
@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Lead ID or lead data is required" }, { status: 400 });
     }
 
-    const lead = await prisma.lead.findUnique({
-      where: { id: String(targetLeadId) }
+    const lead = await prisma.lead.findFirst({
+      where: { id: String(targetLeadId), deletedAt: null }
     });
 
     if (!lead) {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Agents can only access their own leads
-    if (session.role?.toUpperCase() !== 'ADMIN' && lead.agentId !== session.id) {
+    if (!isAdmin(session.role) && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

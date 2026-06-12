@@ -1,26 +1,11 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSessionWithDBVerify } from "@/lib/auth";
+import { getSessionWithDBVerify, isAdmin } from "@/lib/auth";
 import { updateContact } from "@/lib/bitrix24";
 import { normalizeLocation, resolveCoords } from "@/lib/ai";
 import { cleanPhone, cleanEmail } from "@/lib/sanitizer";
-import { z } from "zod";
-
-const leadUpdateSchema = z.object({
-  name: z.string().trim().min(1, "Name cannot be empty").optional(),
-  email: z.string().trim().email("Invalid email format").nullable().or(z.literal("")).optional(),
-  phone: z.string().trim().nullable().optional(),
-  company: z.string().trim().optional(),
-  role: z.string().trim().optional(),
-  location: z.string().trim().optional(),
-  score: z.union([z.number(), z.string()]).optional(),
-  budgetMin: z.union([z.number(), z.string()]).nullable().optional(),
-  budgetMax: z.union([z.number(), z.string()]).nullable().optional(),
-  status: z.string().trim().optional(),
-  notes: z.string().trim().optional(),
-  tier: z.union([z.number(), z.string()]).optional(),
-  source: z.string().trim().optional(),
-});
+import { parseSignals } from "@/lib/signals";
+import { leadUpdateSchema } from "@/lib/schemas";
 
 export async function PATCH(
   request: Request,
@@ -53,30 +38,31 @@ export async function PATCH(
       status,
       notes,
       tier,
-      source
+      source,
+      signals
     } = validation.data;
 
-    const lead = await prisma.lead.findUnique({
-      where: { id },
+    const lead = await prisma.lead.findFirst({
+      where: { id, deletedAt: null },
     });
 
     if (!lead) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     }
 
+    // Agents can only update their own leads
+    const isNonAdmin = !isAdmin(session.role);
+    if (isNonAdmin && lead.agentId !== session.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     // Non-admins cannot edit core lead info fields
-    const isNonAdmin = !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '');
     if (isNonAdmin) {
-      const editFields = [name, email, phone, company, role, location, score, budgetMin, budgetMax, tier, source];
+      const editFields = [name, email, phone, company, role, location, score, budgetMin, budgetMax, tier, source, signals];
       const hasRestrictedEdit = editFields.some(field => field !== undefined);
       if (hasRestrictedEdit) {
         return NextResponse.json({ error: "Only admins are allowed to edit lead details." }, { status: 403 });
       }
-    }
-
-    // Agents can only update their own leads
-    if (isNonAdmin && lead.agentId !== session.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     // Deduplication check on update
@@ -90,6 +76,7 @@ export async function PATCH(
           name: targetName,
           company: targetCompany,
           agentId: lead.agentId,
+          deletedAt: null,
         },
       });
 
@@ -108,6 +95,7 @@ export async function PATCH(
           id: { not: id },
           email: targetEmail,
           agentId: lead.agentId,
+          deletedAt: null,
         },
       });
 
@@ -128,13 +116,15 @@ export async function PATCH(
       lng = coords.lng;
     }
 
-    const parsedScore = score !== undefined ? (typeof score === 'number' ? score : parseInt(score, 10)) : undefined;
+    const parsedScore = score;
     let computedTier = undefined;
-    if (parsedScore !== undefined && !isNaN(parsedScore)) {
+    if (parsedScore !== undefined) {
       if (parsedScore >= 90) computedTier = 1;
       else if (parsedScore >= 60) computedTier = 2;
       else computedTier = 3;
     }
+
+    const targetSignals = signals !== undefined ? parseSignals(signals) : undefined;
 
     const updatedLead = await prisma.lead.update({
       where: { id },
@@ -149,11 +139,12 @@ export async function PATCH(
           latitude: lat,
           longitude: lng
         }),
-        ...(parsedScore !== undefined && { score: isNaN(parsedScore) ? 50 : parsedScore }),
-        ...(tier !== undefined ? { tier: typeof tier === 'number' ? tier : parseInt(tier, 10) } : computedTier !== undefined ? { tier: computedTier } : {}),
+        ...(parsedScore !== undefined && { score: parsedScore }),
+        ...(tier !== undefined ? { tier } : computedTier !== undefined ? { tier: computedTier } : {}),
         ...(source !== undefined && { source: source.trim() }),
-        ...(budgetMin !== undefined && { budgetMin: budgetMin !== "" && budgetMin !== null ? (typeof budgetMin === 'number' ? budgetMin : parseFloat(budgetMin)) : null }),
-        ...(budgetMax !== undefined && { budgetMax: budgetMax !== "" && budgetMax !== null ? (typeof budgetMax === 'number' ? budgetMax : parseFloat(budgetMax)) : null }),
+        ...(budgetMin !== undefined && { budgetMin }),
+        ...(budgetMax !== undefined && { budgetMax }),
+        ...(targetSignals !== undefined && { signals: targetSignals }),
         ...(status !== undefined && { status }),
         ...(notes !== undefined && { notes }),
       },
@@ -194,7 +185,58 @@ export async function PATCH(
       const b24Token = process.env.BITRIX24_WEBHOOK_TOKEN;
       if (b24Domain && b24Token) {
         // Fire and forget so we don't block the UI response
-        updateContact(b24Domain, b24Token, updatedLead.bitrix24Id, updatedLead).catch(console.error);
+        updateContact(b24Domain, b24Token, updatedLead.bitrix24Id, updatedLead)
+          .then(async () => {
+            const currentMetadata = (updatedLead.metadata as Record<string, any>) || {};
+            await prisma.lead.update({
+              where: { id: updatedLead.id },
+              data: {
+                metadata: {
+                  ...currentMetadata,
+                  bitrixSyncStatus: "SUCCESS",
+                  bitrixSyncError: null,
+                  bitrixSyncUpdatedAt: new Date().toISOString()
+                }
+              }
+            });
+          })
+          .catch(async (syncErr: any) => {
+            const errorMessage = syncErr instanceof Error ? syncErr.message : String(syncErr);
+            console.error(`CRM Sync failed for lead ${updatedLead.id}:`, errorMessage);
+
+            // Update metadata with FAILED status and error message
+            const currentMetadata = (updatedLead.metadata as Record<string, any>) || {};
+            await prisma.lead.update({
+              where: { id: updatedLead.id },
+              data: {
+                metadata: {
+                  ...currentMetadata,
+                  bitrixSyncStatus: "FAILED",
+                  bitrixSyncError: errorMessage,
+                  bitrixSyncUpdatedAt: new Date().toISOString()
+                }
+              }
+            });
+
+            // Notify admins
+            try {
+              const allUsers = await prisma.user.findMany();
+              const admins = allUsers.filter(u => isAdmin(u.role));
+              for (const admin of admins) {
+                await prisma.notification.create({
+                  data: {
+                    agentId: admin.id,
+                    title: `CRM Sync Failed`,
+                    body: `Failed to synchronize lead "${updatedLead.name}" (${updatedLead.company}) to Bitrix24: ${errorMessage}`,
+                    type: "error",
+                    data: JSON.stringify({ leadId: updatedLead.id, error: errorMessage })
+                  }
+                });
+              }
+            } catch (notifyErr) {
+              console.error("Failed to create CRM sync failure notifications:", notifyErr);
+            }
+          });
       }
     }
 
@@ -217,8 +259,8 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const lead = await prisma.lead.findUnique({
-      where: { id },
+    const lead = await prisma.lead.findFirst({
+      where: { id, deletedAt: null },
     });
 
     if (!lead) {
@@ -226,7 +268,7 @@ export async function DELETE(
     }
 
     // Agents can only delete their own leads
-    const isNonAdmin = !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'SUPERADMIN'].includes(session.role?.toUpperCase() || '');
+    const isNonAdmin = !isAdmin(session.role);
     if (isNonAdmin && lead.agentId !== session.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
