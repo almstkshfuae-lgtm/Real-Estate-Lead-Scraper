@@ -228,6 +228,8 @@
   "projects": {
     "addProject": "Add Project",
     "addNewProject": "Add New Project",
+    "addProjectHere": "Add project here?",
+    "developerTba": "Developer TBA",
     "uploading": "Uploading...",
     "uploadImage": "Upload Image",
     "imageHint": "Recommended size: 800x400px. JPG or PNG.",
@@ -240,6 +242,7 @@
     "saveError": "Failed to save project",
     "visitSource": "Visit Project Source",
     "deleteProject": "Delete Project",
+    "viewDetails": "View Details",
     "fields": {
       "image": "Project Image",
       "noImage": "No image",
@@ -447,7 +450,9 @@
     "failedToUpdateLeads": "Failed to update leads",
     "cancel": "Cancel",
     "edit": "Edit",
-    "save": "Save Changes"
+    "save": "Save Changes",
+    "tba": "TBA",
+    "uae": "UAE"
   },
   "ai": {
     "pitchTitle": "AI Pitch Generator",
@@ -500,5 +505,41 @@
     "unauthorized": "Unauthorized",
     "invalidInput": "Invalid input data",
     "serverConnectionError": "A connection error occurred. Please try again later."
+  },
+  "sources": {
+    "bayut": "Bayut",
+    "dubizzle": "Dubizzle",
+    "zawyainvest": "Zawya Invest",
+    "zawya": "Zawya",
+    "bloombergmena": "Bloomberg MENA",
+    "bloomberg": "Bloomberg",
+    "forbesme": "Forbes ME",
+    "forbes": "Forbes",
+    "adgmdifcregistry": "ADGM/DIFC Registry",
+    "adgmregistry": "ADGM Registry",
+    "adgm": "ADGM",
+    "dedregistry": "DED Registry",
+    "ded": "DED",
+    "privatebanking": "Private Banking",
+    "familyoffice": "Family Office",
+    "elitelifestyle": "Elite Lifestyle",
+    "elitelifestyleconcierge": "Elite Lifestyle/Concierge",
+    "newspress": "News & Press",
+    "manualimport": "Manual Import",
+    "canadiandoctorsdirectory": "Canadian Doctors Directory",
+    "physiciandirectorycpsa": "Physician Directory - CPSA",
+    "ahuscanadadoctorslist": "aHUS Canada Doctors List",
+    "hnwisources": "HNWI Sources",
+    "unknown": "Unknown"
+  },
+  "developers": {
+    "emaar": "Emaar",
+    "damac": "Damac",
+    "nakheel": "Nakheel",
+    "aldar": "Aldar",
+    "sobha": "Sobha",
+    "deyaar": "Deyaar",
+    "meraas": "Meraas",
+    "dubaiproperties": "Dubai Properties"
   }
 }

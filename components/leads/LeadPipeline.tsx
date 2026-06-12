@@ -162,15 +162,22 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
 
                           <div className="mb-4">
                             <h4 className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)] transition-colors">
-                              {lead.name}
+                              {(i18n.language === "ar" && lead.nameAr) ? lead.nameAr : lead.name}
                             </h4>
-                            <p className="text-[10px] text-[var(--color-text-secondary)] truncate">{t('leads.pipeline.roleAt', { role: lead.role, company: lead.company })}</p>
+                             <p className="text-[10px] text-[var(--color-text-secondary)] truncate">
+                              {t('leads.pipeline.roleAt', { 
+                                role: (i18n.language === "ar" && lead.roleAr) ? lead.roleAr : lead.role, 
+                                company: (i18n.language === "ar" && lead.companyAr) ? lead.companyAr : lead.company 
+                              }) as string}
+                            </p>
                           </div>
 
                           <div className="flex items-center justify-between pt-3 border-t border-[var(--color-border)]/50">
                             {lead.source !== "Manual Import" && (
                               <div className="text-[10px] text-[var(--color-text-disabled)]">
-                                {lead.source}
+                                {i18n.language === "ar" 
+                                  ? (t(`sources.${lead.source.toLowerCase().replace(/[^a-z0-9]/g, "")}`, lead.source) as string) 
+                                  : lead.source}
                               </div>
                             )}
                           </div>

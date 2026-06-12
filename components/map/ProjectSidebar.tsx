@@ -113,28 +113,18 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
     return isRtl ? `${num.toLocaleString()} د.إ` : `AED ${num.toLocaleString()}`;
   };
 
-  const DEVELOPER_TRANSLATIONS: Record<string, string> = {
-    "Emaar": "إعمار",
-    "Damac": "داماك",
-    "Nakheel": "نخيل",
-    "Aldar": "الدار",
-    "Sobha": "شوبا",
-    "Deyaar": "ديار",
-    "Meraas": "ميراس",
-    "Dubai Properties": "دبي للعقارات"
-  };
-
   const displayDeveloper = project.developer 
-    ? (isRtl ? (DEVELOPER_TRANSLATIONS[project.developer] || project.developer) : project.developer) 
-    : (isRtl ? "مطور عقاري قريباً" : "Developer TBA");
+    ? (t(`developers.${project.developer.toLowerCase().replace(/[^a-z0-9]/g, "")}`, project.developer) as string)
+    : (t("projects.developerTba", "Developer TBA") as string);
 
   const displayLocation = project.location 
     ? (isRtl ? (AREA_TRANSLATIONS[project.location] || project.location) : project.location) 
-    : (isRtl ? "الإمارات" : "UAE");
+    : (t("common.uae", "UAE") as string);
 
-  const displayHandover = (project.handoverDate || project.handover) 
-    ? (isRtl && (project.handoverDate || project.handover) === "TBA" ? "قريباً" : (project.handoverDate || project.handover))
-    : (isRtl ? "قريباً" : "TBA");
+  const rawHandover = project.handoverDate || project.handover;
+  const displayHandover = rawHandover 
+    ? (rawHandover === "TBA" ? (t("common.tba", "TBA") as string) : rawHandover)
+    : (t("common.tba", "TBA") as string);
 
   return (
     <div className="fixed inset-y-0 inset-inline-end-0 w-full sm:max-w-md bg-[var(--color-bg-card)] shadow-2xl border-inline-start border-[var(--color-border)] z-[1000] flex flex-col transition-all duration-300 animate-in slide-in-from-inline-end">

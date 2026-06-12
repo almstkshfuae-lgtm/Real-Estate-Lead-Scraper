@@ -322,6 +322,7 @@ function GeoMap({
           const displayCompany = (language === "ar" && lead.companyAr) ? lead.companyAr : lead.company;
           const displayLocation = (language === "ar" && lead.locationAr) ? lead.locationAr : (language === "ar" && AREA_TRANSLATIONS[lead.location] ? AREA_TRANSLATIONS[lead.location] : lead.location);
           const displayStatus = t(`leads.status.${lead.status}`, lead.status);
+          const displaySource = t(`sources.${lead.source.toLowerCase().replace(/[^a-z0-9]/g, "")}`, lead.source);
           
           const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
           const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
@@ -337,6 +338,7 @@ function GeoMap({
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
                 <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: ${tierColor}15; color: ${tierColor};">T${lead.tier}</span>
                 <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #F3F4F6; color: #4B5563;">${displayStatus}</span>
+                <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #E6F1FB; color: #185FA5;">${displaySource}</span>
               </div>
               
               <div style="font-size: 11px; color: #6B7280; display: flex; align-items: center; gap: 4px; margin-bottom: 16px;">
@@ -377,19 +379,8 @@ function GeoMap({
 
           const isAr = language === "ar";
           const currency = isAr ? "د.إ" : "AED";
-          const developerFallback = isAr ? "مطور عقاري" : "Developer";
-          const tbaText = isAr ? "قريباً" : "TBA";
-
-          const DEVELOPER_TRANSLATIONS: Record<string, string> = {
-            "Emaar": "إعمار",
-            "Damac": "داماك",
-            "Nakheel": "نخيل",
-            "Aldar": "الدار",
-            "Sobha": "شوبا",
-            "Deyaar": "ديار",
-            "Meraas": "ميراس",
-            "Dubai Properties": "دبي للعقارات"
-          };
+          const developerFallback = t("projects.fields.developer", "Developer");
+          const tbaText = t("common.tba", "TBA");
 
           const formatPrice = (price: number) => {
             if (price >= 1000000) return (price / 1000000).toFixed(1) + (isAr ? " مليون" : "M");
@@ -398,10 +389,16 @@ function GeoMap({
           };
 
           const priceText = proj.startingPrice ? `${currency} ${formatPrice(proj.startingPrice)}` : tbaText;
-          const projectName = proj.projectName || proj.name || (isAr ? "مشروع عقاري" : "Project");
-          const displayDeveloper = proj.developer ? (isAr ? (DEVELOPER_TRANSLATIONS[proj.developer] || proj.developer) : proj.developer) : developerFallback;
-          const displayLocation = proj.location ? (isAr ? (AREA_TRANSLATIONS[proj.location] || proj.location) : proj.location) : (isAr ? "الإمارات" : "UAE");
-          const displayHandover = proj.handover || proj.handoverDate || tbaText;
+          const projectName = proj.projectName || proj.name || t("projects.project", "Project");
+          const devKey = proj.developer ? proj.developer.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+          const displayDeveloper = proj.developer 
+            ? t(`developers.${devKey}`, proj.developer) 
+            : developerFallback;
+          const displayLocation = proj.location ? (isAr ? (AREA_TRANSLATIONS[proj.location] || proj.location) : proj.location) : t("common.uae", "UAE");
+          const rawHandover = proj.handover || proj.handoverDate;
+          const displayHandover = rawHandover 
+            ? (rawHandover === "TBA" ? tbaText : rawHandover)
+            : tbaText;
 
           // A beautiful rectangular card that displays the project details
           const icon = L.divIcon({
@@ -462,11 +459,11 @@ function GeoMap({
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
                   <div style="background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #F1F5F9;">
-                    <div style="font-size: 10px; color: #64748B;">${isAr ? 'السعر المبدئي' : 'Starting Price'}</div>
+                    <div style="font-size: 10px; color: #64748B;">${t("projects.fields.price", "Starting Price")}</div>
                     <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${proj.startingPrice ? `${currency} ${formatPrice(proj.startingPrice)}` : tbaText}</div>
                   </div>
                   <div style="background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #F1F5F9;">
-                    <div style="font-size: 10px; color: #64748B;">${isAr ? 'المساحة (قدم مربع)' : 'Area (Sqft)'}</div>
+                    <div style="font-size: 10px; color: #64748B;">${t("projects.fields.area", "Area (Sqft)")}</div>
                     <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${proj.areaSqft || proj.area || '-'}</div>
                   </div>
                 </div>
@@ -481,7 +478,7 @@ function GeoMap({
 
                 <button class="view-project-btn" style="width: 100%; padding: 8px; margin-top: 12px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                  ${isAr ? 'عرض التفاصيل' : 'View Details'}
+                  ${t("projects.viewDetails", "View Details")}
                 </button>
               </div>
             </div>
@@ -615,7 +612,7 @@ function GeoMap({
       popupContent.innerHTML = `
         <div style="font-family: ${fontFamily}; text-align: center; padding: 4px; min-width: 160px;">
           <p style="font-size: 13px; font-weight: bold; color: #111827; margin: 0 0 6px 0;">
-            ${isAr ? 'إضافة مشروع هنا؟' : 'Add project here?'}
+            ${t("projects.addProjectHere", "Add project here?")}
           </p>
           <p style="font-size: 11px; color: #6B7280; margin: 0 0 10px 0;">
             ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}
@@ -625,7 +622,7 @@ function GeoMap({
             font-size: 12px; font-weight: bold; border-radius: 6px; cursor: pointer;
             width: 100%; transition: background-color 0.2s;
           " onmouseover="this.style.backgroundColor='#0f4a82'" onmouseout="this.style.backgroundColor='#185FA5'">
-            ${isAr ? 'إضافة مشروع جديد' : 'Add New Project'}
+            ${t("projects.addNewProject", "Add New Project")}
           </button>
         </div>
       `;

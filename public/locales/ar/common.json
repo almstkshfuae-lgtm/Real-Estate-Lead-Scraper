@@ -228,6 +228,8 @@
   "projects": {
     "addProject": "إضافة مشروع",
     "addNewProject": "إضافة مشروع جديد",
+    "addProjectHere": "إضافة مشروع هنا؟",
+    "developerTba": "مطور عقاري قريباً",
     "uploading": "جاري التحميل...",
     "uploadImage": "تحميل صورة",
     "imageHint": "المقاس الموصى به: 800x400 بكسل. صيغة JPG أو PNG.",
@@ -240,6 +242,7 @@
     "saveError": "فشل حفظ المشروع",
     "visitSource": "زيارة مصدر المشروع",
     "deleteProject": "حذف المشروع",
+    "viewDetails": "عرض التفاصيل",
     "fields": {
       "image": "صورة المشروع",
       "noImage": "لا توجد صورة",
@@ -447,7 +450,9 @@
     "failedToUpdateLeads": "فشل تحديث العملاء",
     "cancel": "إلغاء",
     "edit": "تعديل",
-    "save": "حفظ التغييرات"
+    "save": "حفظ التغييرات",
+    "tba": "قريباً",
+    "uae": "الإمارات"
   },
   "ai": {
     "pitchTitle": "مولد العروض بالذكاء الاصطناعي",
@@ -500,5 +505,41 @@
     "unauthorized": "غير مصرح به",
     "invalidInput": "بيانات الإدخال غير صالحة",
     "serverConnectionError": "حدث خطأ في الاتصال بالخادم. يُرجى المحاولة لاحقًا."
+  },
+  "sources": {
+    "bayut": "بيوت",
+    "dubizzle": "دوبيزل",
+    "zawyainvest": "زاوية للاستثمار",
+    "zawya": "زاوية",
+    "bloombergmena": "بلومبرغ الشرق الأوسط",
+    "bloomberg": "بلومبرغ",
+    "forbesme": "فوربس الشرق الأوسط",
+    "forbes": "فوربس",
+    "adgmdifcregistry": "سجل سوق أبوظبي العالمي / مركز دبي المالي العالمي",
+    "adgmregistry": "سجل سوق أبوظبي العالمي",
+    "adgm": "سوق أبوظبي العالمي",
+    "dedregistry": "سجل دائرة التنمية الاقتصادية",
+    "ded": "دائرة التنمية الاقتصادية",
+    "privatebanking": "الخدمات المصرفية الخاصة",
+    "familyoffice": "المكاتب العائلية",
+    "elitelifestyle": "أسلوب الحياة النخبة",
+    "elitelifestyleconcierge": "أسلوب الحياة النخبة / الكونسيرج",
+    "newspress": "الأخبار والصحافة",
+    "manualimport": "استيراد يدوي",
+    "canadiandoctorsdirectory": "دليل الأطباء الكنديين",
+    "physiciandirectorycpsa": "دليل الأطباء - الجمعية الطبية الكندية",
+    "ahuscanadadoctorslist": "قائمة أطباء aHUS كندا",
+    "hnwisources": "مصادر ذوي الثروات العالية",
+    "unknown": "غير معروف"
+  },
+  "developers": {
+    "emaar": "إعمار",
+    "damac": "داماك",
+    "nakheel": "نخيل",
+    "aldar": "الدار",
+    "sobha": "شوبا",
+    "deyaar": "ديار",
+    "meraas": "ميراس",
+    "dubaiproperties": "دبي للعقارات"
   }
 }

@@ -115,8 +115,13 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
             {getTierLabel(lead.tier, language)}
           </span>
           <span className="px-2 py-0.5 rounded text-xs font-medium bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]">
-            {t(`leads.status.${lead.status}`, lead.status)}
+            {t(`leads.status.${lead.status}`, lead.status) as string}
           </span>
+          {lead.source && (
+            <span className="px-2 py-0.5 rounded text-xs font-medium bg-[var(--color-primary-subtle)] text-[var(--color-primary)]">
+              {t(`sources.${lead.source.toLowerCase().replace(/[^a-z0-9]/g, "")}`, lead.source) as string}
+            </span>
+          )}
         </div>
 
         {/* Budget */}

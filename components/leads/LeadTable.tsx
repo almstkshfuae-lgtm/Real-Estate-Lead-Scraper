@@ -367,7 +367,9 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
                     {lead.source !== "Manual Import" && (
                       <div className="text-[10px] text-[var(--color-text-secondary)] flex items-center gap-1">
                         <span className="w-1 h-1 rounded-full bg-[var(--color-text-disabled)]"></span>
-                        {lead.source}
+                        {i18n.language === "ar" 
+                          ? (t(`sources.${lead.source.toLowerCase().replace(/[^a-z0-9]/g, "")}`, lead.source) as string) 
+                          : lead.source}
                       </div>
                     )}
                   </div>
