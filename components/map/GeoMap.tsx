@@ -52,6 +52,7 @@ interface GeoMapProps {
   onGeofenceDrawn: (bounds: { north: number; south: number; east: number; west: number }) => void;
   isAdmin?: boolean;
   onAddProjectClick?: (lat: number, lng: number) => void;
+  onViewportChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
 }
 
 function GeoMap({
@@ -65,6 +66,7 @@ function GeoMap({
   onGeofenceDrawn,
   isAdmin = false,
   onAddProjectClick,
+  onViewportChange,
 }: GeoMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -148,6 +150,38 @@ function GeoMap({
     };
   }, []);
 
+  // Emit viewport bounds on every move/zoom so the parent can refetch scoped data
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !onViewportChange) return;
+
+    const emitBounds = () => {
+      const b = map.getBounds();
+      onViewportChange({
+        north: b.getNorth(),
+        south: b.getSouth(),
+        east:  b.getEast(),
+        west:  b.getWest(),
+      });
+    };
+
+    // Emit once on mount (after map initialised)
+    const initInterval = setInterval(() => {
+      if (mapInstanceRef.current) {
+        clearInterval(initInterval);
+        emitBounds();
+        mapInstanceRef.current.on("moveend", emitBounds);
+      }
+    }, 300);
+
+    return () => {
+      clearInterval(initInterval);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.off("moveend", emitBounds);
+      }
+    };
+  }, [onViewportChange]);
+
   // Render markers or heatmap based on activeLayer
   useEffect(() => {
     const updateLayers = async () => {
@@ -225,7 +259,10 @@ function GeoMap({
           const marker = L.marker([lat, lng], { icon });
 
           const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
-          const signals = Array.isArray(lead.signals) ? lead.signals : [];
+          // Filter "Manual Import" signal — should never be shown to end-users on the map
+          const signals = (Array.isArray(lead.signals) ? lead.signals : []).filter(
+            (s: string) => s !== "Manual Import"
+          );
           const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
           const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
 

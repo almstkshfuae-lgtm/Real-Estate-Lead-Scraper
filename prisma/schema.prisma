@@ -193,6 +193,7 @@ model ProjectHeatmap {
   updatedAt     DateTime @updatedAt
 
   @@index([location])
+  @@index([latitude, longitude])
   @@map("project_heatmaps")
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { isAdmin as checkIsAdmin } from "@/lib/roles";
 import { useTranslation } from "react-i18next";
@@ -30,6 +30,7 @@ import LeadSidebar from "@/components/leads/LeadSidebar";
 import ProjectSidebar from "@/components/map/ProjectSidebar";
 import type { Lead } from "@/components/leads/LeadTable";
 import type { MapLead } from "@/components/map/GeoMap";
+import { UAE_AREAS } from "@/lib/areas";
 
 // Dynamically import the map to avoid SSR issues
 const GeoMap = dynamic(() => import("@/components/map/GeoMap"), {
@@ -70,6 +71,13 @@ export default function MapPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [scoreMin, setScoreMin] = useState<number>(0);
   const [debouncedScoreMin, setDebouncedScoreMin] = useState<number>(0);
+  const [areaFilter, setAreaFilter] = useState("");
+
+  // Viewport for scoping heatmap (project) fetch
+  const [mapViewport, setMapViewport] = useState<{
+    north: number; south: number; east: number; west: number;
+  } | null>(null);
+  const viewportDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState<string | undefined>(undefined);
@@ -218,11 +226,9 @@ export default function MapPage() {
       let url = `/api/leads/cluster?limit=1000&scoreMin=${debouncedScoreMin}`;
       if (tierFilter) url += `&tier=${tierFilter}`;
       if (statusFilter) url += `&status=${statusFilter}`;
+      if (areaFilter) url += `&locationText=${encodeURIComponent(areaFilter)}`;
 
-      const [leadsRes, projectsRes] = await Promise.all([
-        fetch(url),
-        fetch("/api/projects/heatmap")
-      ]);
+      const leadsRes = await fetch(url);
 
       if (!leadsRes.ok) throw new Error("Fetch failed");
       const data = await safeJson(leadsRes);
@@ -233,18 +239,30 @@ export default function MapPage() {
       }));
 
       setLeads(sanitizedLeads);
-
-      if (projectsRes.ok) {
-        const projData = await safeJson(projectsRes);
-        setProjects(projData.projects || []);
-      }
     } catch (e) {
       console.error(e);
       setLeads([]);
     } finally {
       setLoading(false);
     }
-  }, [tierFilter, statusFilter, debouncedScoreMin]);
+  }, [tierFilter, statusFilter, debouncedScoreMin, areaFilter]);
+
+  // Separate projects fetch — viewport-scoped when on heatmap layer
+  const fetchProjects = useCallback(async (viewport?: { north: number; south: number; east: number; west: number } | null) => {
+    try {
+      let projUrl = "/api/projects/heatmap";
+      if (viewport) {
+        projUrl += `?north=${viewport.north}&south=${viewport.south}&east=${viewport.east}&west=${viewport.west}`;
+      }
+      const projectsRes = await fetch(projUrl);
+      if (projectsRes.ok) {
+        const projData = await safeJson(projectsRes);
+        setProjects(projData.projects || []);
+      }
+    } catch (e) {
+      console.error("Projects fetch error:", e);
+    }
+  }, []);
 
   useEffect(() => {
     fetchLeads();
