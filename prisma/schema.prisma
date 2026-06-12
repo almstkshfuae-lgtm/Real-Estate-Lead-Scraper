@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
 }
 
 datasource db {
@@ -38,6 +39,7 @@ model Lead {
   phone        String?
   email        String?
   location     String
+  locationAr   String?
   score        Int
   signals      Json
   propertyPref Json
@@ -69,9 +71,12 @@ model Lead {
   @@index([status])
   @@index([tier])
   @@index([score])
-  @@index([location])
+  @@index([location], map: "leads_location_btree_idx")
   @@index([deletedAt])
   @@index([agentId, name, company], map: "leads_agentId_name_company_idx")
+  @@fulltext([location])
+  @@fulltext([locationAr])
+  @@fulltext([location, locationAr])
   @@map("leads")
 }
 
@@ -192,8 +197,9 @@ model ProjectHeatmap {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@index([location])
+  @@index([location], map: "project_heatmaps_location_btree_idx")
   @@index([latitude, longitude])
+  @@fulltext([location])
   @@map("project_heatmaps")
 }
 

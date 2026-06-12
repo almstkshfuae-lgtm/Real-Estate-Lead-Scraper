@@ -146,14 +146,16 @@ export async function GET(request: Request) {
         const areasInBounds = getAreasInBounds(north, south, east, west);
 
         if (areasInBounds.length > 0) {
-          const textMatches = areasInBounds.flatMap(areaName => [
-            { location: { contains: areaName } },
-            { locationAr: { contains: areaName } }
-          ]);
+          const searchString = areasInBounds.map(areaName => `"${areaName}"`).join(" ");
           geoOrConditions.push({
             AND: [
               { OR: [{ latitude: null }, { longitude: null }] },
-              { OR: textMatches }
+              {
+                OR: [
+                  { location: { search: searchString } },
+                  { locationAr: { search: searchString } }
+                ]
+              }
             ]
           });
         }
