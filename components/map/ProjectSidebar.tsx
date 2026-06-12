@@ -66,7 +66,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
         throw new Error(data.error || "Failed to update project");
       }
 
-      toast.success(isRtl ? "تم تحديث المشروع بنجاح" : "Project updated successfully");
+      toast.success(t("projects.updateSuccess", "Project updated successfully"));
       setIsEditing(false);
       window.location.reload();
     } catch (err: any) {
@@ -77,7 +77,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(isRtl ? `هل أنت متأكد من حذف ${project.projectName}؟` : `Are you sure you want to delete ${project.projectName}?`)) return;
+    if (!window.confirm(t("projects.confirmDelete", { name: project.projectName || project.name, defaultValue: `Are you sure you want to delete ${project.projectName || project.name}?` }))) return;
 
     setSaving(true);
     try {
@@ -90,7 +90,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
         throw new Error(data.error || "Failed to delete project");
       }
 
-      toast.success(isRtl ? "تم حذف المشروع بنجاح" : "Project deleted successfully");
+      toast.success(t("projects.deleteSuccess", "Project deleted successfully"));
       onClose();
       window.location.reload();
     } catch (err: any) {
@@ -128,7 +128,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
             <button
               onClick={() => setIsEditing(true)}
               className="p-2 rounded-full hover:bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition-colors"
-              title={isRtl ? "تعديل" : "Edit"}
+              title={t("common.edit", "Edit")}
             >
               <Edit2 className="w-4 h-4" />
             </button>
@@ -144,7 +144,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
         {isEditing ? (
           <form onSubmit={handleSaveEdit} className="space-y-4">
             <div className="space-y-1.5 text-start">
-              <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "اسم المشروع" : "Project Name"}</label>
+              <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.name", "Project Name")}</label>
               <input
                 type="text"
                 required
@@ -155,7 +155,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "المطور" : "Developer"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.developer", "Developer")}</label>
                 <input
                   type="text"
                   value={editForm.developer}
@@ -164,7 +164,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 />
               </div>
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "السعر المبدئي" : "Starting Price"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.price", "Starting Price")}</label>
                 <input
                   type="number"
                   value={editForm.startingPrice}
@@ -175,7 +175,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "الموقع" : "Location"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.location", "Location")}</label>
                 <input
                   type="text"
                   value={editForm.location}
@@ -184,7 +184,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 />
               </div>
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "تاريخ التسليم" : "Handover Date"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.handover", "Handover Date")}</label>
                 <input
                   type="text"
                   value={editForm.handoverDate}
@@ -195,7 +195,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "نوع العقار" : "Property Type"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.propertyType", "Property Type")}</label>
                 <input
                   type="text"
                   value={editForm.propertyType}
@@ -204,7 +204,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 />
               </div>
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "المساحة" : "Area"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.area", "Area")}</label>
                 <input
                   type="number"
                   value={editForm.areaSqft}
@@ -215,7 +215,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "خط العرض" : "Latitude"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.latitude", "Latitude")}</label>
                 <input
                   type="number"
                   step="any"
@@ -225,7 +225,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 />
               </div>
               <div className="space-y-1.5 text-start">
-                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "خط الطول" : "Longitude"}</label>
+                <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.longitude", "Longitude")}</label>
                 <input
                   type="number"
                   step="any"
@@ -236,7 +236,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
               </div>
             </div>
             <div className="space-y-1.5 text-start">
-              <label className="text-xs font-bold text-[var(--color-text-secondary)]">{isRtl ? "رابط الصورة" : "Image URL"}</label>
+              <label className="text-xs font-bold text-[var(--color-text-secondary)]">{t("projects.fields.imageUrl", "Image URL")}</label>
               <input
                 type="text"
                 value={editForm.imageUrl}
@@ -251,7 +251,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 onClick={() => setIsEditing(false)}
                 className="flex-1 py-3 bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold rounded-xl hover:bg-[var(--color-bg-card)] transition-all"
               >
-                {isRtl ? "إلغاء" : "Cancel"}
+                {t("common.cancel", "Cancel")}
               </button>
               <button
                 type="submit"
@@ -259,7 +259,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 className="flex-1 py-3 bg-[var(--color-primary)] text-white font-bold rounded-xl hover:bg-[var(--color-primary-hover)] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isRtl ? "حفظ التغييرات" : "Save Changes"}
+                {t("common.saveChanges", "Save Changes")}
               </button>
             </div>
           </form>
@@ -282,27 +282,27 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
             <div className="grid grid-cols-2 gap-3">
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <Building2 className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
-                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{isRtl ? "المطور" : "Developer"}</p>
+                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.developer", "Developer")}</p>
                 <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{project.developer || '-'}</p>
               </div>
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <MapPin className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
-                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{isRtl ? "الموقع" : "Location"}</p>
+                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.location", "Location")}</p>
                 <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{project.location || '-'}</p>
               </div>
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <Calendar className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
-                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{isRtl ? "التسليم" : "Handover"}</p>
+                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.handover", "Handover")}</p>
                 <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{project.handoverDate || project.handover || '-'}</p>
               </div>
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <Box className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
-                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{isRtl ? "المساحة (قدم مربع)" : "Area (Sqft)"}</p>
+                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.area", "Area (Sqft)")}</p>
                 <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{project.areaSqft || project.area || '-'}</p>
               </div>
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start col-span-2">
                 <CreditCard className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
-                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{isRtl ? "السعر المبدئي" : "Starting Price"}</p>
+                <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.price", "Starting Price")}</p>
                 <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{formatPrice(project.startingPrice)}</p>
               </div>
             </div>
@@ -315,7 +315,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full py-3 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors"
               >
-                {isRtl ? "زيارة مصدر المشروع" : "Visit Project Source"}
+                {t("projects.visitSource", "Visit Project Source")}
                 <ExternalLink className="w-4 h-4" />
               </a>
             )}
@@ -328,7 +328,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
                 className="flex items-center justify-center gap-2 w-full py-3 bg-red-50 text-red-600 rounded-xl font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                {isRtl ? "حذف المشروع" : "Delete Project"}
+                {t("projects.deleteProject", "Delete Project")}
               </button>
             </div>
           </>

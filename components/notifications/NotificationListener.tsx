@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 interface NotificationItem {
   id: string;
@@ -13,6 +14,7 @@ interface NotificationItem {
 }
 
 export default function NotificationListener() {
+  const { t } = useTranslation("common");
   const [pushEnabled, setPushEnabled] = useState(false);
   const seenNotifications = useRef<Set<string>>(new Set());
   const isInitialFetch = useRef<boolean>(true);
@@ -30,7 +32,7 @@ export default function NotificationListener() {
           if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
             const permission = await Notification.requestPermission();
             if (permission !== "granted") {
-              toast.error("Browser notifications are blocked. Please allow notifications in your browser settings.");
+              toast.error(t("notifications.blockedError", "Browser notifications are blocked. Please allow notifications in your browser settings."));
               return;
             }
           }

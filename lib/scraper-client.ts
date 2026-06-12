@@ -106,15 +106,16 @@ class ScraperClient {
    * Internal fetch wrapper with robust exponential backoff retry logic and AbortSignal support.
    */
   private async fetchWithRetry(url: string, options: RequestInit, retries = 3, delayMs = 1000): Promise<Response> {
-    const signal = options.signal;
+    const timeoutSignal = AbortSignal.timeout(this.timeout || 15000);
+    const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
     const cleanUrl = this.sanitizeUrl(url);
 
     try {
-      if (signal?.aborted) {
+      if (signal.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
 
-      const response = await fetch(url, options);
+      const response = await fetch(url, { ...options, signal });
 
       // Only retry on transient 5xx server errors and 429 rate limits
       if (!response.ok && (response.status >= 500 || response.status === 429)) {

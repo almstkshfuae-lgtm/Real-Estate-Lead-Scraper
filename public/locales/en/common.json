@@ -31,7 +31,8 @@
       "status": "Status",
       "empty": "No leads found matching your search.",
       "pagination": "Showing {{count}} of {{total}} leads",
-      "limit": "Leads per page"
+      "limit": "Leads per page",
+      "fetchError": "Error fetching leads"
     },
     "tiers": {
       "all": "All Tiers",
@@ -56,7 +57,9 @@
     },
     "pipeline": {
       "empty": "No leads",
-      "roleAt": "{{role}} at {{company}}"
+      "roleAt": "{{role}} at {{company}}",
+      "fetchError": "Failed to load leads",
+      "updateError": "Failed to update lead status"
     },
     "sidebar": {
       "tabs": {
@@ -70,6 +73,7 @@
       "company": "Company",
       "role": "Current Role",
       "signals": "Intelligence Signals",
+      "signalsPlaceholder": "e.g. UHNW, Investor, Executive",
       "recentActivity": "Recent Activity",
       "recentActivityText": "Financial reports indicate a 12% revenue growth for {{company}} in Q3. Executive profiles suggest a high capacity for luxury real estate investment (Estimated liquid budget: 15M-25M AED).",
       "aiPitch": {
@@ -99,6 +103,26 @@
         "success": "Follow-up scheduled in Bitrix24",
         "scheduleBtn": "Schedule in Bitrix24"
       }
+    },
+    "importCsv": "Import CSV",
+    "upload": {
+      "title": "Import Leads via CSV",
+      "dragDrop": "Drag and drop your CSV file here",
+      "clickBrowse": "or click to browse from your computer",
+      "rowCount": "{{count}} rows found",
+      "detectedColumns": "Detected Columns",
+      "hidePreview": "Hide Preview",
+      "showPreview": "Preview first 3 rows",
+      "previewNote": "We will assign Tier 1 to all imported leads. Deduplication will be applied automatically.",
+      "saved": "Saved",
+      "updated": "Updated",
+      "skipped": "Skipped",
+      "total": "Total",
+      "confirm": "Import Leads",
+      "success": "Successfully imported {{count}} leads.",
+      "error": "Import failed: {{error}}",
+      "invalidFormat": "Please upload a valid CSV file",
+      "parseError": "Error parsing CSV: {{error}}"
     }
   },
   "auth": {
@@ -204,6 +228,15 @@
     "uploading": "Uploading...",
     "uploadImage": "Upload Image",
     "imageHint": "Recommended size: 800x400px. JPG or PNG.",
+    "updateSuccess": "Project updated successfully",
+    "deleteSuccess": "Project deleted successfully",
+    "confirmDelete": "Are you sure you want to delete {{name}}?",
+    "uploadSuccess": "Image uploaded successfully",
+    "uploadError": "Upload failed",
+    "addSuccess": "Project added successfully",
+    "saveError": "Failed to save project",
+    "visitSource": "Visit Project Source",
+    "deleteProject": "Delete Project",
     "fields": {
       "image": "Project Image",
       "noImage": "No image",
@@ -214,7 +247,9 @@
       "price": "Starting Price (AED)",
       "area": "Area (Sqft)",
       "latitude": "Latitude",
-      "longitude": "Longitude"
+      "longitude": "Longitude",
+      "propertyType": "Property Type",
+      "imageUrl": "Image URL"
     }
   },
   "campaigns": {
@@ -340,7 +375,8 @@
       "scrape": "Scrape Completion",
       "scrapeDesc": "Notify me when an intelligence scrape job finishes.",
       "digest": "Weekly Digest",
-      "digestDesc": "A weekly performance report of your lead pipeline."
+      "digestDesc": "A weekly performance report of your lead pipeline.",
+      "blockedError": "Browser notifications are blocked. Please allow notifications in your browser settings."
     },
     "integrations": {
       "title": "Integrations",
@@ -404,7 +440,11 @@
     "next": "Next",
     "roleAt": "{{role}} at {{company}}",
     "saving": "Saving...",
-    "saveChanges": "Save Changes"
+    "saveChanges": "Save Changes",
+    "failedToUpdateLeads": "Failed to update leads",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "save": "Save Changes"
   },
   "ai": {
     "pitchTitle": "AI Pitch Generator",
@@ -446,5 +486,11 @@
       "stat2": "Lead Intelligence",
       "stat3": "EN / AR Bilingual"
     }
+  },
+  "errors": {
+    "onlyAdminsEdit": "Only admins are allowed to edit lead details.",
+    "leadNotFound": "Lead not found",
+    "unauthorized": "Unauthorized",
+    "invalidInput": "Invalid input data"
   }
 }

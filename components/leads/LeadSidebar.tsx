@@ -17,6 +17,15 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
   const { t, i18n } = useTranslation("common");
   const lang = i18n.language === "ar" ? "ar" : "en";
   const isAdminUser = isAdmin(userRole);
+
+  const translateError = (message: string) => {
+    if (!message) return "";
+    if (message.includes("Only admins are allowed to edit")) {
+      return t("errors.onlyAdminsEdit", "Only admins are allowed to edit lead details.");
+    }
+    return message;
+  };
+
   const [copied, setCopied] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "ai" | "notes" | "followup">("details");
   const [notes, setNotes] = useState(lead?.notes || "");
@@ -156,11 +165,15 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
       if (editForm.score !== lead.score) payload.score = editForm.score;
       if (editForm.source !== lead.source) payload.source = editForm.source;
       
-      const budgetMinVal = editForm.budgetMin !== "" ? parseFloat(editForm.budgetMin) : null;
-      if (budgetMinVal !== lead.budgetMin) payload.budgetMin = budgetMinVal;
+      const rawBudgetMin = String(editForm.budgetMin || "").trim();
+      const budgetMinVal = rawBudgetMin !== "" ? parseFloat(rawBudgetMin.replace(/,/g, "")) : null;
+      const finalBudgetMinVal = (budgetMinVal === null || isNaN(budgetMinVal)) ? null : budgetMinVal;
+      if (finalBudgetMinVal !== lead.budgetMin) payload.budgetMin = finalBudgetMinVal;
       
-      const budgetMaxVal = editForm.budgetMax !== "" ? parseFloat(editForm.budgetMax) : null;
-      if (budgetMaxVal !== lead.budgetMax) payload.budgetMax = budgetMaxVal;
+      const rawBudgetMax = String(editForm.budgetMax || "").trim();
+      const budgetMaxVal = rawBudgetMax !== "" ? parseFloat(rawBudgetMax.replace(/,/g, "")) : null;
+      const finalBudgetMaxVal = (budgetMaxVal === null || isNaN(budgetMaxVal)) ? null : budgetMaxVal;
+      if (finalBudgetMaxVal !== lead.budgetMax) payload.budgetMax = finalBudgetMaxVal;
 
       if (editForm.tier !== lead.tier) payload.tier = editForm.tier;
 
@@ -195,7 +208,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
         onUpdate(updatedLead);
       }
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(translateError(err.message));
     } finally {
       setSaving(false);
     }
@@ -333,7 +346,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
         onUpdate();
       }
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(translateError(err.message));
     } finally {
       setSaving(false);
     }
@@ -529,7 +542,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
                     value={editForm.signals}
                     onChange={(e) => setEditForm({ ...editForm, signals: e.target.value })}
                     className="w-full p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
-                    placeholder="e.g. UHNW, Investor, Executive"
+                    placeholder={t("leads.sidebar.signalsPlaceholder", "e.g. UHNW, Investor, Executive")}
                   />
                 </div>
                 <button
@@ -775,7 +788,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
                         if (!res.ok) throw new Error(data.error || "Failed to send");
                         toast.success(t("common.whatsappSent", "WhatsApp message sent"), { id: toastId });
                       } catch (err: any) {
-                        toast.error(err.message, { id: toastId });
+                        toast.error(translateError(err.message), { id: toastId });
                       }
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#128C7E] transition-all"
@@ -800,7 +813,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
                         if (!res.ok) throw new Error(data.error || "Failed to send");
                         toast.success(t("common.emailSent", "Email sent successfully"), { id: toastId });
                       } catch (err: any) {
-                        toast.error(err.message, { id: toastId });
+                        toast.error(translateError(err.message), { id: toastId });
                       }
                     }}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--color-primary)] text-white rounded-xl text-xs font-bold hover:bg-[var(--color-primary-hover)] transition-all"
@@ -1010,7 +1023,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
                       setFollowUpDate("");
                       setFollowUpTime("");
                     } catch (err: any) {
-                      toast.error(err.message);
+                      toast.error(translateError(err.message));
                     } finally {
                       setScheduling(false);
                     }
@@ -1049,7 +1062,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
               toast.success(t("common.pushedToBitrix", "Pushed to Bitrix24 successfully"));
               // Optionally update lead object locally if we want to show bitrix24Id
             } catch (err: any) {
-              toast.error(err.message);
+              toast.error(translateError(err.message));
             } finally {
               setPushing(false);
             }

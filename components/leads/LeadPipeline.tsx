@@ -59,7 +59,7 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
       setLeads(sanitizedLeads);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to load leads");
+      toast.error(t("leads.pipeline.fetchError", "Failed to load leads"));
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ export default function LeadPipeline({ onSelectLead, filters }: LeadPipelineProp
     } catch (err) {
       console.error(err);
       setLeads(oldLeads);
-      toast.error("Failed to update lead status");
+      toast.error(t("leads.pipeline.updateError", "Failed to update lead status"));
     } finally {
       setUpdatingId(null);
     }

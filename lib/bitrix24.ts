@@ -71,6 +71,7 @@ export async function pushContact(domain: string, token: string, lead: any) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: params }),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
@@ -104,6 +105,7 @@ export async function updateContact(domain: string, token: string, contactId: st
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: contactId, fields: params }),
+      signal: AbortSignal.timeout(10000)
     });
     if (response.ok) {
       const result = await response.json();
@@ -176,6 +178,7 @@ export async function pushDeal(domain: string, token: string, contactId: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: params }),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
@@ -199,7 +202,7 @@ export async function testConnection(domain: string, token: string) {
     const method = 'app.info.json';
     const url = baseUrl.endsWith('/') ? `${baseUrl}${method}` : `${baseUrl}/${method}`;
 
-    const response = await fetch(url);
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!response.ok) return false;
     
     const data = await response.json();
@@ -253,6 +256,7 @@ export async function scheduleFollowUp(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: params }),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
@@ -290,6 +294,7 @@ export async function exchangeCode(code: string) {
   const res = await fetch(url, {
     method: 'GET',
     headers: { 'Accept': 'application/json' },
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!res.ok) {

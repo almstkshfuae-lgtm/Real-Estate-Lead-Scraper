@@ -58,7 +58,8 @@ export async function sendWhatsAppMessage(
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
@@ -98,7 +99,8 @@ export async function sendWhatsAppText(
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
@@ -117,7 +119,8 @@ export async function testWhatsAppConnection(phoneId: string, token: string) {
     // Verify the WhatsApp Business Profile is configured (not just that the phoneId exists)
     const url = `https://graph.facebook.com/v17.0/${phoneId}/whatsapp_business_profile`;
     const response = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { 'Authorization': `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000)
     });
     if (!response.ok) return false;
     const data = await response.json();

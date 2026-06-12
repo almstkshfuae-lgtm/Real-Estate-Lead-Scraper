@@ -165,7 +165,10 @@ function GeoMap({
       }
 
       if (activeLayer === "markers") {
-        // Render every single lead as its own marker, applying a random jitter to prevent perfect overlap
+        // Render every single lead as its own marker.
+        // Apply a STABLE (deterministic) jitter to every lead so that
+        // leads sharing the same lat/lng (e.g. all "Abu Dhabi" leads from the
+        // scraper backfill) spread out visibly instead of stacking invisibly.
         leads.forEach((lead, index) => {
           const baseCoords = getCoords(lead.location || "Unknown", lead.id);
           if (!baseCoords) return;
@@ -196,21 +199,28 @@ function GeoMap({
             iconAnchor: [22, 22],
           });
 
-          // Jitter to spread overlapping leads in the same location
-          const jitterLat = (Math.random() - 0.5) * 0.05;
-          const jitterLng = (Math.random() - 0.5) * 0.05;
+          // --- Stable deterministic jitter using lead ID as seed ---
+          // This spreads overlapping leads reproducibly without randomness
+          // so positions don't jump on every re-render.
+          const dbLat = lead.latitude  != null ? lead.latitude  : null;
+          const dbLng = lead.longitude != null ? lead.longitude : null;
 
-          const dbLat = lead.latitude !== undefined && lead.latitude !== null ? lead.latitude : null;
-          const dbLng = lead.longitude !== undefined && lead.longitude !== null ? lead.longitude : null;
+          const baseLat = dbLat ?? baseCoords.lat;
+          const baseLng = dbLng ?? baseCoords.lng;
 
-          let lat = dbLat ?? baseCoords.lat;
-          let lng = dbLng ?? baseCoords.lng;
-
-          // Apply jitter only if they are using the fallback baseCoords
-          if (dbLat === null || dbLng === null) {
-            lat += jitterLat;
-            lng += jitterLng;
+          // Hash the lead id into a deterministic offset
+          let h1 = 0, h2 = 0;
+          for (let i = 0; i < lead.id.length; i++) {
+            const c = lead.id.charCodeAt(i);
+            h1 = ((h1 << 5) - h1 + c) | 0;
+            h2 = ((h2 << 3) + h2 + c) | 0;
           }
+          // Spread radius ~1.1 km in each direction
+          const jitterLat = ((Math.abs(h1) % 1000) / 1000 - 0.5) * 0.018;
+          const jitterLng = ((Math.abs(h2) % 1000) / 1000 - 0.5) * 0.018;
+
+          const lat = baseLat + jitterLat;
+          const lng = baseLng + jitterLng;
 
           const marker = L.marker([lat, lng], { icon });
 

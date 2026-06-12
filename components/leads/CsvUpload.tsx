@@ -250,7 +250,7 @@ export default function CsvUpload({ onSuccess }: CsvUploadProps) {
         setParsedData(normalised);
       },
       error: (error) => {
-        toast.error(`Error parsing CSV: ${error.message}`);
+        toast.error(t("leads.upload.parseError", "Error parsing CSV: {{error}}", { error: error.message }));
         setFile(null);
       },
     });

@@ -126,6 +126,9 @@ export async function PATCH(
 
     const targetSignals = signals !== undefined ? parseSignals(signals) : undefined;
 
+    const targetBudgetMin = (budgetMin as any) === "" || budgetMin === null || (typeof budgetMin === "string" && (budgetMin as string).trim() === "") ? null : budgetMin;
+    const targetBudgetMax = (budgetMax as any) === "" || budgetMax === null || (typeof budgetMax === "string" && (budgetMax as string).trim() === "") ? null : budgetMax;
+
     const updatedLead = await prisma.lead.update({
       where: { id },
       data: {
@@ -142,8 +145,8 @@ export async function PATCH(
         ...(parsedScore !== undefined && { score: parsedScore }),
         ...(tier !== undefined ? { tier } : computedTier !== undefined ? { tier: computedTier } : {}),
         ...(source !== undefined && { source: source.trim() }),
-        ...(budgetMin !== undefined && { budgetMin }),
-        ...(budgetMax !== undefined && { budgetMax }),
+        ...(targetBudgetMin !== undefined && { budgetMin: targetBudgetMin }),
+        ...(targetBudgetMax !== undefined && { budgetMax: targetBudgetMax }),
         ...(targetSignals !== undefined && { signals: targetSignals }),
         ...(status !== undefined && { status }),
         ...(notes !== undefined && { notes }),

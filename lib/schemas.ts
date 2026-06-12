@@ -31,4 +31,4 @@ export const leadUpdateSchema = z.object({
   }).optional(),
   source: z.string().trim().optional(),
   signals: z.array(z.string()).optional(),
-});
+}).strict(); // Reject unknown fields (id, agentId, createdAt, updatedAt, deletedAt, etc.) with 400 instead of silently stripping

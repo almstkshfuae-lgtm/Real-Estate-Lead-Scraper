@@ -167,7 +167,11 @@ export async function verifyProxyEgress(proxyUrl, timeoutMs = 30000) {
 
   try {
     // Get direct public IP (no proxy) using a simple fetch
-    const directResp = await fetch('https://api.ipify.org?format=json', { cache: 'no-store', redirect: 'follow' });
+    const directResp = await fetch('https://api.ipify.org?format=json', { 
+      cache: 'no-store', 
+      redirect: 'follow',
+      signal: AbortSignal.timeout(10000)
+    });
     if (directResp.ok) {
       const body = await directResp.json();
       result.directIp = body.ip || null;

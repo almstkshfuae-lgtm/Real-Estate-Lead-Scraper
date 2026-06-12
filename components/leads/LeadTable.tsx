@@ -68,6 +68,15 @@ interface LeadTableProps {
 export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
   const router = useRouter();
   const { t, i18n } = useTranslation('common');
+
+  const translateError = (message: string) => {
+    if (!message) return "";
+    if (message.includes("Only admins are allowed to edit")) {
+      return t("errors.onlyAdminsEdit", "Only admins are allowed to edit lead details.");
+    }
+    return message;
+  };
+
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -105,7 +114,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       setTotalLeads(data.total || 0);
       setIsMatchedFallback(data.isMatchedFallback || false);
     } catch (err: any) {
-      toast.error("Error fetching leads");
+      toast.error(t("leads.table.fetchError", "Error fetching leads"));
     } finally {
       setLoading(false);
     }
@@ -169,7 +178,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       setPage(1);
       fetchLeads(1);
     } catch (err: any) {
-      toast.error(err.message || "Failed to update leads");
+      toast.error(translateError(err.message) || t("common.failedToUpdateLeads", "Failed to update leads"));
     } finally {
       setBulkUpdating(false);
     }
@@ -200,7 +209,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       setSelectedIds([]);
       fetchLeads();
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(translateError(err.message));
     } finally {
       setBulkUpdating(false);
     }
@@ -227,7 +236,7 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
       setPage(1);
       fetchLeads(1);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(translateError(err.message));
     } finally {
       setBulkUpdating(false);
     }

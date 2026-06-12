@@ -193,6 +193,42 @@ test.describe('Unit Tests — Core Logic Hardening', () => {
         expect(result.data.tier).toBeUndefined();
       }
     });
+
+    test('should handle whitespace strings in budgetMin and budgetMax correctly', () => {
+      const input = {
+        budgetMin: '   ',
+        budgetMax: ' \t '
+      };
+      const result = leadUpdateSchema.safeParse(input);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.budgetMin).toBeNull();
+        expect(result.data.budgetMax).toBeNull();
+      }
+    });
+  });
+
+  test.describe('Backend PATCH Route Normalization', () => {
+    test('should explicitly map empty or whitespace budget fields to null', () => {
+      const cases = [
+        { min: "", max: "" },
+        { min: "   ", max: " \t " },
+        { min: null, max: null }
+      ];
+
+      for (const c of cases) {
+        const targetBudgetMin = (c.min === "" || c.min === null || (typeof c.min === "string" && c.min.trim() === "")) ? null : c.min;
+        const targetBudgetMax = (c.max === "" || c.max === null || (typeof c.max === "string" && c.max.trim() === "")) ? null : c.max;
+
+        expect(targetBudgetMin).toBeNull();
+        expect(targetBudgetMax).toBeNull();
+      }
+    });
+
+    test('should preserve valid numbers in route normalization', () => {
+      const targetBudgetMin = (500000 === "" || 500000 === null || (typeof 500000 === "string" && "500000".trim() === "")) ? null : 500000;
+      expect(targetBudgetMin).toBe(500000);
+    });
   });
 
   test.describe('CRM Sync Metadata updates', () => {

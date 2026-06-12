@@ -125,13 +125,13 @@ export default function MapPage() {
       const data = await res.json();
       if (data.success) {
         setNewProject(prev => ({ ...prev, imageUrl: data.url }));
-        toast.success(isRtl ? "تم تحميل الصورة بنجاح" : "Image uploaded successfully");
+        toast.success(t("projects.uploadSuccess", "Image uploaded successfully"));
       } else {
-        toast.error(data.error || "Upload failed");
+        toast.error(data.error || t("projects.uploadError", "Upload failed"));
       }
     } catch (err) {
       console.error("Upload failed", err);
-      toast.error("Upload failed");
+      toast.error(t("projects.uploadError", "Upload failed"));
     } finally {
       setIsUploading(false);
     }
@@ -165,7 +165,7 @@ export default function MapPage() {
         throw new Error(errData.error || "Failed to create project");
       }
 
-      toast.success(isRtl ? "تم إضافة المشروع بنجاح" : "Project added successfully");
+      toast.success(t("projects.addSuccess", "Project added successfully"));
       setIsAddModalOpen(false);
       // Reset form
       setNewProject({
@@ -183,7 +183,7 @@ export default function MapPage() {
       // Refresh projects on the map
       fetchLeads();
     } catch (err: any) {
-      toast.error(err.message || "Failed to save project");
+      toast.error(err.message || t("projects.saveError", "Failed to save project"));
     } finally {
       setIsSaving(false);
     }
@@ -499,8 +499,8 @@ export default function MapPage() {
                   onClick={() => setActiveLayer(layer.id)}
                   title={layer.desc}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${activeLayer === layer.id
-                      ? "bg-[var(--color-bg-card)] shadow-sm text-[var(--color-primary)]"
-                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                    ? "bg-[var(--color-bg-card)] shadow-sm text-[var(--color-primary)]"
+                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                     }`}
                 >
                   <layer.icon className="w-4 h-4" />
@@ -542,8 +542,8 @@ export default function MapPage() {
                   setGeofenceActive((v) => !v);
                 }}
                 className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all shadow-lg border ${geofenceActive
-                    ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-[var(--color-primary)]/20"
-                    : "bg-white/95 backdrop-blur-md text-[var(--color-text-primary)] border-white/50 hover:bg-white"
+                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-[var(--color-primary)]/20"
+                  : "bg-white/95 backdrop-blur-md text-[var(--color-text-primary)] border-white/50 hover:bg-white"
                   }`}
                 title={geofenceActive ? t("map.drawing", "Drawing Zone...") : t("map.drawZone", "Draw Zone")}
               >
@@ -679,7 +679,7 @@ export default function MapPage() {
           {/* Add Project Modal */}
           {isAddModalOpen && (
             <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <div 
+              <div
                 className="bg-[var(--color-bg-card)] rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-start"
                 dir={isRtl ? "rtl" : "ltr"}
               >
@@ -687,14 +687,14 @@ export default function MapPage() {
                   <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
                     {t("projects.addNewProject", "Add New Project")}
                   </h2>
-                  <button 
+                  <button
                     onClick={() => setIsAddModalOpen(false)}
                     className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] p-1 text-lg font-bold"
                   >
                     ✕
                   </button>
                 </div>
-                
+
                 <form onSubmit={handleSaveProject} className="p-5 overflow-y-auto flex-1 space-y-5">
                   {/* Image Upload Section */}
                   <div>
@@ -711,16 +711,16 @@ export default function MapPage() {
                           <span className="text-[10px] font-medium">{t("projects.fields.noImage", "No image")}</span>
                         </div>
                       )}
-                      
+
                       <div className="flex-1">
                         <label className="relative cursor-pointer flex items-center gap-2 px-4 py-2 bg-[var(--color-bg-surface)] hover:bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl text-sm font-bold transition-all w-fit shadow-sm">
                           {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                           <span>{isUploading ? t("projects.uploading", "Uploading...") : t("projects.uploadImage", "Upload Image")}</span>
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={handleImageUpload} 
-                            className="hidden" 
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="hidden"
                             disabled={isUploading}
                           />
                         </label>
@@ -812,7 +812,7 @@ export default function MapPage() {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="pt-4 border-t border-[var(--color-border)] flex justify-end gap-3 mt-4">
                     <button
                       type="button"

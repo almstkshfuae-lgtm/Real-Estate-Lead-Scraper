@@ -1150,11 +1150,13 @@ export async function generateGeminiStream(
     ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`
     : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`;
 
+  const timeoutSignal = AbortSignal.timeout(60000);
+  const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal
+    signal: combinedSignal
   });
 
   if (!response.ok) {
@@ -1277,11 +1279,13 @@ export async function generateGeminiChatStream(
     ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`
     : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`;
 
+  const timeoutSignal = AbortSignal.timeout(60000);
+  const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal
+    signal: combinedSignal
   });
 
   if (!response.ok) {

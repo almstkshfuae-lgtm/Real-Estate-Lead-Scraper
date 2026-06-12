@@ -215,6 +215,8 @@ export async function callGemini(opts: GeminiCallOptions): Promise<GeminiCallRes
     : `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${encodeURIComponent(config.apiKey)}`;
 
   const startTime = Date.now();
+  const timeoutSignal = AbortSignal.timeout(30000);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, timeoutSignal]) : timeoutSignal;
 
   try {
     const result = await withRetry(async () => {
@@ -222,7 +224,7 @@ export async function callGemini(opts: GeminiCallOptions): Promise<GeminiCallRes
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-        signal: opts.signal,
+        signal,
       });
 
       if (!response.ok) {
