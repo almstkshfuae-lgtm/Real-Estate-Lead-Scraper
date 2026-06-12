@@ -243,12 +243,12 @@
 - [x] **Hardened**: Translation caching optimization & DB synchronization for SSR parity.
 - [x] **Database Hardening & GDPR Retention Policy** — Added performance indexes (including soft-delete index on `deletedAt`), soft deletes, mutation audit logs, safe webhook restoration/P2002 handling, CSV import duplicate safety, and automated GDPR retention pruning.
 - [x] **Hardened: Performance & Scalability Gaps** — Capped scraper DB pool size (`connection_limit=3`) and shared single client; parallelized ScrapeQueueManager (`MAX_CONCURRENT_SCRAPES=2`); added browser close watchdog watchdogs; replaced TensorFlow.js with Gradient Descent JS ML model (saving 30MB+ package bloat); optimized lead imports and webhooks with bulk query batching (reducing query overhead by 90%); resolved watchdog state desynchronization by removing redundant Next.js passive checks.
-- [🔄] **Query Optimization inside Batches** — Add composite index on `[name, company, agentId]` to prevent full table scans in webhook. <!-- id: 12.11 -->
+- [x] **Query Optimization inside Batches** — Add composite index on `[name, company, agentId]` to prevent full table scans in webhook. <!-- id: 12.11 -->
 - [x] **Hardened: Soft-Delete Security Leak** — Added `deletedAt: null` filter to all `prisma.lead.findMany` queries that were missing it: `api/ai/score/validate`, `api/campaigns`, `api/campaigns/outreach`, `api/leads/bulk-push`, `api/leads/bulk-delete` (findMany + updateMany), `api/export`, and `api/scrape-runs/[id]/sse` (all 3 fallback fetches). Prevents ghost/deleted records from appearing in metrics, exports, CRM pushes, and campaign outreach. <!-- id: 12.12 -->
 - [x] **Metrics & Counts Alignment** — Resolve mismatches in Manual Import exclusions, soft deletes, query filters, and failure alerts between Backend Metrics API and Frontend Lead Table. <!-- id: 12.13 -->
 - [x] **Hardened: Bilingual spelling tolerance and search normalization** — Created `lib/search.ts` utility implementing prefix-aware first-Alif normalization, Ta Marbouta/Haa toggles, and Yaa/Alif Maqsoora normalization. Refactored all search-enabled routes (`api/leads`, `api/leads/cluster`, `api/metrics`, `api/export`, `api/projects/heatmap`, and scraper webhook fallback) to use the robust spelling-tolerant tokenizer, ensuring flexible case-insensitive English/Arabic matching on MySQL. <!-- id: 12.14 -->
 - [x] **Expose AI & Quality Filters** — Linked backend quality filters (`scoreMin`, `excludeRental`, `relocated`) to the frontend Lead Table and Kanban views via a collapsible advanced filter panel, synced with the export route. <!-- id: 12.15 -->
-
+- [🔄] **Hardened: Soft-Delete Bypass in Single Lead Fetches** — Add `deletedAt: null` filter to all `prisma.lead.findUnique` and individual queries across 10 API routes to secure AI signals, scoring, whatsapp, push, persona, followup, and email. <!-- id: 12.16 -->
 
 
 ## Legend
