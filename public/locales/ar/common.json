@@ -192,7 +192,10 @@
       "avgScore": "متوسط النقاط",
       "eliteLeads": "نخبة (ف1)",
       "geofenced": "داخل المنطقة",
-      "hotZones": "المناطق الساخنة"
+      "hotZones": "المناطق الساخنة",
+      "projectsCount": "المشاريع",
+      "avgStartPrice": "متوسط السعر المبدئي",
+      "zoneResults": "نتائج المنطقة"
     },
     "legend": {
       "title": "المفتاح",

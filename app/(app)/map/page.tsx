@@ -605,7 +605,9 @@ export default function MapPage() {
                     <Target className="w-5 h-5 text-[#1D9E75]" />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">Zone Results</div>
+                    <div className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">
+                      {t("map.stats.zoneResults", "Zone Results")}
+                    </div>
                     <div className="text-sm font-black text-[var(--color-text-primary)]">
                       {t("map.geofenceResult", "{{count}} leads found", { count: geofencedLeads.length })}
                     </div>
@@ -901,7 +903,7 @@ export default function MapPage() {
                             {i18n.language === "ar" && lead.nameAr ? lead.nameAr : lead.name}
                           </div>
                           <div className="text-[10px] font-medium text-[var(--color-text-secondary)] truncate">
-                            {lead.company}
+                            {i18n.language === "ar" && lead.companyAr ? lead.companyAr : lead.company}
                           </div>
                         </div>
                       </div>

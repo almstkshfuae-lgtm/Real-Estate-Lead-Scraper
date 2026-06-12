@@ -192,7 +192,10 @@
       "avgScore": "Avg. Score",
       "eliteLeads": "Elite (T1)",
       "geofenced": "In Zone",
-      "hotZones": "Hot Zones"
+      "hotZones": "Hot Zones",
+      "projectsCount": "Projects",
+      "avgStartPrice": "Avg. Start Price",
+      "zoneResults": "Zone Results"
     },
     "legend": {
       "title": "Legend",

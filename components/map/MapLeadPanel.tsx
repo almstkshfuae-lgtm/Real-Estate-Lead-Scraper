@@ -3,6 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { X, Phone, Mail, MapPin, Star, TrendingUp, Building2 } from "lucide-react";
 import type { MapLead } from "./GeoMap";
+import { AREA_TRANSLATIONS } from "@/lib/areas";
 
 interface MapLeadPanelProps {
   lead: MapLead | null;
@@ -55,6 +56,13 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
   if (!lead) return null;
 
   const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
+  const displayCompany = (language === "ar" && lead.companyAr) ? lead.companyAr : lead.company;
+  const displayLocation = (language === "ar" && lead.locationAr) 
+    ? lead.locationAr 
+    : (language === "ar" && AREA_TRANSLATIONS[lead.location]) 
+      ? AREA_TRANSLATIONS[lead.location] 
+      : lead.location;
+
   const signals = (Array.isArray(lead.signals) ? lead.signals : []).filter(s => s !== "Manual Import");
   const scoreColor = getScoreColor(lead.score);
   const tierColor = getTierColor(lead.tier);
@@ -79,7 +87,7 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
           </div>
           <div className="min-w-0">
             <div className="font-bold text-[var(--color-text-primary)] truncate">{displayName}</div>
-            <div className="text-xs text-[var(--color-text-secondary)] truncate">{lead.company}</div>
+            <div className="text-xs text-[var(--color-text-secondary)] truncate">{displayCompany}</div>
           </div>
         </div>
         <button
@@ -95,7 +103,7 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
         {/* Location */}
         <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
           <MapPin className="w-4 h-4 text-[var(--color-primary)] flex-shrink-0" />
-          <span className="truncate">{lead.location}</span>
+          <span className="truncate">{displayLocation}</span>
         </div>
 
         {/* Tier + Status */}
@@ -106,8 +114,8 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
           >
             {getTierLabel(lead.tier, language)}
           </span>
-          <span className="px-2 py-0.5 rounded text-xs font-medium bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] capitalize">
-            {lead.status}
+          <span className="px-2 py-0.5 rounded text-xs font-medium bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]">
+            {t(`leads.status.${lead.status}`, lead.status)}
           </span>
         </div>
 
@@ -117,11 +125,15 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
             <TrendingUp className="w-4 h-4 text-[var(--color-primary)] flex-shrink-0" />
             <span className="font-medium text-[var(--color-text-primary)]">
               {lead.budgetMin
-                ? `AED ${(lead.budgetMin / 1_000_000).toFixed(1)}M`
+                ? (isRtl 
+                  ? `${(lead.budgetMin / 1_000_000).toFixed(1)} مليون د.إ` 
+                  : `AED ${(lead.budgetMin / 1_000_000).toFixed(1)}M`)
                 : ""}
               {lead.budgetMin && lead.budgetMax ? " – " : ""}
               {lead.budgetMax
-                ? `AED ${(lead.budgetMax / 1_000_000).toFixed(1)}M`
+                ? (isRtl 
+                  ? `${(lead.budgetMax / 1_000_000).toFixed(1)} مليون د.إ` 
+                  : `AED ${(lead.budgetMax / 1_000_000).toFixed(1)}M`)
                 : ""}
             </span>
           </div>
@@ -132,13 +144,15 @@ export default function MapLeadPanel({ lead, onClose, onAction }: MapLeadPanelPr
           <div className="flex flex-wrap gap-1.5">
             {signals.map((sig: string) => {
               const style = getSignalStyle(sig);
+              const signalKey = sig.toLowerCase().replace(/\s+/g, '');
+              const displaySig = t(`leads.signals.${signalKey}`, sig);
               return (
                 <span
                   key={sig}
                   className="px-2 py-0.5 rounded text-xs font-medium"
                   style={{ background: style.bg, color: style.text }}
                 >
-                  {sig}
+                  {displaySig}
                 </span>
               );
             })}

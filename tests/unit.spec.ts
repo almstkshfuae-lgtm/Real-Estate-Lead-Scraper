@@ -226,7 +226,8 @@ test.describe('Unit Tests — Core Logic Hardening', () => {
     });
 
     test('should preserve valid numbers in route normalization', () => {
-      const targetBudgetMin = (500000 === "" || 500000 === null || (typeof 500000 === "string" && "500000".trim() === "")) ? null : 500000;
+      const budgetValue: any = 500000;
+      const targetBudgetMin = (budgetValue === "" || budgetValue === null || (typeof budgetValue === "string" && String(budgetValue).trim() === "")) ? null : budgetValue;
       expect(targetBudgetMin).toBe(500000);
     });
   });

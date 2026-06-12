@@ -152,9 +152,8 @@ export async function GET(request: Request) {
         source: true,
         sourceType: true,
         tier: true,
-        phone: true,
-        email: true,
         location: true,
+        locationAr: true,
         score: true,
         budgetMin: true,
         budgetMax: true,
@@ -163,40 +162,16 @@ export async function GET(request: Request) {
         relocated: true,
         rentalFlag: true,
         status: true,
-        notes: true,
         createdAt: true,
-        signals: true,
       },
       orderBy: { createdAt: "desc" },
       take: limit,
     });
 
-    // Parse JSON signals and property preferences properly
-    const formattedLeads = leads.map((lead: any) => {
-      let parsedSignals: string[] = [];
-      try {
-        if (typeof lead.signals === "string") {
-          if (lead.signals.trim().startsWith("[")) {
-            parsedSignals = JSON.parse(lead.signals);
-          } else if (lead.signals.trim() !== "") {
-            parsedSignals = lead.signals.split(",").map((s: string) => s.trim());
-          }
-        } else if (Array.isArray(lead.signals)) {
-          parsedSignals = lead.signals;
-        } else if (lead.signals && typeof lead.signals === "object") {
-          parsedSignals = Object.values(lead.signals);
-        }
-      } catch (e) {
-        if (typeof lead.signals === "string") {
-          parsedSignals = lead.signals.split(",").map((s: string) => s.trim());
-        }
-      }
-
-      return {
-        ...lead,
-        signals: Array.isArray(parsedSignals) ? parsedSignals : [],
-      };
-    });
+    const formattedLeads = leads.map((lead: any) => ({
+      ...lead,
+      signals: [],
+    }));
 
     return NextResponse.json({ leads: formattedLeads });
   } catch (error: any) {

@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
+import { AREA_TRANSLATIONS } from "@/lib/areas";
 
 export default function ProjectSidebar({ project, onClose }: { project: any | null; onClose: () => void }) {
   const { t, i18n } = useTranslation("common");
@@ -101,12 +102,39 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
   };
 
   const formatPrice = (price: number | string) => {
-    if (!price) return 'TBA';
+    const tbaText = isRtl ? "قريباً" : "TBA";
+    if (!price) return tbaText;
     const num = Number(price);
     if (isNaN(num)) return price;
-    if (num >= 1000000) return `AED ${(num / 1000000).toFixed(2)}M`;
-    return `AED ${num.toLocaleString()}`;
+    if (num >= 1000000) {
+      const formatted = (num / 1000000).toFixed(2);
+      return isRtl ? `${formatted} مليون د.إ` : `AED ${formatted}M`;
+    }
+    return isRtl ? `${num.toLocaleString()} د.إ` : `AED ${num.toLocaleString()}`;
   };
+
+  const DEVELOPER_TRANSLATIONS: Record<string, string> = {
+    "Emaar": "إعمار",
+    "Damac": "داماك",
+    "Nakheel": "نخيل",
+    "Aldar": "الدار",
+    "Sobha": "شوبا",
+    "Deyaar": "ديار",
+    "Meraas": "ميراس",
+    "Dubai Properties": "دبي للعقارات"
+  };
+
+  const displayDeveloper = project.developer 
+    ? (isRtl ? (DEVELOPER_TRANSLATIONS[project.developer] || project.developer) : project.developer) 
+    : (isRtl ? "مطور عقاري قريباً" : "Developer TBA");
+
+  const displayLocation = project.location 
+    ? (isRtl ? (AREA_TRANSLATIONS[project.location] || project.location) : project.location) 
+    : (isRtl ? "الإمارات" : "UAE");
+
+  const displayHandover = (project.handoverDate || project.handover) 
+    ? (isRtl && (project.handoverDate || project.handover) === "TBA" ? "قريباً" : (project.handoverDate || project.handover))
+    : (isRtl ? "قريباً" : "TBA");
 
   return (
     <div className="fixed inset-y-0 inset-inline-end-0 w-full sm:max-w-md bg-[var(--color-bg-card)] shadow-2xl border-inline-start border-[var(--color-border)] z-[1000] flex flex-col transition-all duration-300 animate-in slide-in-from-inline-end">
@@ -119,7 +147,7 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
               {formatPrice(project.startingPrice)}
             </span>
             <span className="text-xs text-[var(--color-text-secondary)] font-medium">
-              {project.developer || 'Developer TBA'}
+              {displayDeveloper}
             </span>
           </div>
         </div>
@@ -283,17 +311,17 @@ export default function ProjectSidebar({ project, onClose }: { project: any | nu
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <Building2 className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
                 <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.developer", "Developer")}</p>
-                <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{project.developer || '-'}</p>
+                <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{displayDeveloper}</p>
               </div>
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <MapPin className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
                 <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.location", "Location")}</p>
-                <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{project.location || '-'}</p>
+                <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{displayLocation}</p>
               </div>
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <Calendar className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
                 <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("projects.fields.handover", "Handover")}</p>
-                <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{project.handoverDate || project.handover || '-'}</p>
+                <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{displayHandover}</p>
               </div>
               <div className="p-4 rounded-xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                 <Box className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />

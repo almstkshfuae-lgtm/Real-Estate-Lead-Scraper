@@ -13,10 +13,13 @@ import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 import { Lead } from "./LeadTable";
 import { safeJson } from "@/lib/safe-fetch";
 
-export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lead: Lead | null; userRole?: string; onClose: () => void; onUpdate?: (updatedLead?: Lead) => void }) {
+export default function LeadSidebar({ lead: initialLead, userRole, onClose, onUpdate }: { lead: Lead | null; userRole?: string; onClose: () => void; onUpdate?: (updatedLead?: Lead) => void }) {
   const { t, i18n } = useTranslation("common");
   const lang = i18n.language === "ar" ? "ar" : "en";
   const isAdminUser = isAdmin(userRole);
+
+  const [lead, setLead] = useState<Lead | null>(initialLead);
+  const [loadingLead, setLoadingLead] = useState(false);
 
   const translateError = (message: string) => {
     if (!message) return "";
@@ -28,7 +31,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
 
   const [copied, setCopied] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "ai" | "notes" | "followup">("details");
-  const [notes, setNotes] = useState(lead?.notes || "");
+  const [notes, setNotes] = useState(initialLead?.notes || "");
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
 
@@ -78,32 +81,66 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
 
   useEffect(() => {
     let active = true;
-    if (lead) {
-      setNotes(lead.notes || "");
+    if (initialLead) {
+      setNotes(initialLead.notes || "");
       setPitch("");
       setScoreResult(null);
       setSignals(null);
       setDynamicPersona(null);
 
       setEditForm({
-        name: lead.name || "",
-        email: lead.email || "",
-        phone: lead.phone || "",
-        company: lead.company || "",
-        role: lead.role || "",
-        location: lead.location || "",
-        score: lead.score ?? 50,
-        budgetMin: lead.budgetMin?.toString() || "",
-        budgetMax: lead.budgetMax?.toString() || "",
-        tier: lead.tier ?? 3,
-        source: lead.source || "",
-        signals: Array.isArray(lead.signals) ? lead.signals.join(", ") : "",
+        name: initialLead.name || "",
+        email: initialLead.email || "",
+        phone: initialLead.phone || "",
+        company: initialLead.company || "",
+        role: initialLead.role || "",
+        location: initialLead.location || "",
+        score: initialLead.score ?? 50,
+        budgetMin: initialLead.budgetMin?.toString() || "",
+        budgetMax: initialLead.budgetMax?.toString() || "",
+        tier: initialLead.tier ?? 3,
+        source: initialLead.source || "",
+        signals: Array.isArray(initialLead.signals) ? initialLead.signals.join(", ") : "",
       });
       setIsEditing(false);
+      setLead(initialLead);
+
+      const fetchFullLead = async () => {
+        setLoadingLead(true);
+        try {
+          const res = await fetch(`/api/leads/${initialLead.id}`);
+          if (!res.ok) throw new Error("Failed to fetch full lead");
+          const data = await res.json();
+          if (active && data.lead) {
+            setLead(data.lead);
+            setNotes(data.lead.notes || "");
+            setEditForm({
+              name: data.lead.name || "",
+              email: data.lead.email || "",
+              phone: data.lead.phone || "",
+              company: data.lead.company || "",
+              role: data.lead.role || "",
+              location: data.lead.location || "",
+              score: data.lead.score ?? 50,
+              budgetMin: data.lead.budgetMin?.toString() || "",
+              budgetMax: data.lead.budgetMax?.toString() || "",
+              tier: data.lead.tier ?? 3,
+              source: data.lead.source || "",
+              signals: Array.isArray(data.lead.signals) ? data.lead.signals.join(", ") : "",
+            });
+          }
+        } catch (err) {
+          console.error("Error fetching full lead details:", err);
+        } finally {
+          if (active) setLoadingLead(false);
+        }
+      };
+
+      fetchFullLead();
 
       // Load cached/stored persona
       setPersonaLoading(true);
-      fetch(`/api/leads/${lead.id}/persona?lang=${lang}`)
+      fetch(`/api/leads/${initialLead.id}/persona?lang=${lang}`)
         .then((res) => {
           if (!res.ok) throw new Error();
           return res.json();
@@ -126,7 +163,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
       fetch("/api/ai/signals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId: lead.id, generate: false, lang })
+        body: JSON.stringify({ leadId: initialLead.id, generate: false, lang })
       })
       .then((res) => {
         if (!res.ok) throw new Error();
@@ -140,11 +177,13 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
       .catch((err) => {
         console.error("Failed to load cached signals:", err);
       });
+    } else {
+      setLead(null);
     }
     return () => {
       active = false;
     };
-  }, [lead, lang]);
+  }, [initialLead, lang]);
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,6 +398,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
     { id: "followup", label: t("leads.sidebar.tabs.followup", "Follow-up"), icon: Clock },
   ];
 
+  const displayName = (lang === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
   const currentScore = scoreResult?.refinedScore ?? lead.score;
 
   return (
@@ -368,7 +408,7 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
         <div className="flex items-center gap-3">
           <ScoreBadge score={currentScore} />
           <div className="text-start">
-            <h2 className="text-xl font-bold text-[var(--color-text-primary)]">{lead.name}</h2>
+            <h2 className="text-xl font-bold text-[var(--color-text-primary)]">{displayName}</h2>
             <div className="flex items-center gap-2 mt-1">
               <TierBadge tier={lead.tier} />
               <span className="text-xs text-[var(--color-text-disabled)]">•</span>
@@ -401,7 +441,15 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 relative">
+        {loadingLead && (
+          <div className="absolute inset-0 bg-[var(--color-bg-card)]/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" />
+            <span className="text-xs font-bold text-[var(--color-text-secondary)]">
+              {t("common.loading", "Loading secure details...")}
+            </span>
+          </div>
+        )}
 
         {/* DETAILS TAB */}
         {activeTab === "details" && (
@@ -583,12 +631,16 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
                     <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                       <Building2 className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
                       <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("leads.sidebar.company")}</p>
-                      <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{lead.company}</p>
+                      <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">
+                        {(lang === "ar" && lead.companyAr) ? lead.companyAr : lead.company}
+                      </p>
                     </div>
                     <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                       <Briefcase className="w-4 h-4 text-[var(--color-text-secondary)] mb-2" />
                       <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider">{t("leads.sidebar.role")}</p>
-                      <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">{lead.role}</p>
+                      <p className="text-sm font-bold text-[var(--color-text-primary)] mt-0.5">
+                        {(lang === "ar" && lead.roleAr) ? lead.roleAr : lead.role}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -599,7 +651,11 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
                     <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.budget", "Budget")}</h3>
                     <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start">
                       <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                        {lead.budgetMin ? `AED ${lead.budgetMin.toLocaleString()}` : "0"} - {lead.budgetMax ? `AED ${lead.budgetMax.toLocaleString()}` : t("common.any", "Any")}
+                        {lead.budgetMin 
+                          ? (lang === "ar" ? `${lead.budgetMin.toLocaleString()} د.إ` : `AED ${lead.budgetMin.toLocaleString()}`) 
+                          : "0"} - {lead.budgetMax 
+                            ? (lang === "ar" ? `${lead.budgetMax.toLocaleString()} د.إ` : `AED ${lead.budgetMax.toLocaleString()}`) 
+                            : t("common.any", "Any")}
                       </p>
                     </div>
                   </div>
@@ -805,7 +861,9 @@ export default function LeadSidebar({ lead, userRole, onClose, onUpdate }: { lea
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
-                            subject: `Investment Opportunity: ${lead.company}`,
+                            subject: lang === "ar" 
+                              ? `فرصة استثمارية: ${(lang === "ar" && lead.companyAr) ? lead.companyAr : lead.company}` 
+                              : `Investment Opportunity: ${lead.company}`,
                             body: pitch
                           })
                         });

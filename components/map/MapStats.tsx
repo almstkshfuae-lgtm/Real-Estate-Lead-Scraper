@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { MapPin, TrendingUp, Users, Target, Zap } from "lucide-react";
 import type { MapLead } from "./GeoMap";
+import { AREA_TRANSLATIONS } from "@/lib/areas";
 
 interface MapStatsProps {
   leads: MapLead[];
@@ -11,7 +12,9 @@ interface MapStatsProps {
 }
 
 export default function MapStats({ leads, filteredCount, geofencedCount, projects = [] }: MapStatsProps) {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  const language = i18n.language;
+  const isAr = language === "ar";
 
   const { avgScore, t1Count, topLocations, stats } = useMemo(() => {
     const totalLeads = leads.length;
@@ -141,17 +144,18 @@ export default function MapStats({ leads, filteredCount, geofencedCount, project
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="p-2.5 bg-[var(--color-bg-surface)] rounded-lg">
-              <div className="text-[var(--color-text-secondary)] font-medium">Projects</div>
+              <div className="text-[var(--color-text-secondary)] font-medium">{t("map.stats.projectsCount", "Projects")}</div>
               <div className="text-lg font-extrabold text-[var(--color-text-primary)] mt-0.5">{projects.length}</div>
             </div>
             <div className="p-2.5 bg-[var(--color-bg-surface)] rounded-lg">
-              <div className="text-[var(--color-text-secondary)] font-medium">Avg Start Price</div>
+              <div className="text-[var(--color-text-secondary)] font-medium">{t("map.stats.avgStartPrice", "Avg Start Price")}</div>
               <div className="text-sm font-extrabold text-[#085041] mt-1 truncate">
                 {(() => {
                   const validPrices = projects.map(p => p.startingPrice).filter(price => typeof price === "number" && price > 0);
-                  if (validPrices.length === 0) return "N/A";
+                  if (validPrices.length === 0) return t("common.notAvailable", "N/A");
                   const avgPrice = Math.round(validPrices.reduce((a, b) => a + b, 0) / validPrices.length);
-                  return `${(avgPrice / 1000000).toFixed(1)}M AED`;
+                  const mVal = (avgPrice / 1000000).toFixed(1);
+                  return isAr ? `${mVal} مليون د.إ` : `${mVal}M AED`;
                 })()}
               </div>
             </div>
@@ -169,37 +173,40 @@ export default function MapStats({ leads, filteredCount, geofencedCount, project
             </span>
           </div>
           <div className="space-y-2">
-            {topLocations.map(([loc, count], idx) => (
-              <div key={loc} className="flex items-center gap-2">
-                <span
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                  style={{
-                    background: idx === 0 ? "#3C3489" : idx === 1 ? "#085041" : "#444441",
-                  }}
-                >
-                  {idx + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-medium text-[var(--color-text-primary)] truncate">
-                      {loc}
-                    </span>
-                    <span className="text-xs font-bold text-[var(--color-text-secondary)] ms-2">
-                      {count}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-[var(--color-bg-surface)] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${(count / leads.length) * 100}%`,
-                        background: idx === 0 ? "#3C3489" : idx === 1 ? "#085041" : "#444441",
-                      }}
-                    />
+            {topLocations.map(([loc, count], idx) => {
+              const displayLoc = isAr ? (AREA_TRANSLATIONS[loc] || loc) : loc;
+              return (
+                <div key={loc} className="flex items-center gap-2">
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                    style={{
+                      background: idx === 0 ? "#3C3489" : idx === 1 ? "#085041" : "#444441",
+                    }}
+                  >
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-medium text-[var(--color-text-primary)] truncate">
+                        {displayLoc}
+                      </span>
+                      <span className="text-xs font-bold text-[var(--color-text-secondary)] ms-2">
+                        {count}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-[var(--color-bg-surface)] rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${(count / leads.length) * 100}%`,
+                          background: idx === 0 ? "#3C3489" : idx === 1 ? "#085041" : "#444441",
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

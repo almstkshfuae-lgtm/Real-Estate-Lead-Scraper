@@ -182,6 +182,11 @@ To resolve identified security vulnerabilities, legal risks, and data leakage ve
 - **Soft Deletion & Merging**: Lead deletions execute via soft deletes (`deletedAt` timestamp). Webhook re-ingestions of soft-deleted leads restore and merge details seamlessly while creating structured audit entries.
 - **Data Pruning**: An automated retention cleanup policy runs hard deletions on expired lead records older than 90 days, complying with global and regional data protection regulations (e.g. UAE PDPL).
 
+### 6. Map Lead Data Protection (Data Security Leak Mitigation)
+- **Exclusion of Sensitive Fields**: The geographic clusters API (`/api/leads/cluster`) explicitly excludes personal identifiable information (PII) including `phone`, `email`, `notes`, and `signals` from the Prisma select statement, preventing external scraping or data harvesting of the HNWI list.
+- **Dynamic Lazy-Loading**: When a user selects a lead to view its details (e.g., clicking "View Full Profile" on the map), the frontend `LeadSidebar` issues a secure dynamic `GET` request to `/api/leads/[id]`. This endpoint is secured using session verification and RBAC checks (restricting agents to their own leads, admins to all), returning the full details on demand.
+- **Visual Feedback**: Displays a premium blur loader overlay on the tab content panel of `LeadSidebar` during the secure lazy-load process.
+
 ---
 
 ## 📡 Real-Time Progress Tracking via Event-Driven SSE

@@ -7,6 +7,43 @@ import { cleanPhone, cleanEmail } from "@/lib/sanitizer";
 import { parseSignals } from "@/lib/signals";
 import { leadUpdateSchema } from "@/lib/schemas";
 
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSessionWithDBVerify();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    const lead = await prisma.lead.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!lead) {
+      return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    }
+
+    // Agents can only view their own leads
+    if (!isAdmin(session.role) && lead.agentId !== session.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      lead: {
+        ...lead,
+        signals: parseSignals(lead.signals),
+      }
+    });
+  } catch (error) {
+    console.error("Lead GET error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

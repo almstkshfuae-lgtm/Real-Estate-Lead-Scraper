@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState, useCallback, memo } from "react";
 import { useTranslation } from "react-i18next";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
-import { UAE_AREAS, GLOBAL_AREAS, getCoords } from "@/lib/areas";
+import { UAE_AREAS, GLOBAL_AREAS, getCoords, AREA_TRANSLATIONS } from "@/lib/areas";
 
 
 function getTierColor(tier: number): string {
@@ -24,9 +26,12 @@ export interface MapLead {
   name: string;
   nameAr?: string;
   company: string;
+  companyAr?: string;
   role: string;
+  roleAr?: string;
   source: string;
   location: string;
+  locationAr?: string;
   score: number;
   tier: number;
   status: string;
@@ -71,12 +76,14 @@ function GeoMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const clusterGroupRef = useRef<any>(null);
   const heatLayerRef = useRef<any>(null);
   const geofenceLayerRef = useRef<any>(null);
   const drawingRef = useRef(false);
   const startPointRef = useRef<any>(null);
   const rectRef = useRef<any>(null);
   const isRtl = language === "ar";
+  const { t } = useTranslation("common");
 
   useEffect(() => {
     // Cancellation token — set true in cleanup so async continuations abort
@@ -189,8 +196,13 @@ function GeoMap({
       if (!map) return;
 
       const L = (await import("leaflet")).default;
+      await import("leaflet.markercluster");
 
-      // Clear existing markers and heatmap overlays
+      // Clear existing markers, cluster group, and heatmap overlays
+      if (clusterGroupRef.current) {
+        map.removeLayer(clusterGroupRef.current);
+        clusterGroupRef.current = null;
+      }
       markersRef.current.forEach((m) => map.removeLayer(m));
       markersRef.current = [];
       if (heatLayerRef.current) {
@@ -199,11 +211,60 @@ function GeoMap({
       }
 
       if (activeLayer === "markers") {
-        // Render every single lead as its own marker.
-        // Apply a STABLE (deterministic) jitter to every lead so that
-        // leads sharing the same lat/lng (e.g. all "Abu Dhabi" leads from the
-        // scraper backfill) spread out visibly instead of stacking invisibly.
-        leads.forEach((lead, index) => {
+        // Create the Leaflet MarkerClusterGroup with custom premium styles
+        const clusterGroup = (L as any).markerClusterGroup({
+          showCoverageOnHover: false,
+          spiderfyOnMaxZoom: true,
+          zoomToBoundsOnClick: true,
+          maxClusterRadius: 45,
+          iconCreateFunction: (cluster: any) => {
+            const childMarkers = cluster.getAllChildMarkers();
+            const count = childMarkers.length;
+
+            // Find the highest tier among the leads in this cluster (1 is elite, 3 is standard)
+            let topTier = 3;
+            childMarkers.forEach((marker: any) => {
+              const lead = marker.options.leadData;
+              if (lead && lead.tier < topTier) {
+                topTier = lead.tier;
+              }
+            });
+
+            const color = getTierColor(topTier);
+
+            return L.divIcon({
+              html: `
+                <div style="position: relative; width: 52px; height: 52px;">
+                  <div style="
+                    position: absolute; inset: 0; border-radius: 50%;
+                    background: ${color}22; border: 2px dashed ${color};
+                    animation: pulse-map 3s infinite;
+                  "></div>
+                  <div style="
+                    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    width: 38px; height: 38px; border-radius: 50%; background: ${color};
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    box-shadow: 0 4px 12px ${color}66; cursor: pointer; color: white;
+                    font-family: ${language === 'ar' ? "'Cairo', 'Tajawal', system-ui" : "'Inter', sans-serif"};
+                  ">
+                    <span style="font-size: 13px; font-weight: 800; line-height: 1.1;">${count}</span>
+                    <span style="font-size: 8px; font-weight: 700; opacity: 0.8; margin-top: 1px;">
+                      ${language === 'ar' ? 'عميل' : 'LEADS'}
+                    </span>
+                  </div>
+                </div>
+              `,
+              className: "custom-cluster-marker",
+              iconSize: [52, 52],
+              iconAnchor: [26, 26],
+            });
+          }
+        });
+
+        clusterGroupRef.current = clusterGroup;
+
+        // Render every single lead inside the cluster group
+        leads.forEach((lead) => {
           const baseCoords = getCoords(lead.location || "Unknown", lead.id);
           if (!baseCoords) return;
 
@@ -234,8 +295,7 @@ function GeoMap({
           });
 
           // --- Stable deterministic jitter using lead ID as seed ---
-          // This spreads overlapping leads reproducibly without randomness
-          // so positions don't jump on every re-render.
+          // Reduced range to ~50m to keep within the community bounds
           const dbLat = lead.latitude  != null ? lead.latitude  : null;
           const dbLng = lead.longitude != null ? lead.longitude : null;
 
@@ -249,20 +309,20 @@ function GeoMap({
             h1 = ((h1 << 5) - h1 + c) | 0;
             h2 = ((h2 << 3) + h2 + c) | 0;
           }
-          // Spread radius ~1.1 km in each direction
-          const jitterLat = ((Math.abs(h1) % 1000) / 1000 - 0.5) * 0.018;
-          const jitterLng = ((Math.abs(h2) % 1000) / 1000 - 0.5) * 0.018;
+          // Spread radius ~50 meters: 0.00045 degrees lat/lng
+          const jitterLat = ((Math.abs(h1) % 1000) / 1000 - 0.5) * 0.0009;
+          const jitterLng = ((Math.abs(h2) % 1000) / 1000 - 0.5) * 0.0009;
 
           const lat = baseLat + jitterLat;
           const lng = baseLng + jitterLng;
 
-          const marker = L.marker([lat, lng], { icon });
+          const marker = L.marker([lat, lng], { icon, leadData: lead } as any);
 
           const displayName = (language === "ar" && lead.nameAr) ? lead.nameAr : lead.name;
-          // Filter "Manual Import" signal — should never be shown to end-users on the map
-          const signals = (Array.isArray(lead.signals) ? lead.signals : []).filter(
-            (s: string) => s !== "Manual Import"
-          );
+          const displayCompany = (language === "ar" && lead.companyAr) ? lead.companyAr : lead.company;
+          const displayLocation = (language === "ar" && lead.locationAr) ? lead.locationAr : (language === "ar" && AREA_TRANSLATIONS[lead.location] ? AREA_TRANSLATIONS[lead.location] : lead.location);
+          const displayStatus = t(`leads.status.${lead.status}`, lead.status);
+          
           const dirAttr = language === "ar" ? 'dir="rtl"' : 'dir="ltr"';
           const fontFamily = language === "ar" ? "'Cairo', 'Tajawal', system-ui, sans-serif" : "'Inter', sans-serif";
 
@@ -272,21 +332,21 @@ function GeoMap({
                 <div style="font-weight: 800; font-size: 15px; color: #111827; margin-bottom: 2px;">${displayName}</div>
                 <div style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; background: ${scoreColor}; flex-shrink: 0;">${lead.score}</div>
               </div>
-              <div style="font-size: 12px; color: #6B7280; margin-bottom: 12px; font-weight: 500;">${lead.company}</div>
+              <div style="font-size: 12px; color: #6B7280; margin-bottom: 12px; font-weight: 500;">${displayCompany}</div>
               
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
                 <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: ${tierColor}15; color: ${tierColor};">T${lead.tier}</span>
-                <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #F3F4F6; color: #4B5563;">${lead.status}</span>
+                <span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #F3F4F6; color: #4B5563;">${displayStatus}</span>
               </div>
               
               <div style="font-size: 11px; color: #6B7280; display: flex; align-items: center; gap: 4px; margin-bottom: 16px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                ${lead.location}
+                ${displayLocation}
               </div>
 
               <button class="view-profile-btn" style="width: 100%; padding: 8px; background: #185FA5; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                ${language === 'ar' ? 'عرض الملف الكامل' : 'View Full Profile'}
+                ${t("map.panel.viewProfile", "View Full Profile")}
               </button>
             </div>
           `, { maxWidth: 300, className: "custom-lead-popup" });
@@ -301,9 +361,11 @@ function GeoMap({
             }
           });
 
-          marker.addTo(map);
+          clusterGroup.addLayer(marker);
           markersRef.current.push(marker);
         });
+
+        clusterGroup.addTo(map);
       } else if (activeLayer === "heatmap") {
         const heatGroup = L.layerGroup();
 
@@ -313,14 +375,33 @@ function GeoMap({
           const lng = proj.lng ?? proj.longitude;
           if (!lat || !lng) return;
 
+          const isAr = language === "ar";
+          const currency = isAr ? "د.إ" : "AED";
+          const developerFallback = isAr ? "مطور عقاري" : "Developer";
+          const tbaText = isAr ? "قريباً" : "TBA";
+
+          const DEVELOPER_TRANSLATIONS: Record<string, string> = {
+            "Emaar": "إعمار",
+            "Damac": "داماك",
+            "Nakheel": "نخيل",
+            "Aldar": "الدار",
+            "Sobha": "شوبا",
+            "Deyaar": "ديار",
+            "Meraas": "ميراس",
+            "Dubai Properties": "دبي للعقارات"
+          };
+
           const formatPrice = (price: number) => {
-            if (price >= 1000000) return (price / 1000000).toFixed(1) + 'M';
-            if (price >= 1000) return (price / 1000).toFixed(0) + 'K';
+            if (price >= 1000000) return (price / 1000000).toFixed(1) + (isAr ? " مليون" : "M");
+            if (price >= 1000) return (price / 1000).toFixed(0) + (isAr ? " ألف" : "K");
             return price.toString();
           };
 
-          const priceText = proj.startingPrice ? `AED ${formatPrice(proj.startingPrice)}` : 'TBA';
-          const projectName = proj.projectName || proj.name || 'Project';
+          const priceText = proj.startingPrice ? `${currency} ${formatPrice(proj.startingPrice)}` : tbaText;
+          const projectName = proj.projectName || proj.name || (isAr ? "مشروع عقاري" : "Project");
+          const displayDeveloper = proj.developer ? (isAr ? (DEVELOPER_TRANSLATIONS[proj.developer] || proj.developer) : proj.developer) : developerFallback;
+          const displayLocation = proj.location ? (isAr ? (AREA_TRANSLATIONS[proj.location] || proj.location) : proj.location) : (isAr ? "الإمارات" : "UAE");
+          const displayHandover = proj.handover || proj.handoverDate || tbaText;
 
           // A beautiful rectangular card that displays the project details
           const icon = L.divIcon({
@@ -372,20 +453,20 @@ function GeoMap({
             ">
               ${proj.imageUrl ? `
                 <div style="width: 100%; height: 140px; border-radius: 8px 8px 0 0; overflow: hidden; margin-bottom: 12px; background: #F3F4F6;">
-                  <img src="${proj.imageUrl}" alt="${proj.projectName || proj.name || 'Project'}" style="width: 100%; height: 100%; object-fit: cover;" />
+                  <img src="${proj.imageUrl}" alt="${projectName}" style="width: 100%; height: 100%; object-fit: cover;" />
                 </div>
               ` : ''}
               <div style="padding: ${proj.imageUrl ? '0 12px 12px 12px' : '8px'};">
-                <div style="font-weight: 800; font-size: 15px; color: #111827; margin-bottom: 2px;">${proj.projectName || proj.name || 'Project'}</div>
-                <div style="font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">${proj.developer || 'Developer'}</div>
+                <div style="font-weight: 800; font-size: 15px; color: #111827; margin-bottom: 2px;">${projectName}</div>
+                <div style="font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">${displayDeveloper}</div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
                   <div style="background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #F1F5F9;">
-                    <div style="font-size: 10px; color: #64748B;">Starting Price</div>
-                    <div style="font-size: 13px; font-weight: 700; color: #0F172A;">AED ${formatPrice(proj.startingPrice || 0)}</div>
+                    <div style="font-size: 10px; color: #64748B;">${isAr ? 'السعر المبدئي' : 'Starting Price'}</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${proj.startingPrice ? `${currency} ${formatPrice(proj.startingPrice)}` : tbaText}</div>
                   </div>
                   <div style="background: #F8FAFC; padding: 8px; border-radius: 8px; border: 1px solid #F1F5F9;">
-                    <div style="font-size: 10px; color: #64748B;">Area (Sqft)</div>
+                    <div style="font-size: 10px; color: #64748B;">${isAr ? 'المساحة (قدم مربع)' : 'Area (Sqft)'}</div>
                     <div style="font-size: 13px; font-weight: 700; color: #0F172A;">${proj.areaSqft || proj.area || '-'}</div>
                   </div>
                 </div>
@@ -393,14 +474,14 @@ function GeoMap({
                 <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
                   <div style="color: #64748B; display: flex; align-items: center; gap: 4px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                    ${proj.location || 'UAE'}
+                    ${displayLocation}
                   </div>
-                  <div style="color: #059669; font-weight: 600; background: #D1FAE5; padding: 2px 6px; border-radius: 4px;">${proj.handover || 'TBA'}</div>
+                  <div style="color: #059669; font-weight: 600; background: #D1FAE5; padding: 2px 6px; border-radius: 4px;">${displayHandover}</div>
                 </div>
 
                 <button class="view-project-btn" style="width: 100%; padding: 8px; margin-top: 12px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                  ${language === 'ar' ? 'عرض التفاصيل' : 'View Details'}
+                  ${isAr ? 'عرض التفاصيل' : 'View Details'}
                 </button>
               </div>
             </div>

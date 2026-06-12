@@ -179,7 +179,7 @@ export async function GET(request: Request) {
     const selectFields = minimal ? {
       id: true, name: true, nameAr: true, company: true, companyAr: true,
       role: true, roleAr: true, source: true, sourceType: true, tier: true,
-      phone: true, email: true, location: true, score: true, propertyPref: true,
+      phone: true, email: true, location: true, locationAr: true, score: true, propertyPref: true,
       budgetMin: true, budgetMax: true, latitude: true, longitude: true,
       relocated: true, rentalFlag: true, status: true, bitrix24Id: true,
       agentId: true, scrapeRunId: true, createdAt: true, updatedAt: true,

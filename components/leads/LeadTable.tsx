@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { safeJson } from "@/lib/safe-fetch";
 import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 import { useRouter } from "next/navigation";
+import { AREA_TRANSLATIONS } from "@/lib/areas";
 
 export type Lead = {
   id: string;
@@ -31,6 +32,7 @@ export type Lead = {
   phone?: string | null;
   email?: string | null;
   location: string;
+  locationAr?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   score: number;
@@ -342,10 +344,21 @@ export default function LeadTable({ onSelectLead, filters }: LeadTableProps) {
                 <td className="px-6 py-4">
                   <div>
                     <div className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-primary)] transition-colors">
-                      {lead.name}
+                      {(i18n.language === "ar" && lead.nameAr) ? lead.nameAr : lead.name}
                     </div>
-                    <div className="text-xs text-[var(--color-text-secondary)]">{t('common.roleAt', { role: lead.role, company: lead.company })}</div>
-                    <div className="text-[10px] text-[var(--color-text-disabled)] mt-1">{lead.location}</div>
+                    <div className="text-xs text-[var(--color-text-secondary)]">
+                      {t('common.roleAt', { 
+                        role: (i18n.language === "ar" && lead.roleAr) ? lead.roleAr : lead.role, 
+                        company: (i18n.language === "ar" && lead.companyAr) ? lead.companyAr : lead.company 
+                      })}
+                    </div>
+                    <div className="text-[10px] text-[var(--color-text-disabled)] mt-1">
+                      {(i18n.language === "ar" && lead.locationAr) 
+                        ? lead.locationAr 
+                        : (i18n.language === "ar" && AREA_TRANSLATIONS[lead.location]) 
+                          ? AREA_TRANSLATIONS[lead.location] 
+                          : lead.location}
+                    </div>
                   </div>
                 </td>
                 <td className="px-6 py-4">
