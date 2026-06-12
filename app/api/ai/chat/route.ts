@@ -108,9 +108,14 @@ export async function POST(req: NextRequest) {
 
     const budget = await checkDailyBudget();
     if (budget.exceeded) {
+      // Log technical details server-side only — never expose raw spend figures to the client
+      console.warn(
+        `[AI Chat] Daily budget exceeded: $${budget.currentSpend.toFixed(4)} / $${budget.limit.toFixed(2)}`
+      );
       return new Response(
         JSON.stringify({
-          error: `Daily AI budget exceeded ($${budget.currentSpend.toFixed(4)} / $${budget.limit.toFixed(2)}). Please adjust in Settings → Integrations.`
+          error: "daily_budget_exceeded",
+          message: "Daily AI usage limit has been reached. Please contact your system administrator."
         }),
         { status: 429, headers: { "Content-Type": "application/json" } }
       );
@@ -121,8 +126,12 @@ export async function POST(req: NextRequest) {
     // Fast-fail when no AI provider is configured to avoid wasted work
     const aiConfig = await getAIConfig();
     if (!aiConfig) {
-      console.warn('[AI Chat] request rejected: no AI provider configured');
-      return new Response(JSON.stringify({ error: 'AI provider not configured. Set GOOGLE_AI_API_KEY or OPENAI_API_KEY.' }), {
+      // Log env-specific detail server-side only
+      console.warn('[AI Chat] request rejected: no AI provider configured (GOOGLE_AI_API_KEY / OPENAI_API_KEY missing)');
+      return new Response(JSON.stringify({
+        error: "ai_unavailable",
+        message: "AI service is currently unavailable. Please contact your system administrator."
+      }), {
         status: 503,
         headers: { 'Content-Type': 'application/json' },
       });

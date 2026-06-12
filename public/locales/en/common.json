@@ -485,12 +485,17 @@
       "stat1": "Real-time Streaming",
       "stat2": "Lead Intelligence",
       "stat3": "EN / AR Bilingual"
+    },
+    "errors": {
+      "dailyBudgetExceeded": "Daily AI usage limit has been reached. Please contact your system administrator.",
+      "aiUnavailable": "AI service is currently unavailable. Please try again later or contact the administrator."
     }
   },
   "errors": {
     "onlyAdminsEdit": "Only admins are allowed to edit lead details.",
     "leadNotFound": "Lead not found",
     "unauthorized": "Unauthorized",
-    "invalidInput": "Invalid input data"
+    "invalidInput": "Invalid input data",
+    "serverConnectionError": "A connection error occurred. Please try again later."
   }
 }

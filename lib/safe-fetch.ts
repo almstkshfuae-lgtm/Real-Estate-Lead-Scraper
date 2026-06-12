@@ -11,11 +11,14 @@ export async function safeJson<T = any>(res: Response): Promise<T> {
   try {
     return JSON.parse(text) as T;
   } catch {
-    // Surface the raw body (truncated) when the response isn't valid JSON.
+    // Log the raw body (may contain HTML from proxy 502s) to server-side only.
+    // Never surface this raw content to the frontend.
     const preview = text.length > 200 ? text.slice(0, 200) + '…' : text;
-    throw new Error(
-      `Server returned non-JSON response (HTTP ${res.status}): ${preview}`,
+    console.error(
+      `[safeJson] Non-JSON response (HTTP ${res.status}): ${preview}`,
     );
+    // Return a generic, user-safe error so callers can display a clean message.
+    throw new Error('server_connection_error');
   }
 }
 

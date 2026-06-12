@@ -99,15 +99,20 @@ export default function AIChatPanel({ context }: { context?: string }) {
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        let errorMessage = "Chat failed, please try again.";
+        let errorKey = "ai.chatError";
+        let errorFallback = "Chat failed, please try again";
         try {
-          const json = JSON.parse(errorText);
-          errorMessage = json.error || json.detail || errorText || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-        throw new Error(errorMessage);
+          const json = await res.json();
+          // Map structured error codes to i18n keys — never expose raw server text
+          if (json.error === "daily_budget_exceeded") {
+            errorKey = "ai.errors.dailyBudgetExceeded";
+            errorFallback = "Daily AI usage limit reached. Please contact your administrator.";
+          } else if (json.error === "ai_unavailable") {
+            errorKey = "ai.errors.aiUnavailable";
+            errorFallback = "AI service is currently unavailable. Please try again later.";
+          }
+        } catch { /* use default error key */ }
+        throw new Error(t(errorKey, errorFallback));
       }
 
       if (!res.body) throw new Error("Chat failed: missing response body.");
