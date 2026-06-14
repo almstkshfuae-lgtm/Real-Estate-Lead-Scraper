@@ -275,6 +275,23 @@ function resolveRow(raw: Record<string, string>): Record<string, string> {
   return out;
 }
 
+function parseJsonField(val: any): any {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      return parseJsonField(parsed);
+    } catch {
+      return val;
+    }
+  }
+  if (typeof val === "object") {
+    return val;
+  }
+  return val;
+}
+
+
 
 
 function calculateRoleBasedTier(role: string): number {
@@ -539,8 +556,12 @@ export async function POST(request: Request) {
           const hasDifferentBudgetMin = budgetMin !== null && budgetMin !== existingByUnique.budgetMin;
           const hasDifferentBudgetMax = budgetMax !== null && budgetMax !== existingByUnique.budgetMax;
           const hasDifferentPersona = finalPersona && finalPersona !== existingByUnique.persona;
-          const hasDifferentSignals = row.signals && JSON.stringify(finalSignals) !== JSON.stringify(existingByUnique.signals);
-          const hasDifferentMetadata = Object.keys(metadata).length > 0 && JSON.stringify(metadata) !== JSON.stringify(existingByUnique.metadata);
+
+          const existingSignals = parseSignals(existingByUnique.signals);
+          const hasDifferentSignals = row.signals && JSON.stringify(finalSignals.slice().sort()) !== JSON.stringify(existingSignals.slice().sort());
+
+          const existingMetadata = parseJsonField(existingByUnique.metadata) || {};
+          const hasDifferentMetadata = Object.keys(metadata).length > 0 && JSON.stringify(metadata) !== JSON.stringify(existingMetadata);
 
           const shouldUpdate =
             hasDifferentEmail ||
@@ -575,9 +596,9 @@ export async function POST(request: Request) {
                 ...(budgetMin !== null && { budgetMin }),
                 ...(budgetMax !== null && { budgetMax }),
                 metadata: Object.keys(metadata).length > 0 ? {
-                  ...(existingByUnique.metadata as Record<string, any> || {}),
+                  ...(parseJsonField(existingByUnique.metadata) || {}),
                   ...metadata
-                } : (existingByUnique.metadata || undefined),
+                } : (parseJsonField(existingByUnique.metadata) || undefined),
                 updatedAt: new Date(),
                 deletedAt: null // Restore if soft deleted
               },
@@ -643,12 +664,12 @@ export async function POST(request: Request) {
           latitude: coords.lat,
           longitude: coords.lng,
           score: computedScore,
-          signals: JSON.stringify(finalSignals),
+          signals: finalSignals, // Pass array directly
           persona: finalPersona,
-          propertyPref: JSON.stringify({ type: "apartment" }),
+          propertyPref: { type: "apartment" }, // Pass object directly
           status: "new",
           agentId: session.id,
-          metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+          metadata: Object.keys(metadata).length > 0 ? metadata : null, // Pass object directly
           budgetMin,
           budgetMax,
         });
@@ -663,34 +684,43 @@ export async function POST(request: Request) {
         });
       }
 
-      // Execute updates (sequentially since they are typically rare and require updates/auditing)
+      // Record skipped leads
       for (const item of leadsToUpdate) {
-        if (item.status === "updated") {
-          try {
-            await prisma.lead.update({
-              where: { id: item.id },
-              data: item.data
-            });
-            updatedCount++;
+        if (item.status === "skipped") {
+          skippedCount++;
+          if (item.reason) skipReasons.push(item.reason);
+        }
+      }
 
-            if (item.auditAction) {
-              await prisma.auditLog.create({
-                data: {
+      // Execute updates in parallel batches of size 15 to avoid 504 timeouts and connection pool exhaustion
+      const actualUpdates = leadsToUpdate.filter(item => item.status === "updated");
+      const BATCH_SIZE = 15;
+
+      for (let i = 0; i < actualUpdates.length; i += BATCH_SIZE) {
+        const batch = actualUpdates.slice(i, i + BATCH_SIZE);
+        await Promise.allSettled(
+          batch.map(async (item) => {
+            try {
+              await prisma.lead.update({
+                where: { id: item.id },
+                data: item.data
+              });
+              updatedCount++;
+
+              if (item.auditAction) {
+                auditLogsToCreate.push({
                   action: item.auditAction,
                   entityType: "Lead",
                   entityId: item.id,
                   agentId: session.id,
-                  details: item.auditDetails
-                }
-              });
+                  details: item.auditDetails || ""
+                });
+              }
+            } catch (updateErr) {
+              console.error(`[CSV Import] Failed to update lead ${item.id}:`, updateErr);
             }
-          } catch (updateErr) {
-            console.error(`[CSV Import] Failed to update lead ${item.id}:`, updateErr);
-          }
-        } else if (item.status === "skipped") {
-          skippedCount++;
-          if (item.reason) skipReasons.push(item.reason);
-        }
+          })
+        );
       }
 
       // Execute bulk inserts for created leads
