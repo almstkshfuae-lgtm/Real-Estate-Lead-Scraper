@@ -36,6 +36,7 @@ export function useScrapeRunStatus(
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const runIdRef = useRef(runId);
+  const statusRef = useRef<ScrapeRunStatus | null>(null);
 
   // Keep the ref current to avoid stale closures
   runIdRef.current = runId;
@@ -71,6 +72,8 @@ export function useScrapeRunStatus(
 
       const data = await res.json();
       const run = data.run;
+
+      statusRef.current = run.status as ScrapeRunStatus;
 
       setState({
         status: run.status as ScrapeRunStatus,
@@ -120,6 +123,8 @@ export function useScrapeRunStatus(
     stopPolling();
     stopSSE();
 
+    statusRef.current = null;
+
     if (!runId) {
       setState({ status: null, leadsFound: 0, isPolling: false, error: null, isUsingSSE: false });
       return;
@@ -146,6 +151,7 @@ export function useScrapeRunStatus(
           const run = data.run;
 
           if (run) {
+            statusRef.current = run.status as ScrapeRunStatus;
             setState({
               status: run.status as ScrapeRunStatus,
               leadsFound: run.leadsFound ?? 0,
@@ -165,14 +171,11 @@ export function useScrapeRunStatus(
       };
 
       es.onerror = (err) => {
-        setState((prev) => {
-          if (prev.status === "COMPLETED" || prev.status === "FAILED") {
-            return prev;
-          }
-          console.warn("[useScrapeRunStatus] SSE stream error. Falling back to HTTP polling.", err);
-          setTimeout(() => startPollingFallback(), 0);
-          return prev;
-        });
+        if (statusRef.current === "COMPLETED" || statusRef.current === "FAILED") {
+          return;
+        }
+        console.warn("[useScrapeRunStatus] SSE stream error. Falling back to HTTP polling.", err);
+        startPollingFallback();
       };
     } else {
       console.warn("[useScrapeRunStatus] EventSource is not supported. Falling back to HTTP polling.");

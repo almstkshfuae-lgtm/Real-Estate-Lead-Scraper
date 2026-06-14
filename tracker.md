@@ -260,6 +260,7 @@
 - [x] **Hardened: Geofencing Text Fallback Full-Text Search (FTS) Indexing** — Migrate location search to use MySQL full-text search indexes instead of multi-contains queries. <!-- id: 12.24 -->
 - [x] **Bilingual Map & Sidebar Localization Parity** — Implement full bilingual swap for Arabic fields (nameAr, companyAr, locationAr) and translate all hardcoded strings inside map popups, geofencing list, stats, and ProjectSidebar. <!-- id: 12.25 -->
 - [x] **Hardened: Session Verification desynchronization and mutation protection** — Verify session credentials in database for auth/me and search mutation routes to prevent 401 and 500 error collisions from stale browser tokens. <!-- id: 12.26 -->
+- [x] **Hardened: CSV lead import query optimization** — Optimized the import endpoint `/api/leads/import` to batch creations using `createMany` and deduplicate leads in bulk using indexed name search, reducing query roundtrips from $O(N)$ to $O(1)$ and preventing 504 gateway timeouts. <!-- id: 12.27 -->
 
 
 ## Legend
