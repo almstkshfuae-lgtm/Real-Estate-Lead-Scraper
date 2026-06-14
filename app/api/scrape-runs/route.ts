@@ -18,18 +18,21 @@ export async function GET() {
 
     // Dynamically calculate active lead counts for the retrieved runs
     const runIds = runs.map(r => r.id);
-    const activeLeadCounts = await prisma.lead.groupBy({
-      by: ['scrapeRunId'],
+
+    // scrapeRunId no longer exists on Lead — query via LeadScrapeRun join table
+    const rawAssociations = await prisma.leadScrapeRun.findMany({
       where: {
         scrapeRunId: { in: runIds },
-        deletedAt: null,
-        ...(isHostAdmin ? {} : { agentId: session.id })
+        lead: {
+          deletedAt: null,
+          ...(isHostAdmin ? {} : { agentId: session.id })
+        }
       },
-      _count: { id: true }
+      select: { scrapeRunId: true }
     });
 
-    const countsMap = activeLeadCounts.reduce((acc, curr) => {
-      acc[curr.scrapeRunId] = curr._count.id;
+    const countsMap = rawAssociations.reduce((acc, curr) => {
+      acc[curr.scrapeRunId] = (acc[curr.scrapeRunId] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 

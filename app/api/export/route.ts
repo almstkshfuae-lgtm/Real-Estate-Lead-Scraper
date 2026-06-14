@@ -39,7 +39,7 @@ export async function GET(request: Request) {
         conditions.push({ tier: parsedTier });
       }
     }
-    if (scrapeRunId) conditions.push({ scrapeRunId });
+    if (scrapeRunId) conditions.push({ scrapeRuns: { some: { scrapeRunId } } });
 
     if (scoreMin) {
       const parsedScoreMin = parseInt(scoreMin);

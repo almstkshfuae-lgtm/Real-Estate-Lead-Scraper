@@ -27,8 +27,14 @@ export async function GET(
     if (!isAdmin && (currentRun.status === "FAILED" || (currentRun.status === "COMPLETED" && currentRun.leadsFound === 0))) {
       try {
         // Prevent concurrent duplicate fallback lead cloning
-        const existingRunLeadsCount = await prisma.lead.count({
-          where: { scrapeRunId: currentRun.id, agentId: session.id, deletedAt: null }
+        const existingRunLeadsCount = await prisma.leadScrapeRun.count({
+          where: {
+            scrapeRunId: currentRun.id,
+            lead: {
+              agentId: session.id,
+              deletedAt: null
+            }
+          }
         });
         if (existingRunLeadsCount > 0) {
           console.info(`[SSE Fallback Check] Leads already exist for scrapeRunId ${currentRun.id}. Skipping clone.`);
@@ -67,7 +73,7 @@ export async function GET(
             const randomSuffix = Math.floor(1000 + Math.random() * 9000);
             const newSource = `${adminLead.source} (Match ${randomSuffix})`;
             try {
-              await prisma.lead.create({
+              const newLead = await prisma.lead.create({
                 data: {
                   name: adminLead.name,
                   nameAr: adminLead.nameAr,
@@ -91,9 +97,16 @@ export async function GET(
                   relocated: adminLead.relocated,
                   status: "new",
                   agentId: session.id,
+                }
+              });
+
+              await prisma.leadScrapeRun.create({
+                data: {
+                  leadId: newLead.id,
                   scrapeRunId: currentRun.id,
                 }
               });
+
               createdCount++;
             }
             catch (e) {

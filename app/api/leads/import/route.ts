@@ -243,24 +243,108 @@ export async function POST(request: Request) {
         });
       }
 
+      // ── In-Memory Validation & Deduplication of Import Batch ───────────────
+      const deduplicatedLeads: any[] = [];
+      const batchUniqueKeys = new Set<string>();
+      const batchEmails = new Set<string>();
+
+      for (const rawRow of rawLeads) {
+        const row = resolveRow(rawRow as Record<string, string>);
+
+        // Validate normalized row structure via Zod
+        const validation = leadImportSchema.safeParse(row);
+        if (!validation.success) {
+          skippedCount++;
+          skipReasons.push(`Row skipped — invalid data: ${JSON.stringify(validation.error.flatten().fieldErrors)} for row name "${row.name || 'Unknown'}"`);
+          continue;
+        }
+
+        const name = (row.name || "").trim() || "Unknown Contact";
+        const email = cleanEmail(row.email || "");
+        const phone = cleanPhone(row.phone || "");
+        const company = (row.company || "").trim() || "Manual Entry";
+        const role = (row.role || "").trim() || "Imported Lead";
+        const locationRaw = (row.location || "").trim() || "Abu Dhabi";
+        const location = normalizeLocation(locationRaw);
+        const coords = resolveCoords(location);
+
+        const hasIdentity =
+          name !== "Unknown Contact" ||
+          email !== null ||
+          phone !== null ||
+          company !== "Manual Entry";
+
+        if (!hasIdentity) {
+          skippedCount++;
+          skipReasons.push(`Row skipped — no identifiable data: ${JSON.stringify(rawRow)}`);
+          continue;
+        }
+
+        // Deduplicate name+company within this import batch
+        const uniqueKey = `${name.trim().toLowerCase()}|${company.trim().toLowerCase()}`;
+        if (batchUniqueKeys.has(uniqueKey)) {
+          skippedCount++;
+          skipReasons.push(`Duplicate skipped in import batch — same name+company: "${name}" @ "${company}"`);
+          continue;
+        }
+
+        // Deduplicate email within this import batch
+        if (email) {
+          const emailLower = email.trim().toLowerCase();
+          if (batchEmails.has(emailLower)) {
+            skippedCount++;
+            skipReasons.push(`Duplicate skipped in import batch — email already exists: "${email}"`);
+            continue;
+          }
+          batchEmails.add(emailLower);
+        }
+
+        batchUniqueKeys.add(uniqueKey);
+
+        // Standard keys and extra metadata
+        const standardKeys = ["name", "email", "phone", "company", "role", "location", "persona", "signals"];
+        const metadata: Record<string, any> = {};
+        for (const [key, val] of Object.entries(row)) {
+          if (!standardKeys.includes(key)) {
+            metadata[key] = val;
+          }
+        }
+
+        let finalSignals: string[] = [];
+        if (row.signals) {
+          finalSignals = parseSignals(row.signals);
+        }
+
+        let finalPersona: string | null = null;
+        if (row.persona) {
+          finalPersona = cleanPersonaPreamble(row.persona);
+        }
+
+        deduplicatedLeads.push({
+          name,
+          email,
+          phone,
+          company,
+          role,
+          location,
+          coords,
+          metadata,
+          finalSignals,
+          finalPersona,
+          row
+        });
+      }
+
       // ── Pre-fetch existing leads in bulk to avoid connection-pool-exhausting query storms ──
       const searchPairs: { name: string; company: string }[] = [];
       const searchEmails: string[] = [];
 
-      for (const rawRow of rawLeads) {
-        const row = resolveRow(rawRow as Record<string, string>);
-        const name = (row.name || "").trim() || "Unknown Contact";
-        const company = (row.company || "").trim() || "Manual Entry";
-        const email = cleanEmail(row.email || "");
-
-        const hasIdentity = name !== "Unknown Contact" || email !== null || company !== "Manual Entry";
-        if (hasIdentity) {
-          if (name !== "Unknown Contact" || company !== "Manual Entry") {
-            searchPairs.push({ name, company });
-          }
-          if (email) {
-            searchEmails.push(email);
-          }
+      for (const item of deduplicatedLeads) {
+        if (item.name !== "Unknown Contact" || item.company !== "Manual Entry") {
+          searchPairs.push({ name: item.name, company: item.company });
+        }
+        if (item.email) {
+          searchEmails.push(item.email);
         }
       }
 
@@ -303,231 +387,33 @@ export async function POST(request: Request) {
         }
       }
 
-      for (const rawRow of rawLeads) {
-        // ── 1. Normalise column names via alias map ─────────────────────────
-        const row = resolveRow(rawRow as Record<string, string>);
+      // Process validated, deduplicated leads in concurrent chunks of 15
+      const CHUNK_SIZE = 15;
+      for (let i = 0; i < deduplicatedLeads.length; i += CHUNK_SIZE) {
+        const chunk = deduplicatedLeads.slice(i, i + CHUNK_SIZE);
 
-        // Validate the normalized row properties
-        const validation = leadImportSchema.safeParse(row);
-        if (!validation.success) {
-          skippedCount++;
-          skipReasons.push(`Row skipped — invalid data: ${JSON.stringify(validation.error.flatten().fieldErrors)} for row name "${row.name || 'Unknown'}"`);
-          continue;
-        }
+        const chunkResults = await Promise.all(chunk.map(async (item) => {
+          const { name, email, phone, company, role, location, coords, metadata, finalSignals, finalPersona, row } = item;
 
-        // ── 2. Extract fields ───────────────────────────────────────────────
-        const name = (row.name || "").trim() || "Unknown Contact";
-        const email = cleanEmail(row.email || "");
-        const phone = cleanPhone(row.phone || "");
-        const company = (row.company || "").trim() || "Manual Entry";
-        const role = (row.role || "").trim() || "Imported Lead";
-        const locationRaw = (row.location || "").trim() || "Abu Dhabi";
-        const location = normalizeLocation(locationRaw);
-        const coords = resolveCoords(location);
+          // ── Deduplication by (name, company) ─────────────
+          const lookupUniqueKey = `${name.trim().toLowerCase()}|${company.trim().toLowerCase()}`;
+          const existingByUnique = uniqueMap.get(lookupUniqueKey);
 
-        // Extract extra/metadata fields
-        const standardKeys = ["name", "email", "phone", "company", "role", "location", "persona", "signals"];
-        const metadata: Record<string, any> = {};
-        for (const [key, val] of Object.entries(row)) {
-          if (!standardKeys.includes(key)) {
-            metadata[key] = val;
-          }
-        }
+          if (existingByUnique) {
+            // Update if we have richer contact info than what's stored or if restoring a soft-deleted lead
+            const shouldUpdate =
+              (email && !existingByUnique.email) ||
+              (phone && !existingByUnique.phone) ||
+              Object.keys(metadata).length > 0 ||
+              existingByUnique.deletedAt !== null;
 
-        let finalSignals: string[] = [];
-        if (row.signals) {
-          finalSignals = parseSignals(row.signals);
-        }
-
-        let finalPersona: string | null = null;
-        if (row.persona) {
-          finalPersona = cleanPersonaPreamble(row.persona);
-        }
-
-        // ── 3. Minimum viability check ──────────────────────────────────────
-        const hasIdentity =
-          name !== "Unknown Contact" ||
-          email !== null ||
-          phone !== null ||
-          company !== "Manual Entry";
-
-        if (!hasIdentity) {
-          skippedCount++;
-          skipReasons.push(`Row skipped — no identifiable data: ${JSON.stringify(rawRow)}`);
-          continue;
-        }
-
-        // ── 4. Deduplication by (name, company) ─────────────
-        const lookupUniqueKey = `${name.trim().toLowerCase()}|${company.trim().toLowerCase()}`;
-        const existingByUnique = uniqueMap.get(lookupUniqueKey);
-
-        if (existingByUnique) {
-          // Update if we have richer contact info than what's stored or if restoring a soft-deleted lead
-          const shouldUpdate =
-            (email && !existingByUnique.email) ||
-            (phone && !existingByUnique.phone) ||
-            Object.keys(metadata).length > 0 ||
-            existingByUnique.deletedAt !== null;
-
-          if (shouldUpdate) {
-            const wasDeleted = existingByUnique.deletedAt !== null;
-            await prisma.lead.update({
-              where: { id: existingByUnique.id },
-              data: {
-                email: email || existingByUnique.email,
-                phone: phone || existingByUnique.phone,
-                role,
-                location,
-                latitude: coords.lat,
-                longitude: coords.lng,
-                ...(finalPersona && { persona: finalPersona }),
-                ...(row.signals && { signals: finalSignals }),
-                metadata: Object.keys(metadata).length > 0 ? {
-                  ...(existingByUnique.metadata as Record<string, any> || {}),
-                  ...metadata
-                } : (existingByUnique.metadata || undefined),
-                updatedAt: new Date(),
-                deletedAt: null // Restore if soft deleted
-              },
-            });
-            updatedCount++;
-
-            // Create Audit Log
-            try {
-              await prisma.auditLog.create({
-                data: {
-                  action: wasDeleted ? "MERGE" : "UPDATE",
-                  entityType: "Lead",
-                  entityId: existingByUnique.id,
-                  agentId: session.id,
-                  details: wasDeleted 
-                    ? `Restored and merged soft-deleted lead via CSV import`
-                    : `Updated lead details via CSV import`
-                }
-              });
-            } catch (auditErr) {
-              console.error("[CSV Import] Failed to create audit log for merge/restore:", auditErr);
-            }
-          } else {
-            skippedCount++;
-            skipReasons.push(`Duplicate skipped — same name+company already imported: "${name}" @ "${company}"`);
-          }
-          continue;
-        }
-
-        // ── 5. Soft-deduplicate by email only (not phone — phones can be shared) ─
-        if (email) {
-          const existingByEmail = emailMap.get(email.trim().toLowerCase());
-          if (existingByEmail) {
-            if (existingByEmail.deletedAt !== null) {
-              // If it's soft-deleted, we can actually restore it and update it
-              const wasDeleted = true;
+            if (shouldUpdate) {
+              const wasDeleted = existingByUnique.deletedAt !== null;
               await prisma.lead.update({
-                where: { id: existingByEmail.id },
+                where: { id: existingByUnique.id },
                 data: {
-                  deletedAt: null,
-                  updatedAt: new Date()
-                }
-              });
-              updatedCount++;
-              
-              try {
-                await prisma.auditLog.create({
-                  data: {
-                    action: "MERGE",
-                    entityType: "Lead",
-                    entityId: existingByEmail.id,
-                    agentId: session.id,
-                    details: `Restored soft-deleted lead (matched by email) via CSV import`
-                  }
-                });
-              } catch (auditErr) {
-                console.error("[CSV Import] Failed to create audit log for email restore:", auditErr);
-              }
-            } else {
-              skippedCount++;
-              skipReasons.push(`Duplicate skipped — email already exists: "${email}"`);
-            }
-            continue;
-          }
-        }
-
-        let computedTier = 3;
-        let computedScore = 50;
-        const roleLower = role.toLowerCase();
-        if (/\b(ceo|founder|co-founder|chairman|president|owner|sheikh|minister|royal)\b/i.test(roleLower)) {
-          computedTier = 1;
-          computedScore = Math.max(50, Math.floor(Math.random() * 10) + 90);
-        } else if (/\b(director|managing director|general manager|head|partner|vp|vice president)\b/i.test(roleLower)) {
-          computedTier = 2;
-          computedScore = Math.floor(Math.random() * 19) + 70;
-        } else if (/\b(manager|specialist|physician|associate|consultant|executive|member)\b/i.test(roleLower)) {
-          computedTier = 3;
-          computedScore = Math.floor(Math.random() * 19) + 50;
-        } else {
-          computedTier = 3;
-          computedScore = Math.floor(Math.random() * 20) + 30;
-        }
-
-        // ── 6. Create the lead ──────────────────────────────────────────────
-        try {
-          const newLead = await prisma.lead.create({
-            data: {
-              name,
-              company,
-              role,
-              source: "Manual Import",
-              tier: computedTier,
-              email: email || null,
-              phone: phone || null,
-              location,
-              latitude: coords.lat,
-              longitude: coords.lng,
-              score: computedScore,
-              signals: finalSignals,
-              persona: finalPersona,
-              propertyPref: { type: "apartment" },
-              status: "new",
-              agentId: session.id,
-              scrapeRunId: importRun.id,
-              metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-            },
-          });
-          savedCount++;
-
-          // Create Audit Log for CREATE
-          try {
-            await prisma.auditLog.create({
-              data: {
-                action: "CREATE",
-                entityType: "Lead",
-                entityId: newLead.id,
-                agentId: session.id,
-                details: `Created new lead via CSV import`
-              }
-            });
-          } catch (auditErr) {
-            console.error("[CSV Import] Failed to create audit log for create:", auditErr);
-          }
-        } catch (createErr: any) {
-          if (createErr.code === 'P2002') {
-            console.warn(`[CSV Import] P2002 collision caught on create for "${name}" - attempting updates instead.`);
-            // Fetch colliding lead
-            const collidingLead = await prisma.lead.findFirst({
-              where: {
-                name,
-                company,
-                agentId: session.id
-              }
-            });
-
-            if (collidingLead) {
-              const wasDeleted = collidingLead.deletedAt !== null;
-              await prisma.lead.update({
-                where: { id: collidingLead.id },
-                data: {
-                  email: email || collidingLead.email,
-                  phone: phone || collidingLead.phone,
+                  email: email || existingByUnique.email,
+                  phone: phone || existingByUnique.phone,
                   role,
                   location,
                   latitude: coords.lat,
@@ -535,33 +421,237 @@ export async function POST(request: Request) {
                   ...(finalPersona && { persona: finalPersona }),
                   ...(row.signals && { signals: finalSignals }),
                   metadata: Object.keys(metadata).length > 0 ? {
-                    ...(collidingLead.metadata as Record<string, any> || {}),
+                    ...(existingByUnique.metadata as Record<string, any> || {}),
                     ...metadata
-                  } : (collidingLead.metadata || undefined),
+                  } : (existingByUnique.metadata || undefined),
                   updatedAt: new Date(),
-                  deletedAt: null
-                }
+                  deletedAt: null // Restore if soft deleted
+                },
               });
-              updatedCount++;
 
+              // Create Audit Log
               try {
                 await prisma.auditLog.create({
                   data: {
                     action: wasDeleted ? "MERGE" : "UPDATE",
                     entityType: "Lead",
-                    entityId: collidingLead.id,
+                    entityId: existingByUnique.id,
                     agentId: session.id,
-                    details: `Merged colliding lead after P2002 race condition on CSV import`
+                    details: wasDeleted 
+                      ? `Restored and merged soft-deleted lead via CSV import`
+                      : `Updated lead details via CSV import`
                   }
                 });
               } catch (auditErr) {
-                console.error("[CSV Import] Failed to create audit log for collision merge:", auditErr);
+                console.error("[CSV Import] Failed to create audit log for merge/restore:", auditErr);
+              }
+            }
+
+            // Always link to the import scrape run
+            await prisma.leadScrapeRun.upsert({
+              where: {
+                leadId_scrapeRunId: {
+                  leadId: existingByUnique.id,
+                  scrapeRunId: importRun.id
+                }
+              },
+              create: {
+                leadId: existingByUnique.id,
+                scrapeRunId: importRun.id
+              },
+              update: {}
+            });
+
+            return { status: shouldUpdate ? "updated" : "skipped", reason: shouldUpdate ? undefined : `Duplicate skipped — same name+company already imported: "${name}" @ "${company}"` };
+          }
+
+          // ── Soft-deduplicate by email only ─
+          if (email) {
+            const existingByEmail = emailMap.get(email.trim().toLowerCase());
+            if (existingByEmail) {
+              const wasDeleted = existingByEmail.deletedAt !== null;
+              if (wasDeleted) {
+                await prisma.lead.update({
+                  where: { id: existingByEmail.id },
+                  data: {
+                    deletedAt: null,
+                    updatedAt: new Date()
+                  }
+                });
+                
+                try {
+                  await prisma.auditLog.create({
+                    data: {
+                      action: "MERGE",
+                      entityType: "Lead",
+                      entityId: existingByEmail.id,
+                      agentId: session.id,
+                      details: `Restored soft-deleted lead (matched by email) via CSV import`
+                    }
+                  });
+                } catch (auditErr) {
+                  console.error("[CSV Import] Failed to create audit log for email restore:", auditErr);
+                }
+              }
+
+              // Always link to the import scrape run
+              await prisma.leadScrapeRun.upsert({
+                where: {
+                  leadId_scrapeRunId: {
+                    leadId: existingByEmail.id,
+                    scrapeRunId: importRun.id
+                  }
+                },
+                create: {
+                  leadId: existingByEmail.id,
+                  scrapeRunId: importRun.id
+                },
+                update: {}
+              });
+
+              return { status: wasDeleted ? "updated" : "skipped", reason: wasDeleted ? undefined : `Duplicate skipped — email already exists: "${email}"` };
+            }
+          }
+
+          let computedTier = 3;
+          let computedScore = 50;
+          const roleLower = role.toLowerCase();
+          if (/\b(ceo|founder|co-founder|chairman|president|owner|sheikh|minister|royal)\b/i.test(roleLower)) {
+            computedTier = 1;
+            computedScore = Math.max(50, Math.floor(Math.random() * 10) + 90);
+          } else if (/\b(director|managing director|general manager|head|partner|vp|vice president)\b/i.test(roleLower)) {
+            computedTier = 2;
+            computedScore = Math.floor(Math.random() * 19) + 70;
+          } else if (/\b(manager|specialist|physician|associate|consultant|executive|member)\b/i.test(roleLower)) {
+            computedTier = 3;
+            computedScore = Math.floor(Math.random() * 19) + 50;
+          } else {
+            computedTier = 3;
+            computedScore = Math.floor(Math.random() * 20) + 30;
+          }
+
+          // ── Create the lead ──────────────────────────────────────────────
+          try {
+            const newLead = await prisma.lead.create({
+              data: {
+                name,
+                company,
+                role,
+                source: "Manual Import",
+                tier: computedTier,
+                email: email || null,
+                phone: phone || null,
+                location,
+                latitude: coords.lat,
+                longitude: coords.lng,
+                score: computedScore,
+                signals: finalSignals,
+                persona: finalPersona,
+                propertyPref: { type: "apartment" },
+                status: "new",
+                agentId: session.id,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+              },
+            });
+
+            await prisma.leadScrapeRun.create({
+              data: {
+                leadId: newLead.id,
+                scrapeRunId: importRun.id
+              }
+            });
+
+            // Create Audit Log for CREATE
+            try {
+              await prisma.auditLog.create({
+                data: {
+                  action: "CREATE",
+                  entityType: "Lead",
+                  entityId: newLead.id,
+                  agentId: session.id,
+                  details: `Created new lead via CSV import`
+                }
+              });
+            } catch (auditErr) {
+              console.error("[CSV Import] Failed to create audit log for create:", auditErr);
+            }
+            return { status: "saved" };
+          } catch (createErr: any) {
+            if (createErr.code === 'P2002') {
+              console.warn(`[CSV Import] P2002 collision caught on create for "${name}" - attempting updates instead.`);
+              const collidingLead = await prisma.lead.findFirst({
+                where: {
+                  name,
+                  company,
+                  agentId: session.id
+                }
+              });
+
+              if (collidingLead) {
+                const wasDeleted = collidingLead.deletedAt !== null;
+                await prisma.lead.update({
+                  where: { id: collidingLead.id },
+                  data: {
+                    email: email || collidingLead.email,
+                    phone: phone || collidingLead.phone,
+                    role,
+                    location,
+                    latitude: coords.lat,
+                    longitude: coords.lng,
+                    ...(finalPersona && { persona: finalPersona }),
+                    ...(row.signals && { signals: finalSignals }),
+                    metadata: Object.keys(metadata).length > 0 ? {
+                      ...(collidingLead.metadata as Record<string, any> || {}),
+                      ...metadata
+                    } : (collidingLead.metadata || undefined),
+                    updatedAt: new Date(),
+                    deletedAt: null
+                  }
+                });
+
+                await prisma.leadScrapeRun.upsert({
+                  where: {
+                    leadId_scrapeRunId: {
+                      leadId: collidingLead.id,
+                      scrapeRunId: importRun.id
+                    }
+                  },
+                  create: {
+                    leadId: collidingLead.id,
+                    scrapeRunId: importRun.id
+                  },
+                  update: {}
+                });
+
+                try {
+                  await prisma.auditLog.create({
+                    data: {
+                      action: wasDeleted ? "MERGE" : "UPDATE",
+                      entityType: "Lead",
+                      entityId: collidingLead.id,
+                      agentId: session.id,
+                      details: `Merged colliding lead after P2002 race condition on CSV import`
+                    }
+                  });
+                } catch (auditErr) {
+                  console.error("[CSV Import] Failed to create audit log for collision merge:", auditErr);
+                }
+                return { status: "updated" };
+              } else {
+                return { status: "skipped", reason: `P2002 collision skip: "${name}"` };
               }
             } else {
-              skippedCount++;
+              throw createErr;
             }
-          } else {
-            throw createErr;
+          }
+        }));
+
+        for (const res of chunkResults) {
+          if (res.status === "saved") savedCount++;
+          else if (res.status === "updated") updatedCount++;
+          else if (res.status === "skipped") {
+            skippedCount++;
+            if (res.reason) skipReasons.push(res.reason);
           }
         }
       }

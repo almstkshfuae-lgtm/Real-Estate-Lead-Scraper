@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     }
 
     if (scrapeRunId) {
-      conditions.push({ scrapeRunId });
+      conditions.push({ scrapeRuns: { some: { scrapeRunId } } });
     }
 
     const recentlyRelocatedParam = searchParams.get("recentlyRelocated") || searchParams.get("relocated");
@@ -182,7 +182,7 @@ export async function GET(request: Request) {
       phone: true, email: true, location: true, locationAr: true, score: true, propertyPref: true,
       budgetMin: true, budgetMax: true, latitude: true, longitude: true,
       relocated: true, rentalFlag: true, status: true, bitrix24Id: true,
-      agentId: true, scrapeRunId: true, createdAt: true, updatedAt: true,
+      agentId: true, createdAt: true, updatedAt: true,
       signals: true, persona: true, notes: true
     } : undefined;
 

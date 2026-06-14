@@ -31,6 +31,7 @@ import { sendEmail } from "@/lib/mail";
 import { parsePreferences } from "@/lib/auth";
 import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 import { buildSearchConditions } from "@/lib/search";
+import { normalizeText, normalizePhone, normalizeEmail, getNameVariants } from "@/lib/normalization";
 
 // Schema for individual lead validation
 const leadSchema = z.object({
@@ -125,8 +126,11 @@ function mergeLeadData(existingLead: any, lead: any, adjustedScore: number, lead
 }
 
 async function executeFallback(runId: string, agentId: string, criteriaObj: any): Promise<number> {
-  const existingRunLeadsCount = await prisma.lead.count({
-    where: { scrapeRunId: runId, agentId }
+  const existingRunLeadsCount = await prisma.leadScrapeRun.count({
+    where: {
+      scrapeRunId: runId,
+      lead: { agentId }
+    }
   });
   if (existingRunLeadsCount > 0) {
     console.info(`[Webhook Fallback] Leads already exist for scrapeRunId ${runId}. Skipping clone.`);
@@ -261,7 +265,7 @@ async function executeFallback(runId: string, agentId: string, criteriaObj: any)
     const newSource = `${lead.source} (Match ${randomSuffix})`;
 
     try {
-      await prisma.lead.create({
+      const newLead = await prisma.lead.create({
         data: {
           name: lead.name,
           nameAr: lead.nameAr,
@@ -285,9 +289,16 @@ async function executeFallback(runId: string, agentId: string, criteriaObj: any)
           relocated: lead.relocated,
           status: "new",
           agentId,
-          scrapeRunId: runId,
         }
       });
+
+      await prisma.leadScrapeRun.create({
+        data: {
+          leadId: newLead.id,
+          scrapeRunId: runId
+        }
+      });
+
       clonedCount++;
     } catch (e) {
       console.error(`[Webhook Fallback] Failed to clone fallback lead ${lead.name}:`, e);
@@ -355,7 +366,7 @@ export async function POST(request: NextRequest) {
     if (isCompletedSignal) {
       console.info(`[Webhook] Received completion signal for ScrapeRun: ${runId}`);
 
-      let totalLeads = await prisma.lead.count({
+      let totalLeads = await prisma.leadScrapeRun.count({
         where: { scrapeRunId: runId }
       });
 
@@ -389,11 +400,13 @@ export async function POST(request: NextRequest) {
       });
       await notifyScrapeRunUpdate(runId);
 
-      const tierOneCount = await prisma.lead.count({
+      const tierOneCount = await prisma.leadScrapeRun.count({
         where: {
           scrapeRunId: runId,
-          agentId,
-          tier: 1
+          lead: {
+            agentId,
+            tier: 1
+          }
         }
       });
 
@@ -436,11 +449,13 @@ export async function POST(request: NextRequest) {
       });
       await notifyScrapeRunUpdate(runId);
 
-      const tierOneCount = await prisma.lead.count({
+      const tierOneCount = await prisma.leadScrapeRun.count({
         where: {
           scrapeRunId: runId,
-          agentId,
-          tier: 1
+          lead: {
+            agentId,
+            tier: 1
+          }
         }
       });
 
@@ -664,28 +679,42 @@ export async function POST(request: NextRequest) {
       const batch = cleanLeadsPayload.slice(i, i + BATCH_SIZE);
 
       // ── Index-aligned batch dedup lookup ───────────────────────────────────
-      // The composite index on (agentId, name, company) requires:
-      //   1. agentId equality first  → narrows to one agent's row space
-      //   2. name IN [...]           → B-tree range scan within that space
-      //   3. company IN [...]        → further narrows; MySQL applies as filter
-      // This avoids the full-table scan caused by OR-array on mixed text columns.
-      // Source-level disambiguation is done in-memory after the DB round-trip.
-      const batchNames = [...new Set(batch.map((lead: any) => lead.name as string))];
+      // We look up by spelling-tolerant name variants, phone numbers, or email addresses
+      const batchNameVariants = [...new Set(batch.flatMap((lead: any) => getNameVariants(lead.name)))];
       const batchCompanies = [...new Set(batch.map((lead: any) => (lead.company || "Not Specified") as string))];
+      const batchPhones = [...new Set(batch.map((lead: any) => cleanPhone(lead.phone)).filter(Boolean) as string[])];
+      const batchEmails = [...new Set(batch.map((lead: any) => cleanEmail(lead.email)).filter(Boolean) as string[])];
 
       const existingLeads = await prisma.lead.findMany({
         where: {
           agentId: agentId,
-          name: { in: batchNames },
-          company: { in: batchCompanies },
+          deletedAt: null,
+          OR: [
+            {
+              name: { in: batchNameVariants },
+              company: { in: batchCompanies },
+            },
+            ...(batchPhones.length > 0 ? [{ phone: { in: batchPhones } }] : []),
+            ...(batchEmails.length > 0 ? [{ email: { in: batchEmails } }] : []),
+          ]
         }
       });
 
-      const existingMap = new Map();
-      for (const el of existingLeads) {
-        const key = `${el.name.trim().toLowerCase()}|${el.company.trim().toLowerCase()}|${el.source.trim().toLowerCase()}`;
-        existingMap.set(key, el);
-      }
+      const findExistingLead = (lead: any, existingList: any[]) => {
+        const normName = normalizeText(lead.name);
+        const normCompany = normalizeText(lead.company || "Not Specified");
+        const normPhone = normalizePhone(lead.phone);
+        const normEmail = normalizeEmail(lead.email);
+
+        return existingList.find((el) => {
+          if (normEmail && el.email && normalizeEmail(el.email) === normEmail) return true;
+          if (normPhone && el.phone && normalizePhone(el.phone) === normPhone) return true;
+          
+          const elNormName = normalizeText(el.name);
+          const elNormCompany = normalizeText(el.company || "Not Specified");
+          return normName === elNormName && normCompany === elNormCompany;
+        });
+      };
 
       const results = await Promise.allSettled(batch.map(async (lead: any) => {
         // Basic sanity check — scraper-service already validated, but be defensive
@@ -708,8 +737,7 @@ export async function POST(request: NextRequest) {
         }
 
         const leadSource = lead.source || "HNWI Sources";
-        const lookupKey = `${lead.name.trim().toLowerCase()}|${leadCompany.trim().toLowerCase()}|${leadSource.trim().toLowerCase()}`;
-        const existingLead = existingMap.get(lookupKey);
+        const existingLead = findExistingLead(lead, existingLeads);
 
         if (existingLead) {
           // If the lead was soft-deleted, do NOT restore or update it during automated scraping webhook
@@ -723,6 +751,21 @@ export async function POST(request: NextRequest) {
           await prisma.lead.update({
             where: { id: existingLead.id },
             data: mergedData
+          });
+
+          // Link to the scrape run via join table
+          await prisma.leadScrapeRun.upsert({
+            where: {
+              leadId_scrapeRunId: {
+                leadId: existingLead.id,
+                scrapeRunId: runId
+              }
+            },
+            create: {
+              leadId: existingLead.id,
+              scrapeRunId: runId
+            },
+            update: {}
           });
 
           // Log Audit Entry
@@ -767,6 +810,12 @@ export async function POST(request: NextRequest) {
                 propertyPref: lead.propertyPref || {},
                 persona: lead.persona || null,
                 agentId: agentId,
+              }
+            });
+
+            await prisma.leadScrapeRun.create({
+              data: {
+                leadId: newLead.id,
                 scrapeRunId: runId
               }
             });
@@ -813,6 +862,20 @@ export async function POST(request: NextRequest) {
                 await prisma.lead.update({
                   where: { id: collidingLead.id },
                   data: mergedData
+                });
+
+                await prisma.leadScrapeRun.upsert({
+                  where: {
+                    leadId_scrapeRunId: {
+                      leadId: collidingLead.id,
+                      scrapeRunId: runId
+                    }
+                  },
+                  create: {
+                    leadId: collidingLead.id,
+                    scrapeRunId: runId
+                  },
+                  update: {}
                 });
 
                 try {

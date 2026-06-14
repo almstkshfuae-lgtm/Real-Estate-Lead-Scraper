@@ -46,7 +46,7 @@ LeadPulse is built on a decoupled, cost-efficient model. Rather than relying on 
 - **Session Extraction**: Extract session tokens from incoming cookies (`auth_token`) and fall back to HTTP headers (`Authorization: Bearer <token>`).
 - **Unified Session Verification**: All protected API endpoints and Server Components consume a unified session retrieval interface via `getSession()` from `lib/auth.ts`, ensuring that all APIs retrieve user credentials identically and avoiding authorization bypasses or mismatch issues.
 - **Enforcement Rules**: 
-  - Restricts public access strictly to `/`, `/login`, `/api/auth/login`, and `/install` along with static assets.
+  - Restricts public access to bypass verification for specific public pages and self-authorizing API endpoints, specifically: `/`, `/login`, `/api/auth/login`, `/api/scrape/webhook`, `/api/cron/*`, `/api/scrape-runs/cleanup`, and `/install` along with static assets.
   - Protects all other paths, including `/api/auth/me`, `/api/leads`, and `/api/leads/cluster`.
   - Wrapped entirely in a `try/catch` block. On verification failure or runtime exceptions during an API call, it returns a clean JSON `{ error: "Unauthorized" }` with status `401` to prevent UI state crashes.
   - **RBAC & Capping**: Admins have full access. Non-admins (agents) cannot view or access the Integrations page and cannot edit core lead details (restricted to notes and status). They only have visibility over leads that belong to them (enforced via `agentId` filtering). Role verification is normalized across all routes via a standard `isAdmin` helper that handles variant role strings (e.g. `"super admin"`, `"SUPER_ADMIN"`, `"admin"`, etc.). Standard leads list queries and search results utilize normal pagination parameters without an artificial capping limit, enabling agents to accumulate and browse all of their leads over multiple scrape runs. Additionally, on zero-result scraper runs (totalLeads === 0), a smart backend fallback mechanism in the webhook completion handler automatically fetches up to 10 active matching leads from the database based on search criteria (or agent/global fallbacks) and links them to the current ScrapeRun, ensuring seamless user experience and UI continuity.
@@ -120,9 +120,18 @@ model Lead {
   persona      String?
   bitrix24Id   String?   // Linked CRM Contact ID
   agentId      String
-  scrapeRunId  String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  scrapeRuns   LeadScrapeRun[]
+}
+
+model LeadScrapeRun {
+  id          String    @id @default(cuid())
+  leadId      String
+  scrapeRunId String
+  createdAt   DateTime  @default(now())
+  lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  scrapeRun   ScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
 }
 ```
 

@@ -117,8 +117,7 @@ export async function POST(req: NextRequest) {
         rentalFlag: Math.random() < 0.1,
         status,
         persona: `Historical simulated investor profile for statistical validation. Target location: ${location}.`,
-        agentId: session.id,
-        scrapeRunId: run.id
+        agentId: session.id
       });
     }
 
@@ -130,6 +129,25 @@ export async function POST(req: NextRequest) {
         data: batch as any
       });
     }
+
+    // Query back the newly created leads to link them to the scrape run via LeadScrapeRun
+    const insertedLeads = await prisma.lead.findMany({
+      where: {
+        agentId: session.id,
+        source: "Historical Outcome Simulator",
+        createdAt: { gte: run.startedAt }
+      },
+      select: { id: true }
+    });
+
+    const leadScrapeRuns = insertedLeads.map(l => ({
+      leadId: l.id,
+      scrapeRunId: run.id
+    }));
+
+    await prisma.leadScrapeRun.createMany({
+      data: leadScrapeRuns
+    });
 
     return NextResponse.json({
       success: true,

@@ -56,11 +56,13 @@ export async function GET(
     }
 
     // Dynamically calculate count of active, non-deleted leads in this run
-    const activeLeadsCount = await prisma.lead.count({
+    const activeLeadsCount = await prisma.leadScrapeRun.count({
       where: {
         scrapeRunId: id,
-        deletedAt: null,
-        ...(isAdmin ? {} : { agentId: session.id })
+        lead: {
+          deletedAt: null,
+          ...(isAdmin ? {} : { agentId: session.id })
+        }
       }
     });
 

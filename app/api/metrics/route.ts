@@ -100,7 +100,13 @@ export async function GET(request: Request) {
     }
 
     if (scrapeRunId) {
-      conditions.push({ scrapeRunId });
+      conditions.push({
+        scrapeRuns: {
+          some: {
+            scrapeRunId
+          }
+        }
+      });
     }
 
     const recentlyRelocatedParam = searchParams.get("recentlyRelocated") || searchParams.get("relocated");
@@ -228,7 +234,7 @@ export async function GET(request: Request) {
     const scrapeRunWhere = {
       OR: [
         { leadsFound: 0 },
-        { leads: { some: { deletedAt: null } } }
+        { leads: { some: { lead: { deletedAt: null } } } }
       ]
     };
 
@@ -286,7 +292,7 @@ export async function GET(request: Request) {
           total: totalRuns,
           byStatus: runsByStatus.reduce((acc, curr) => {
             if (curr.status !== null && curr.status !== undefined && curr.status !== "") {
-              acc[curr.status] = curr._count.id;
+              acc[curr.status] = (curr._count as any).id;
             }
             return acc;
           }, {} as Record<string, number>),
@@ -345,7 +351,7 @@ export async function GET(request: Request) {
     prometheusText += `# TYPE brilliance_scrape_runs_total gauge\n`;
     runsByStatus.forEach(item => {
       if (item.status !== null && item.status !== undefined && item.status !== "") {
-        prometheusText += `brilliance_scrape_runs_total{status="${item.status}"} ${item._count.id}\n`;
+        prometheusText += `brilliance_scrape_runs_total{status="${item.status}"} ${(item._count as any).id}\n`;
       }
     });
     prometheusText += `\n`;

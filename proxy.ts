@@ -18,7 +18,8 @@ export async function proxy(request: NextRequest) {
       pathname.startsWith('/login') ||
       pathname === '/api/auth/login' ||
       pathname === '/api/scrape/webhook' ||
-      pathname === '/api/cron/scrape' ||
+      pathname.startsWith('/api/cron/') ||
+      pathname === '/api/scrape-runs/cleanup' ||
       pathname === '/install' ||
       pathname.startsWith('/_next') ||
       pathname.includes('.') ||
@@ -40,7 +41,7 @@ export async function proxy(request: NextRequest) {
     if (token) {
       const now = Date.now();
       const cached = tokenCache.get(token);
-      
+
       if (cached && cached.expiresAt > now) {
         user = cached.user;
       } else {

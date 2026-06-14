@@ -251,15 +251,29 @@ async function main() {
   }
 
   for (const lead of leadsData) {
+    // Build payload without scrapeRunId (now tracked via LeadScrapeRun join table)
     const leadPayload = {
-      ...lead,
-      agentId: admin.id,
-      scrapeRunId: scrapeRun.id,
+      name: lead.name,
+      nameAr: lead.nameAr,
+      company: lead.company,
+      companyAr: lead.companyAr,
+      role: lead.role,
+      roleAr: lead.roleAr,
+      source: lead.source,
+      tier: lead.tier,
+      phone: lead.phone,
+      email: lead.email,
+      location: lead.location,
+      score: lead.score,
       signals: lead.signals,
       propertyPref: lead.propertyPref,
+      budgetMin: lead.budgetMin,
+      budgetMax: lead.budgetMax,
+      status: lead.status,
+      agentId: admin.id,
     };
 
-    await prisma.lead.upsert({
+    const upserted = await prisma.lead.upsert({
       where: {
         name_company_source_agentId: {
           name: lead.name,
@@ -270,6 +284,21 @@ async function main() {
       },
       update: leadPayload,
       create: leadPayload,
+    });
+
+    // Link lead to the seed scrape run via the join table
+    await prisma.leadScrapeRun.upsert({
+      where: {
+        leadId_scrapeRunId: {
+          leadId: upserted.id,
+          scrapeRunId: scrapeRun.id,
+        },
+      },
+      create: {
+        leadId: upserted.id,
+        scrapeRunId: scrapeRun.id,
+      },
+      update: {},
     });
   }
 
