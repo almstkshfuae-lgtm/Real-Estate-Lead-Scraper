@@ -259,6 +259,7 @@
 - [x] **Hardened: User-Facing Error Message Sanitization** — Replaced all technical strings exposed to the frontend: (1) `api/ai/chat` budget-exceeded and missing-API-key errors now emit structured error codes (`daily_budget_exceeded`, `ai_unavailable`) with server-side logging of raw figures; (2) `lib/safe-fetch.ts` `safeJson` logs the raw non-JSON/HTML proxy body server-side and throws a generic `server_connection_error` token; (3) `scraper-service/src/ui-strings.js` gained a `USER_FACING_MESSAGES` export with EN/AR plain-language strings for consent bypass failures, bot blocks, and selector failures — preventing any CSS selector string from leaking into notifications. New i18n keys added to both `en/common.json` and `ar/common.json`. <!-- id: 12.23 -->
 - [x] **Hardened: Geofencing Text Fallback Full-Text Search (FTS) Indexing** — Migrate location search to use MySQL full-text search indexes instead of multi-contains queries. <!-- id: 12.24 -->
 - [x] **Bilingual Map & Sidebar Localization Parity** — Implement full bilingual swap for Arabic fields (nameAr, companyAr, locationAr) and translate all hardcoded strings inside map popups, geofencing list, stats, and ProjectSidebar. <!-- id: 12.25 -->
+- [x] **Hardened: Session Verification desynchronization and mutation protection** — Verify session credentials in database for auth/me and search mutation routes to prevent 401 and 500 error collisions from stale browser tokens. <!-- id: 12.26 -->
 
 
 ## Legend

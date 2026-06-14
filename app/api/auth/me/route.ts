@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, shouldRefreshAndCreateNewToken } from '@/lib/auth';
+import { getSessionWithDBVerify, shouldRefreshAndCreateNewToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
-  const payload = await getSession();
+  const payload = await getSessionWithDBVerify();
 
   if (!payload) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

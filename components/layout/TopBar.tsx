@@ -17,7 +17,13 @@ export default function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   useEffect(() => {
     // Fetch user details
     fetch("/api/auth/me")
-      .then(res => res.ok ? res.json() : null)
+      .then(res => {
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
       .then(data => {
         if (data && data.user) {
           setUserData({
