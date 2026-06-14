@@ -10,13 +10,18 @@ import crypto from "crypto";
 
 const leadImportSchema = z.object({
   name: z.string().trim().optional(),
-  email: z.string().trim().email("Invalid email format").nullable().or(z.literal("")).optional(),
+  email: z.string().trim().optional().nullable(),
   phone: z.string().trim().nullable().optional(),
   company: z.string().trim().optional(),
   role: z.string().trim().optional(),
   location: z.string().trim().optional(),
   persona: z.string().trim().optional(),
   signals: z.any().optional(),
+  source: z.string().trim().optional(),
+  budgetMin: z.any().optional(),
+  budgetMax: z.any().optional(),
+  tier: z.any().optional(),
+  score: z.any().optional(),
 });
 
 // ─── Flexible Column name mapping ─────────────────────────────────────────────
@@ -147,6 +152,71 @@ function getCanonicalHeader(header: string): string | null {
     return "phone";
   }
 
+  // 7. Source check
+  if (
+    normalized.includes("source") ||
+    normalized.includes("المصدر") ||
+    normalized.includes("مصدر")
+  ) {
+    return "source";
+  }
+
+  // 8. Budget Min check
+  if (
+    normalized.includes("budgetmin") ||
+    normalized.includes("minbudget") ||
+    normalized.includes("minimumbudget") ||
+    normalized.includes("الميزانيةالأدنى") ||
+    normalized.includes("الحدالأدنىللميزانية") ||
+    normalized.includes("budgetfrom") ||
+    normalized.includes("min_budget") ||
+    normalized.includes("budget_min") ||
+    normalized.includes("budget_from") ||
+    normalized.includes("minimum_budget")
+  ) {
+    return "budgetMin";
+  }
+
+  // 9. Budget Max check
+  if (
+    normalized.includes("budgetmax") ||
+    normalized.includes("maxbudget") ||
+    normalized.includes("maximumbudget") ||
+    normalized.includes("الميزانيةالأقصى") ||
+    normalized.includes("الحدالأقصىللميزانية") ||
+    normalized.includes("budgetto") ||
+    normalized.includes("max_budget") ||
+    normalized.includes("budget_max") ||
+    normalized.includes("budget_to") ||
+    normalized.includes("maximum_budget")
+  ) {
+    return "budgetMax";
+  }
+
+  // 10. Tier check
+  if (
+    normalized.includes("tier") ||
+    normalized.includes("مستوى") ||
+    normalized.includes("درجة") ||
+    normalized.includes("التصنيف") ||
+    normalized === "class" ||
+    normalized === "grade"
+  ) {
+    return "tier";
+  }
+
+  // 11. Score check
+  if (
+    normalized.includes("score") ||
+    normalized.includes("التقييم") ||
+    normalized.includes("درجةالتقييم") ||
+    normalized.includes("نقاط") ||
+    normalized === "rating" ||
+    normalized === "points"
+  ) {
+    return "score";
+  }
+
   return null;
 }
 
@@ -206,6 +276,26 @@ function resolveRow(raw: Record<string, string>): Record<string, string> {
 }
 
 
+
+function calculateRoleBasedTier(role: string): number {
+  const roleLower = role.toLowerCase();
+  if (/\b(ceo|founder|co-founder|chairman|president|owner|sheikh|minister|royal)\b/i.test(roleLower)) {
+    return 1;
+  } else if (/\b(director|managing director|general manager|head|partner|vp|vice president)\b/i.test(roleLower)) {
+    return 2;
+  }
+  return 3;
+}
+
+function calculateRoleBasedScore(tier: number): number {
+  if (tier === 1) {
+    return Math.max(50, Math.floor(Math.random() * 10) + 90);
+  } else if (tier === 2) {
+    return Math.floor(Math.random() * 19) + 70;
+  } else {
+    return Math.floor(Math.random() * 19) + 50;
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -303,7 +393,7 @@ export async function POST(request: Request) {
         batchUniqueKeys.add(uniqueKey);
 
         // Standard keys and extra metadata
-        const standardKeys = ["name", "email", "phone", "company", "role", "location", "persona", "signals"];
+        const standardKeys = ["name", "email", "phone", "company", "role", "location", "persona", "signals", "source", "budgetMin", "budgetMax", "tier", "score"];
         const metadata: Record<string, any> = {};
         for (const [key, val] of Object.entries(row)) {
           if (!standardKeys.includes(key)) {
@@ -321,6 +411,44 @@ export async function POST(request: Request) {
           finalPersona = cleanPersonaPreamble(row.persona);
         }
 
+        const source = (row.source || "").trim() || "Manual Import";
+
+        let budgetMin: number | null = null;
+        if (row.budgetMin) {
+          const parsed = parseFloat(String(row.budgetMin).replace(/[\s,]/g, ""));
+          if (!isNaN(parsed)) budgetMin = parsed;
+        }
+
+        let budgetMax: number | null = null;
+        if (row.budgetMax) {
+          const parsed = parseFloat(String(row.budgetMax).replace(/[\s,]/g, ""));
+          if (!isNaN(parsed)) budgetMax = parsed;
+        }
+
+        let computedTier = 3;
+        if (row.tier) {
+          const parsed = parseInt(String(row.tier).replace(/\D/g, ""), 10);
+          if (!isNaN(parsed) && (parsed === 1 || parsed === 2 || parsed === 3)) {
+            computedTier = parsed;
+          } else {
+            computedTier = calculateRoleBasedTier(role);
+          }
+        } else {
+          computedTier = calculateRoleBasedTier(role);
+        }
+
+        let computedScore = 50;
+        if (row.score) {
+          const parsed = parseInt(String(row.score).replace(/\D/g, ""), 10);
+          if (!isNaN(parsed)) {
+            computedScore = Math.min(99, Math.max(0, parsed));
+          } else {
+            computedScore = calculateRoleBasedScore(computedTier);
+          }
+        } else {
+          computedScore = calculateRoleBasedScore(computedTier);
+        }
+
         deduplicatedLeads.push({
           name,
           email,
@@ -332,6 +460,11 @@ export async function POST(request: Request) {
           metadata,
           finalSignals,
           finalPersona,
+          source,
+          budgetMin,
+          budgetMax,
+          computedTier,
+          computedScore,
           row
         });
       }
@@ -391,17 +524,35 @@ export async function POST(request: Request) {
       }[] = [];
 
       for (const item of deduplicatedLeads) {
-        const { name, email, phone, company, role, location, coords, metadata, finalSignals, finalPersona, row } = item;
+        const { name, email, phone, company, role, location, coords, metadata, finalSignals, finalPersona, source, budgetMin, budgetMax, computedTier, computedScore, row } = item;
 
         // ── Deduplication by (name, company) ─────────────
         const lookupUniqueKey = `${name.trim().toLowerCase()}|${company.trim().toLowerCase()}`;
         const existingByUnique = uniqueMap.get(lookupUniqueKey);
 
         if (existingByUnique) {
+          const hasDifferentEmail = email && email !== existingByUnique.email;
+          const hasDifferentPhone = phone && phone !== existingByUnique.phone;
+          const hasDifferentSource = row.source && source !== existingByUnique.source;
+          const hasDifferentTier = row.tier && computedTier !== existingByUnique.tier;
+          const hasDifferentScore = row.score && computedScore !== existingByUnique.score;
+          const hasDifferentBudgetMin = budgetMin !== null && budgetMin !== existingByUnique.budgetMin;
+          const hasDifferentBudgetMax = budgetMax !== null && budgetMax !== existingByUnique.budgetMax;
+          const hasDifferentPersona = finalPersona && finalPersona !== existingByUnique.persona;
+          const hasDifferentSignals = row.signals && JSON.stringify(finalSignals) !== JSON.stringify(existingByUnique.signals);
+          const hasDifferentMetadata = Object.keys(metadata).length > 0 && JSON.stringify(metadata) !== JSON.stringify(existingByUnique.metadata);
+
           const shouldUpdate =
-            (email && !existingByUnique.email) ||
-            (phone && !existingByUnique.phone) ||
-            Object.keys(metadata).length > 0 ||
+            hasDifferentEmail ||
+            hasDifferentPhone ||
+            hasDifferentSource ||
+            hasDifferentTier ||
+            hasDifferentScore ||
+            hasDifferentBudgetMin ||
+            hasDifferentBudgetMax ||
+            hasDifferentPersona ||
+            hasDifferentSignals ||
+            hasDifferentMetadata ||
             existingByUnique.deletedAt !== null;
 
           if (shouldUpdate) {
@@ -418,6 +569,11 @@ export async function POST(request: Request) {
                 longitude: coords.lng,
                 ...(finalPersona && { persona: finalPersona }),
                 ...(row.signals && { signals: finalSignals }),
+                ...(row.source && { source }),
+                ...(row.tier && { tier: computedTier }),
+                ...(row.score && { score: computedScore }),
+                ...(budgetMin !== null && { budgetMin }),
+                ...(budgetMax !== null && { budgetMax }),
                 metadata: Object.keys(metadata).length > 0 ? {
                   ...(existingByUnique.metadata as Record<string, any> || {}),
                   ...metadata
@@ -472,23 +628,6 @@ export async function POST(request: Request) {
         }
 
         // ── Prepare to create new lead ─
-        let computedTier = 3;
-        let computedScore = 50;
-        const roleLower = role.toLowerCase();
-        if (/\b(ceo|founder|co-founder|chairman|president|owner|sheikh|minister|royal)\b/i.test(roleLower)) {
-          computedTier = 1;
-          computedScore = Math.max(50, Math.floor(Math.random() * 10) + 90);
-        } else if (/\b(director|managing director|general manager|head|partner|vp|vice president)\b/i.test(roleLower)) {
-          computedTier = 2;
-          computedScore = Math.floor(Math.random() * 19) + 70;
-        } else if (/\b(manager|specialist|physician|associate|consultant|executive|member)\b/i.test(roleLower)) {
-          computedTier = 3;
-          computedScore = Math.floor(Math.random() * 19) + 50;
-        } else {
-          computedTier = 3;
-          computedScore = Math.floor(Math.random() * 20) + 30;
-        }
-
         const newLeadId = crypto.randomUUID();
 
         leadsToCreate.push({
@@ -496,7 +635,7 @@ export async function POST(request: Request) {
           name,
           company,
           role,
-          source: "Manual Import",
+          source,
           tier: computedTier,
           email: email || null,
           phone: phone || null,
@@ -510,6 +649,8 @@ export async function POST(request: Request) {
           status: "new",
           agentId: session.id,
           metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+          budgetMin,
+          budgetMax,
         });
 
         leadsToLinkRun.push({ leadId: newLeadId });

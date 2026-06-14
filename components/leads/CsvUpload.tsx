@@ -131,6 +131,71 @@ export function getCanonicalHeader(header: string): string | null {
     return "phone";
   }
 
+  // 7. Source check
+  if (
+    normalized.includes("source") ||
+    normalized.includes("المصدر") ||
+    normalized.includes("مصدر")
+  ) {
+    return "source";
+  }
+
+  // 8. Budget Min check
+  if (
+    normalized.includes("budgetmin") ||
+    normalized.includes("minbudget") ||
+    normalized.includes("minimumbudget") ||
+    normalized.includes("الميزانيةالأدنى") ||
+    normalized.includes("الحدالأدنىللميزانية") ||
+    normalized.includes("budgetfrom") ||
+    normalized.includes("min_budget") ||
+    normalized.includes("budget_min") ||
+    normalized.includes("budget_from") ||
+    normalized.includes("minimum_budget")
+  ) {
+    return "budgetMin";
+  }
+
+  // 9. Budget Max check
+  if (
+    normalized.includes("budgetmax") ||
+    normalized.includes("maxbudget") ||
+    normalized.includes("maximumbudget") ||
+    normalized.includes("الميزانيةالأقصى") ||
+    normalized.includes("الحدالأقصىللميزانية") ||
+    normalized.includes("budgetto") ||
+    normalized.includes("max_budget") ||
+    normalized.includes("budget_max") ||
+    normalized.includes("budget_to") ||
+    normalized.includes("maximum_budget")
+  ) {
+    return "budgetMax";
+  }
+
+  // 10. Tier check
+  if (
+    normalized.includes("tier") ||
+    normalized.includes("مستوى") ||
+    normalized.includes("درجة") ||
+    normalized.includes("التصنيف") ||
+    normalized === "class" ||
+    normalized === "grade"
+  ) {
+    return "tier";
+  }
+
+  // 11. Score check
+  if (
+    normalized.includes("score") ||
+    normalized.includes("التقييم") ||
+    normalized.includes("درجةالتقييم") ||
+    normalized.includes("نقاط") ||
+    normalized === "rating" ||
+    normalized === "points"
+  ) {
+    return "score";
+  }
+
   return null;
 }
 
@@ -299,7 +364,7 @@ export default function CsvUpload({ onSuccess }: CsvUploadProps) {
   };
 
   // Preview: first 3 rows, canonical columns that we know about
-  const PREVIEW_COLS = ["name", "email", "phone", "company", "role", "location"];
+  const PREVIEW_COLS = ["name", "email", "phone", "company", "role", "location", "source", "budgetMin", "budgetMax", "tier", "score"];
   const previewRows = parsedData.slice(0, 3);
 
   return (
