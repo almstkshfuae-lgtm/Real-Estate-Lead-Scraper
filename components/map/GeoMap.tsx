@@ -369,13 +369,70 @@ function GeoMap({
 
         clusterGroup.addTo(map);
       } else if (activeLayer === "heatmap") {
-        const heatGroup = L.layerGroup();
+        const projectClusterGroup = (L as any).markerClusterGroup({
+          showCoverageOnHover: false,
+          spiderfyOnMaxZoom: true,
+          zoomToBoundsOnClick: true,
+          maxClusterRadius: 45,
+          iconCreateFunction: (cluster: any) => {
+            const count = cluster.getChildCount();
+            const color = "#085041"; // Premium forest green for projects
+
+            return L.divIcon({
+              html: `
+                <div style="position: relative; width: 52px; height: 52px;">
+                  <div style="
+                    position: absolute; inset: 0; border-radius: 50%;
+                    background: ${color}22; border: 2px dashed ${color};
+                    animation: pulse-map 3s infinite;
+                  "></div>
+                  <div style="
+                    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    width: 38px; height: 38px; border-radius: 50%; background: ${color};
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    box-shadow: 0 4px 12px ${color}66; cursor: pointer; color: white;
+                    font-family: ${language === 'ar' ? "'Cairo', 'Tajawal', system-ui" : "'Inter', sans-serif"};
+                  ">
+                    <span style="font-size: 13px; font-weight: 800; line-height: 1.1;">${count}</span>
+                    <span style="font-size: 8px; font-weight: 700; opacity: 0.8; margin-top: 1px;">
+                      ${language === 'ar' ? 'مشروع' : 'PROJ'}
+                    </span>
+                  </div>
+                </div>
+              `,
+              className: "custom-project-cluster-marker",
+              iconSize: [52, 52],
+              iconAnchor: [26, 26],
+            });
+          }
+        });
 
         // 1. Plot Real Estate Projects directly as detailed cards
         projects.forEach((proj) => {
-          const lat = proj.lat ?? proj.latitude;
-          const lng = proj.lng ?? proj.longitude;
-          if (!lat || !lng) return;
+          const dbLat = proj.lat ?? proj.latitude;
+          const dbLng = proj.lng ?? proj.longitude;
+
+          // Fallback to area coordinates if DB coordinates are missing
+          const baseCoords = getCoords(proj.location || "Unknown", proj.id);
+          const baseLat = dbLat ?? (baseCoords ? baseCoords.lat : null);
+          const baseLng = dbLng ?? (baseCoords ? baseCoords.lng : null);
+
+          if (baseLat === null || baseLng === null) return;
+
+          // Hash the project ID to get a deterministic offset (jitter)
+          let h1 = 0, h2 = 0;
+          const seed = proj.id || proj.projectName || "";
+          for (let i = 0; i < seed.length; i++) {
+            const c = seed.charCodeAt(i);
+            h1 = ((h1 << 5) - h1 + c) | 0;
+            h2 = ((h2 << 3) + h2 + c) | 0;
+          }
+          // Spread radius ~50 meters: 0.00045 degrees lat/lng
+          const jitterLat = ((Math.abs(h1) % 1000) / 1000 - 0.5) * 0.0009;
+          const jitterLng = ((Math.abs(h2) % 1000) / 1000 - 0.5) * 0.0009;
+
+          const lat = baseLat + jitterLat;
+          const lng = baseLng + jitterLng;
 
           const isAr = language === "ar";
           const currency = isAr ? "د.إ" : "AED";
@@ -494,11 +551,11 @@ function GeoMap({
             }
           });
 
-          heatGroup.addLayer(marker);
+          projectClusterGroup.addLayer(marker);
         });
 
-        heatGroup.addTo(map);
-        heatLayerRef.current = heatGroup;
+        projectClusterGroup.addTo(map);
+        heatLayerRef.current = projectClusterGroup;
       }
     };
 
