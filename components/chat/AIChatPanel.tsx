@@ -1,11 +1,109 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Send, Loader2, Bot, User, Sparkles, Trash2, Copy, CheckCircle2 } from "lucide-react";
+import { Send, Loader2, Bot, User, Sparkles, Trash2, Copy, CheckCircle2, MapPin, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 type Message = { role: "user" | "assistant"; content: string; id: string; dir?: "rtl" | "ltr"; lang?: "ar" | "en" };
+
+const renderMessageContent = (content: string) => {
+  if (!content) return null;
+
+  const lines = content.split("\n");
+  const elements: React.ReactNode[] = [];
+  let inSourcesSection = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.includes("Sources (Google Maps):")) {
+      inSourcesSection = true;
+      elements.push(
+        <span
+          key={`src-hdr-${i}`}
+          className="mt-4 pt-3 border-t border-[var(--color-border)] flex items-center gap-2 text-xs font-normal text-[var(--color-text-secondary)] select-none GMP-attribution w-full"
+          style={{ fontFamily: "Roboto, Sans-Serif" }}
+          translate="no"
+        >
+          <img
+            src="https://www.google.com/images/branding/product/ico/web_maps_icon_32dp.ico"
+            alt="Google Maps"
+            className="w-3.5 h-3.5"
+            translate="no"
+          />
+          <span translate="no">Sources (Google Maps):</span>
+        </span>
+      );
+      continue;
+    }
+
+    if (inSourcesSection && line.trim().startsWith("- [")) {
+      const match = line.match(/^-\s*\[(.*?)\]\((.*?)\)/);
+      if (match) {
+        const [, title, url] = match;
+        elements.push(
+          <span key={`src-item-${i}`} className="block mt-1.5">
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-[var(--color-primary-subtle)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white rounded-md border border-[var(--color-border)] transition-all cursor-pointer"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              <span>{title}</span>
+              <ExternalLink className="w-3 h-3 opacity-60" />
+            </a>
+          </span>
+        );
+        continue;
+      }
+    }
+
+    const linkRegex = /\[(.*?)\]\((.*?)\)/g;
+    let lastIndex = 0;
+    const parts: React.ReactNode[] = [];
+    let match;
+
+    linkRegex.lastIndex = 0;
+
+    while ((match = linkRegex.exec(line)) !== null) {
+      const matchIndex = match.index;
+      if (matchIndex > lastIndex) {
+        parts.push(line.substring(lastIndex, matchIndex));
+      }
+
+      const [, linkText, linkUrl] = match;
+      parts.push(
+        <a
+          key={`inline-link-${matchIndex}`}
+          href={linkUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-0.5 text-[var(--color-primary)] hover:underline font-medium"
+        >
+          {linkText}
+          <ExternalLink className="w-3 h-3 inline-block" />
+        </a>
+      );
+
+      lastIndex = linkRegex.lastIndex;
+    }
+
+    if (lastIndex < line.length) {
+      parts.push(line.substring(lastIndex));
+    }
+
+    elements.push(
+      <span key={`line-${i}`} className="block min-h-[1.2em]">
+        {parts.length > 0 ? parts : line}
+      </span>
+    );
+  }
+
+  return <span className="block">{elements}</span>;
+};
+
 
 const SUGGESTED_PROMPTS_EN = [
   "What are the top investment areas in Dubai right now?",
@@ -239,13 +337,21 @@ export default function AIChatPanel({ context }: { context?: string }) {
                       : "bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-bl-sm"
                   }`}
                 >
-                  {msg.content || (loading && msg.role === "assistant" ? (
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
-                    </span>
-                  ) : "")}
+                  {msg.role === "assistant" ? (
+                    msg.content ? (
+                      renderMessageContent(msg.content)
+                    ) : (
+                      loading ? (
+                        <span className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </span>
+                      ) : ""
+                    )
+                  ) : (
+                    msg.content
+                  )}
                 </div>
                 {msg.content && msg.role === "assistant" && (
                   <button

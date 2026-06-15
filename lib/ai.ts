@@ -1262,7 +1262,12 @@ export async function generateGeminiChatStream(
     parts: [{ text: m.content }]
   }));
 
-  const body = {
+  // Detect location-aware keywords in the latest user query to enable Google Maps Grounding
+  const lastUserMsg = messages.filter(m => m.role === "user").pop()?.content || "";
+  const locationKeywords = ["near", "where", "restaurant", "hotel", "cafe", "mall", "place", "location", "address", "map", "dubai", "abu dhabi", "sharjah", "عقارات", "مطعم", "فندق", "أين", "قريب", "دبي", "أبوظبي"];
+  const hasLocationContext = locationKeywords.some(keyword => lastUserMsg.toLowerCase().includes(keyword));
+
+  const body: any = {
     contents,
     systemInstruction: {
       parts: [{ text: systemPrompt }]
@@ -1274,6 +1279,19 @@ export async function generateGeminiChatStream(
       topK: 40
     }
   };
+
+  if (hasLocationContext) {
+    body.tools = [{ googleMaps: {} }];
+    body.toolConfig = {
+      retrievalConfig: {
+        // Default context location: Dubai (25.2048, 55.2708)
+        latLng: {
+          latitude: 25.2048,
+          longitude: 55.2708
+        }
+      }
+    };
+  }
 
   const endpoint = isProjectBased
     ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${config.projectId}/locations/${config.location}/publishers/google/models/${config.model}:streamGenerateContent?key=${encodeURIComponent(config.apiKey)}`
@@ -1296,15 +1314,36 @@ export async function generateGeminiChatStream(
   const reader = response.body?.getReader();
   const decoder = new TextDecoder();
 
+  let capturedGrounding: any = null;
+  let enqueuedSources = false;
+
   return new ReadableStream({
     async pull(controller) {
       if (!reader) {
         controller.close();
         return;
       }
+      
+      const appendSources = () => {
+        if (enqueuedSources) return;
+        if (capturedGrounding?.groundingChunks && capturedGrounding.groundingChunks.length > 0) {
+          const sourcesList = ["\n\n**Sources (Google Maps):**"];
+          capturedGrounding.groundingChunks.forEach((chunk: any) => {
+            if (chunk.maps) {
+              sourcesList.push(`- [${chunk.maps.title}](${chunk.maps.uri})`);
+            } else if (chunk.web) {
+              sourcesList.push(`- [${chunk.web.title}](${chunk.web.uri})`);
+            }
+          });
+          controller.enqueue(sourcesList.join("\n"));
+          enqueuedSources = true;
+        }
+      };
+
       try {
         const { done, value } = await reader.read();
         if (done) {
+          appendSources();
           controller.close();
           return;
         }
@@ -1330,6 +1369,11 @@ export async function generateGeminiChatStream(
           try {
             const obj = JSON.parse(cleanChunk);
             const candidate = obj?.predictions?.[0] || obj?.candidates?.[0];
+            
+            if (candidate?.groundingMetadata) {
+              capturedGrounding = candidate.groundingMetadata;
+            }
+
             const contents = candidate?.content || candidate;
             const parts = contents?.parts || contents;
             if (Array.isArray(parts)) {
@@ -1351,6 +1395,15 @@ export async function generateGeminiChatStream(
               }
             }
             text = matches.join("");
+
+            // Try to extract groundingMetadata using regex if JSON parse fails
+            const metadataRegex = /"groundingMetadata"\s*:\s*({[\s\S]*?})\s*(?:,?\s*"|$)/;
+            const metaMatch = metadataRegex.exec(chunkText);
+            if (metaMatch && metaMatch[1]) {
+              try {
+                capturedGrounding = JSON.parse(metaMatch[1]);
+              } catch {}
+            }
           }
         }
 
@@ -1358,6 +1411,7 @@ export async function generateGeminiChatStream(
           controller.enqueue(text);
         }
         if (shouldClose) {
+          appendSources();
           controller.close();
         }
       } catch (err) {

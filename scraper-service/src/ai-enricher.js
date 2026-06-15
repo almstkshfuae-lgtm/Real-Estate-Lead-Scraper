@@ -762,6 +762,43 @@ Output ONLY a JSON array matching the translationSchema. No other text.`;
 }
 
 /**
+ * Safely inserts inline markdown citations [X](URL) into the text content.
+ */
+export function addCitationsJS(text, supports, chunks) {
+  if (!text || !supports || !chunks) return text;
+  let cited = text;
+  
+  // Sort supports by endIndex in descending order to avoid shifting issues when inserting.
+  const sortedSupports = [...supports].sort(
+    (a, b) => (b.segment?.endIndex ?? 0) - (a.segment?.endIndex ?? 0)
+  );
+
+  for (const support of sortedSupports) {
+    const endIndex = support.segment?.endIndex;
+    if (endIndex === undefined || !support.groundingChunkIndices?.length) {
+      continue;
+    }
+
+    const citationLinks = support.groundingChunkIndices
+      .map(i => {
+        const uri = chunks[i]?.web?.uri;
+        if (uri) {
+          return `[${i + 1}](${uri})`;
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    if (citationLinks.length > 0) {
+      const citationString = citationLinks.join(", ");
+      cited = cited.slice(0, endIndex) + citationString + cited.slice(endIndex);
+    }
+  }
+
+  return cited;
+}
+
+/**
  * Phase 3: Web Search Enrichment using Google Search Grounding.
  * Takes normalized leads (post Phase 1 extraction + Phase 2 translation) and uses
  * Gemini's google_search tool to research each lead online — finding LinkedIn profiles,
@@ -867,7 +904,7 @@ Return ONLY the JSON array. No markdown, no explanation.`;
     let errorMessage = null;
 
     try {
-      const rawText = await withRetryJS(async () => {
+      const responseResult = await withRetryJS(async () => {
         const resp = await axios.post(endpoint, requestBody, {
           headers: { 'Content-Type': 'application/json' },
           timeout: 90000 // longer timeout for search-grounded calls
@@ -878,26 +915,88 @@ Return ONLY the JSON array. No markdown, no explanation.`;
         completionTokens = usageMetadata.candidatesTokenCount || 0;
         totalTokens = usageMetadata.totalTokenCount || (promptTokens + completionTokens);
 
-        // Extract text from all parts (google_search may produce multi-part responses)
         const candidate = data?.candidates?.[0];
         const parts = candidate?.content?.parts || [];
-        return parts
+        const text = parts
           .filter(p => p.text) // skip tool-call parts, keep only text parts
           .map(p => p.text)
           .join('');
+        return {
+          rawText: text,
+          groundingMetadata: candidate?.groundingMetadata || null
+        };
       }, 4, 3000);
 
+      const rawText = responseResult.rawText;
+      const groundingMetadata = responseResult.groundingMetadata;
       success = true;
 
-      // Parse the free-form JSON response
-      let batchResults = safeParseJsonJS(rawText, []);
-      if (!Array.isArray(batchResults)) batchResults = [];
+      // Apply citations to JSON if possible, keeping safety fallback
+      let citedText = rawText;
+      const chunks = groundingMetadata?.groundingChunks || [];
+      const supports = groundingMetadata?.groundingSupports || [];
+      if (supports.length > 0 && chunks.length > 0) {
+        try {
+          citedText = addCitationsJS(rawText, supports, chunks);
+        } catch (citeErr) {
+          console.warn('[ScraperAI] Error adding citations to raw JSON:', citeErr.message);
+        }
+      }
+
+      // Try parsing the cited text first
+      let batchResults = safeParseJsonJS(citedText, null);
+      if (!batchResults || !Array.isArray(batchResults)) {
+        console.warn('[ScraperAI] Citations broke JSON parsing or failed. Falling back to uncited text.');
+        batchResults = safeParseJsonJS(rawText, []);
+      }
+
+      // Extract general batch sources
+      const generalSources = [];
+      for (const chunk of chunks) {
+        const uri = chunk?.web?.uri;
+        const title = chunk?.web?.title;
+        if (uri) {
+          generalSources.push({ uri, title: title || new URL(uri).hostname || uri });
+        }
+      }
 
       // Merge enrichment data into leads
       for (const result of batchResults) {
         const idx = result.index;
         if (idx !== undefined && idx >= 0 && idx < enrichedLeads.length) {
           const existingMeta = enrichedLeads[idx].metadata || {};
+          
+          // Gather cited sources specifically for this lead
+          const leadCitedUrls = new Set();
+          const leadSources = [];
+          
+          const textFieldsToScan = [
+            result.onlineSummary,
+            result.recentNews,
+            result.investmentActivity
+          ].filter(Boolean);
+          
+          const citationRegex = /\[\d+\]\((https?:\/\/[^\s)]+)\)/g;
+          for (const field of textFieldsToScan) {
+            let match;
+            while ((match = citationRegex.exec(field)) !== null) {
+              leadCitedUrls.add(match[1]);
+            }
+          }
+          
+          for (const url of leadCitedUrls) {
+            const matchedChunk = chunks.find(c => c?.web?.uri === url);
+            const title = matchedChunk?.web?.title || new URL(url).hostname || url;
+            leadSources.push({ uri: url, title });
+          }
+
+          // Fallback to general sources if no specific inline citations were found
+          if (leadSources.length === 0 && generalSources.length > 0) {
+            if (result.onlineSummary || result.recentNews || result.investmentActivity) {
+              leadSources.push(...generalSources);
+            }
+          }
+
           enrichedLeads[idx].metadata = {
             ...existingMeta,
             webEnrichment: {
@@ -907,6 +1006,7 @@ Return ONLY the JSON array. No markdown, no explanation.`;
               socialProfiles: result.socialProfiles || {},
               onlineSummary: result.onlineSummary || null,
               searchConfidence: result.searchConfidence || 'low',
+              sources: leadSources,
               enrichedAt: new Date().toISOString()
             }
           };

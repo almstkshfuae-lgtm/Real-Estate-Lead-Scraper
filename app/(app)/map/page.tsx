@@ -264,6 +264,34 @@ export default function MapPage() {
     }
   }, []);
 
+  // Viewport change handler to update projects state
+  const handleViewportChange = useCallback((viewport: { north: number; south: number; east: number; west: number }) => {
+    setMapViewport(viewport);
+    if (activeLayer === "heatmap") {
+      if (viewportDebounceRef.current) {
+        clearTimeout(viewportDebounceRef.current);
+      }
+      viewportDebounceRef.current = setTimeout(() => {
+        fetchProjects(viewport);
+      }, 400);
+    }
+  }, [activeLayer, fetchProjects]);
+
+  useEffect(() => {
+    if (activeLayer === "heatmap") {
+      fetchProjects(mapViewport);
+    }
+  }, [activeLayer, mapViewport, fetchProjects]);
+
+  // Clean up viewport debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (viewportDebounceRef.current) {
+        clearTimeout(viewportDebounceRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
@@ -448,6 +476,7 @@ export default function MapPage() {
             onGeofenceDrawn={handleGeofenceDrawn}
             isAdmin={isAdmin}
             onAddProjectClick={handleAddProjectAt}
+            onViewportChange={handleViewportChange}
           />
 
           {/* Floating UI OVER the map */}
@@ -569,7 +598,13 @@ export default function MapPage() {
               </button>
 
               <button
-                onClick={fetchLeads}
+                onClick={() => {
+                  if (activeLayer === "heatmap") {
+                    fetchProjects(mapViewport);
+                  } else {
+                    fetchLeads();
+                  }
+                }}
                 disabled={loading}
                 className="flex items-center justify-center w-10 h-10 bg-white/95 backdrop-blur-md text-[var(--color-text-primary)] rounded-xl shadow-lg border border-white/50 hover:bg-white transition-all pointer-events-auto"
                 title={t("common.refresh", "Refresh")}

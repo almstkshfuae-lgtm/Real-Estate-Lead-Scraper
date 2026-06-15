@@ -13,6 +13,46 @@ import ScoreBadge, { TierBadge, SignalChip } from "./ScoreBadge";
 import { Lead } from "./LeadTable";
 import { safeJson } from "@/lib/safe-fetch";
 
+function renderTextWithCitations(text: string | null | undefined) {
+  if (!text) return null;
+  const regex = /\[(\d+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const index = match.index;
+    const num = match[1];
+    const url = match[2];
+    
+    // Add text before the match
+    if (index > lastIndex) {
+      parts.push(text.substring(lastIndex, index));
+    }
+    
+    // Add the link
+    parts.push(
+      <a
+        key={index}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 rounded-full mx-0.5 align-super"
+        title={url}
+      >
+        {num}
+      </a>
+    );
+    
+    lastIndex = regex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? parts : text;
+}
+
 export default function LeadSidebar({ lead: initialLead, userRole, onClose, onUpdate }: { lead: Lead | null; userRole?: string; onClose: () => void; onUpdate?: (updatedLead?: Lead) => void }) {
   const { t, i18n } = useTranslation("common");
   const lang = i18n.language === "ar" ? "ar" : "en";
@@ -692,7 +732,7 @@ export default function LeadSidebar({ lead: initialLead, userRole, onClose, onUp
                             {t("leads.sidebar.webEnrichment.summary", "Online Profile Summary")}
                           </span>
                           <p className="text-xs text-[var(--color-text-primary)] leading-relaxed italic">
-                            &ldquo;{(lead.metadata as any).webEnrichment.onlineSummary}&rdquo;
+                            &ldquo;{renderTextWithCitations((lead.metadata as any).webEnrichment.onlineSummary)}&rdquo;
                           </p>
                         </div>
                       )}
@@ -719,7 +759,7 @@ export default function LeadSidebar({ lead: initialLead, userRole, onClose, onUp
                             {t("leads.sidebar.webEnrichment.news", "Recent Press & News")}
                           </span>
                           <p className="text-xs text-[var(--color-text-primary)] leading-relaxed">
-                            {(lead.metadata as any).webEnrichment.recentNews}
+                            {renderTextWithCitations((lead.metadata as any).webEnrichment.recentNews)}
                           </p>
                         </div>
                       )}
@@ -731,8 +771,35 @@ export default function LeadSidebar({ lead: initialLead, userRole, onClose, onUp
                             {t("leads.sidebar.webEnrichment.investments", "Known Investments & Interests")}
                           </span>
                           <p className="text-xs text-[var(--color-text-primary)] leading-relaxed">
-                            {(lead.metadata as any).webEnrichment.investmentActivity}
+                            {renderTextWithCitations((lead.metadata as any).webEnrichment.investmentActivity)}
                           </p>
+                        </div>
+                      )}
+
+                      {/* Sources Section */}
+                      {Array.isArray((lead.metadata as any).webEnrichment.sources) && (lead.metadata as any).webEnrichment.sources.length > 0 && (
+                        <div className="space-y-2 pt-2.5 border-t border-[var(--color-border)]/50">
+                          <span className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider block">
+                            {t("leads.sidebar.webEnrichment.sources", "Cited Sources")}
+                          </span>
+                          <ul className="space-y-1 text-xs">
+                            {(lead.metadata as any).webEnrichment.sources.map((source: { uri: string; title: string }, i: number) => (
+                              <li key={i} className="flex items-center gap-1.5 text-[var(--color-text-primary)] hover:text-[var(--color-primary)] transition-all truncate">
+                                <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-blue-100/60 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[9px] font-black shrink-0">
+                                  {i + 1}
+                                </span>
+                                <a
+                                  href={source.uri}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="underline truncate text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]"
+                                  title={source.uri}
+                                >
+                                  {source.title}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       )}
 

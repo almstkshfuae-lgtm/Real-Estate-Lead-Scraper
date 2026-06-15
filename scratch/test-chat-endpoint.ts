@@ -2,21 +2,20 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local", override: true });
 
 async function main() {
-  const baseUrl = "http://localhost:3000";
+  const baseUrl = "http://localhost:3001";
   
   // 1. Login
   console.log("Logging in...");
   const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "admin@brilliance.ae", password: "admin123" })
+    body: JSON.stringify({ email: "admin@brilliance-lead.uk", password: "almstkshf@2030" })
   });
   
   const loginData = await loginRes.json();
-  const setCookie = loginRes.headers.get("set-cookie");
-  const tokenMatch = setCookie?.match(/auth_token=([^;]+)/);
-  const cookieHeader = tokenMatch ? `auth_token=${tokenMatch[1]}` : "";
-  console.log("Logged in. Cookie:", cookieHeader.substring(0, 30) + "...");
+  const token = loginData.token;
+  const cookieHeader = token ? `auth_token=${token}` : "";
+  console.log("Logged in. Cookie:", cookieHeader ? cookieHeader.substring(0, 30) + "..." : "NONE");
   
   // 2. Chat
   console.log("Hitting chat endpoint...");
@@ -27,7 +26,7 @@ async function main() {
       Cookie: cookieHeader
     },
     body: JSON.stringify({
-      messages: [{ role: "user", content: "Tell me a 1-sentence joke." }],
+      messages: [{ role: "user", content: "What are the best Italian restaurants near Downtown Dubai?" }],
       lang: "en"
     })
   });
