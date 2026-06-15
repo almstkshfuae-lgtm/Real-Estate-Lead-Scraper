@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { prisma } from './prisma.js';
 import { DEFAULT_SCRAPER_SOURCES } from '../default-sources.js';
-import { technicalAccessTest, applyStealthOverrides, resolveCloudflareChallenge } from '../verification-pipeline.js';
+import { technicalAccessTest, applyStealthOverrides, resolveCloudflareChallenge, getRandomDesktopUserAgent, getStealthContextOptions } from '../verification-pipeline.js';
 import { maskProxyUrl, parseProxyUrl } from '../proxy-validator.js';
 import { launchBrowser } from '../browser-launcher.js';
 import { callGeminiForLeads, callGeminiForProjects, withRetryJS } from './ai-enricher.js';
@@ -54,12 +54,6 @@ export const PROXY_CONFIG = {
 
 function getRandomDelay(minMs = 1000, maxMs = 4000) {
   return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
-}
-
-function getRandomDesktopUserAgent() {
-  const chromeMajor = 100 + Math.floor(Math.random() * 30);
-  const chromeBuild = Math.floor(1000 + Math.random() * 9000);
-  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.${chromeBuild}.0 Safari/537.36`;
 }
 
 function generateMockLeadData(sourceKey, sourceName, criteria = {}) {
@@ -368,7 +362,7 @@ export async function seedDefaultSources() {
   }
 }
 
-async function performInteractiveSearch(page, sourceKey, criteria = {}) {
+async function performInteractiveSearch(page, sourceKey, criteria = {}, brokenSelectors = []) {
   const query = criteria.signals && criteria.signals.length > 0 ? criteria.signals[0] : 'investment';
 
   if (sourceKey === 'adgm') {
@@ -421,25 +415,115 @@ async function performInteractiveSearch(page, sourceKey, criteria = {}) {
 
         const listingData = await page.evaluate(() => {
           const results = [];
-          const items = document.querySelectorAll('div[role="feed"] > div');
-          items.forEach(item => {
-            const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [jsan*="fontHeadlineSmall"]');
-            const phoneEl = item.querySelector('[data-item-id*="phone:tel:"], [aria-label*="Phone"]');
-            const websiteEl = item.querySelector('[data-item-id="authority"], [aria-label*="Website"]');
-            const categoryEl = item.querySelector('.W4Efsd:not(.W4Efsd span)');
-            const ratingEl = item.querySelector('.MW4etd');
-            const reviewsEl = item.querySelector('.UY7F9');
-            const linkEl = item.querySelector('a.hfpxzc, a[href*="/maps/place/"]');
+          let items = Array.from(document.querySelectorAll('div[role="feed"] > div'));
+          
+          // Fallback: If feed items aren't found directly, look for any listing anchor tag
+          if (items.length === 0) {
+            const links = Array.from(document.querySelectorAll('a[href*="/maps/place/"]'));
+            items = links.map(link => {
+              return link.closest('div[role="feed"] > div') || link.closest('[class*="card"]') || link.parentElement?.parentElement || link;
+            }).filter((v, i, a) => a.indexOf(v) === i);
+          }
 
-            const name = nameEl?.textContent?.trim();
+          items.forEach(item => {
+            const linkEl = item.querySelector('a[href*="/maps/place/"], a.hfpxzc');
+            
+            // 1. Robust Name Extraction
+            let name = linkEl?.getAttribute('aria-label')?.trim() || '';
+            if (!name) {
+              const nameEl = item.querySelector('.qBF1Pd, .fontHeadlineSmall, [class*="Headline" i], [class*="headline" i], [jsan*="fontHeadlineSmall"]');
+              name = nameEl?.textContent?.trim() || '';
+            }
+            if (!name) {
+              const headingEl = item.querySelector('[role="heading"], h1, h2, h3, h4, h5, h6');
+              name = headingEl?.textContent?.trim() || '';
+            }
+            if (!name && linkEl) {
+              name = linkEl.textContent?.trim() || '';
+            }
+
             if (name && name.length > 1) {
+              // 2. Robust Phone Number Extraction
+              const phoneEl = item.querySelector('[data-item-id*="phone:tel:"], [aria-label*="Phone"]');
+              let phone = phoneEl?.getAttribute('aria-label')?.replace(/Phone:\s*/i, '').trim() || phoneEl?.textContent?.trim() || '';
+              if (!phone) {
+                const textContent = item.textContent || '';
+                const match = textContent.match(/(?:\+971|00971|0)(?:\s*5[024568]|\s*[234679])[\s-]*\d{3}[\s-]*\d{4}/);
+                if (match) {
+                  phone = match[0].trim();
+                }
+              }
+
+              // 3. Robust Website Extraction
+              const websiteEl = item.querySelector('[data-item-id="authority"], [aria-label*="Website"]');
+              let website = websiteEl?.getAttribute('aria-label')?.replace(/Website:\s*/i, '').trim() || websiteEl?.href || '';
+              if (!website) {
+                const anchors = Array.from(item.querySelectorAll('a'));
+                for (const anchor of anchors) {
+                  const href = anchor.href || '';
+                  if (href && !href.includes('google.com') && !href.includes('google.ae') && !href.startsWith('javascript:')) {
+                    website = href;
+                    break;
+                  }
+                }
+              }
+
+              // 4. Robust Category Extraction (with rating/reviews fallback)
+              const categoryEl = item.querySelector('.W4Efsd:not(.W4Efsd span)');
+              const ratingEl = item.querySelector('.MW4etd');
+              const reviewsEl = item.querySelector('.UY7F9');
+              
+              let category = categoryEl?.textContent?.trim() || '';
+              let rating = ratingEl?.textContent?.trim() || '';
+              let reviews = reviewsEl?.textContent?.trim() || '';
+
+              if (!rating || !reviews || !category) {
+                const textContent = item.textContent || '';
+                const segments = textContent.split(/[\u00B7\u2022|+-]/).map(s => s.trim()).filter(Boolean);
+
+                if (!rating) {
+                  const ratingMatch = textContent.match(/\b([1-5]\.[0-9])\b/);
+                  if (ratingMatch) rating = ratingMatch[1];
+                }
+                if (!reviews) {
+                  const reviewsMatch = textContent.match(/\(([\d,.]+k?)\)/i) || textContent.match(/\b([\d,.]+k?)\s*(reviews|ratings|تقييم)\b/i);
+                  if (reviewsMatch) reviews = reviewsMatch[1];
+                }
+                if (!category) {
+                  const categoryKeywords = [
+                    'real estate', 'property', 'developer', 'agency', 'agent', 'broker', 
+                    'consultant', 'investment', 'builder', 'contractor', 'construction',
+                    'عقارات', 'مطور', 'وكيل', 'وسيط', 'استثمار', 'بناء'
+                  ];
+                  for (const segment of segments) {
+                    const lowerSeg = segment.toLowerCase();
+                    if (categoryKeywords.some(keyword => lowerSeg.includes(keyword)) && segment.length < 50) {
+                      category = segment;
+                      break;
+                    }
+                  }
+                  
+                  if (!category && segments.length > 1) {
+                    for (let i = 0; i < segments.length; i++) {
+                      const seg = segments[i];
+                      if (seg.includes(rating) || (reviews && seg.includes(reviews))) {
+                        if (i + 1 < segments.length && segments[i + 1].length < 40) {
+                          category = segments[i + 1];
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
               results.push({
                 name,
-                phone: phoneEl?.getAttribute('aria-label')?.replace('Phone:', '').trim() || phoneEl?.textContent?.trim() || '',
-                website: websiteEl?.getAttribute('aria-label')?.replace('Website:', '').trim() || '',
-                category: categoryEl?.textContent?.trim() || '',
-                rating: ratingEl?.textContent?.trim() || '',
-                reviews: reviewsEl?.textContent?.trim() || '',
+                phone,
+                website,
+                category,
+                rating,
+                reviews,
                 profileUrl: linkEl?.href || ''
               });
             }
@@ -447,7 +531,7 @@ async function performInteractiveSearch(page, sourceKey, criteria = {}) {
           return results;
         });
 
-        if (listingData.length > 0) {
+        if (listingData && listingData.length > 0) {
           console.log(`[Scraper] Google Maps: extracted ${listingData.length} listings.`);
           await page.evaluate((data) => {
             const script = document.createElement('script');
@@ -456,10 +540,17 @@ async function performInteractiveSearch(page, sourceKey, criteria = {}) {
             script.textContent = JSON.stringify(data);
             document.body.appendChild(script);
           }, listingData);
+        } else {
+          console.warn('[Scraper] Google Maps feed container was visible but 0 listings could be parsed. Selectors might be broken.');
+          if (brokenSelectors) {
+            brokenSelectors.push('google-maps-listing-item-selectors');
+          }
+          throw new Error('Google Maps feed found but failed to parse any listings. Selectors might be broken.');
         }
       }
     } catch (err) {
-      console.warn('[Scraper] Google Maps interaction failed:', err.message);
+      console.error('[Scraper] Google Maps interaction failed:', err.message);
+      throw err;
     }
   } else if (sourceKey === 'yellow-pages') {
     console.log('[Scraper] Interacting with Yellow Pages listings...');
@@ -654,7 +745,40 @@ async function collectMemberLinks(page, source, visitedUrls, brokenSelectors) {
             host.includes('snapchat.com') || (host.includes('google.com') && !isGoogleMapsProfile) ||
             host.includes('whatsapp.com') || host.includes('t.me');
 
-          if (!isSocialOrExternal && !visitedUrls.has(absolute)) {
+          // Check if it is an internal navigation link (like home page, contact us, etc.)
+          const cleanPath = path.replace(/\/$/, '');
+          const isInternalNavigation = 
+            cleanPath === '' || 
+            cleanPath === '/index.html' ||
+            cleanPath === '/index.php' ||
+            ['/contact', '/contact-us', '/about', '/about-us', '/login', '/signin', '/signup', '/register', 
+             '/privacy', '/privacy-policy', '/terms', '/terms-of-use', '/terms-of-service', '/faq', '/help', 
+             '/jobs', '/careers', '/press', '/blog', '/news', '/cookie-policy', '/sitemap', '/sitemap.xml'
+            ].some(navPath => cleanPath.includes(navPath)) ||
+            ['page=', 'p=', 'pg=', '/page/'].some(param => urlObj.search.includes(param) || cleanPath.includes(param));
+
+          // Also check if the link is inside a nav, header, or footer layout element
+          const isLinkInNavOrFooter = await anchor.evaluate(el => {
+            let current = el;
+            while (current) {
+              const tag = current.tagName?.toLowerCase();
+              if (['nav', 'header', 'footer', 'aside', 'menu'].includes(tag)) {
+                return true;
+              }
+              const id = current.id?.toLowerCase() || '';
+              const className = typeof current.className === 'string' ? current.className.toLowerCase() : '';
+              if (
+                id.includes('nav') || id.includes('header') || id.includes('footer') || id.includes('sidebar') || id.includes('menu') ||
+                className.includes('nav') || className.includes('header') || className.includes('footer') || className.includes('sidebar') || className.includes('menu')
+              ) {
+                return true;
+              }
+              current = current.parentElement;
+            }
+            return false;
+          }).catch(() => false);
+
+          if (!isSocialOrExternal && !isInternalNavigation && !isLinkInNavOrFooter && !visitedUrls.has(absolute)) {
             links.push(absolute);
           }
         } catch (urlErr) { /* ignore */ }
@@ -719,7 +843,7 @@ async function scrapePageRecursively(
     await checkContentSelectors(page, source, brokenSelectors);
 
     if (brokenSelectors.length > 3) {
-      await flagSourceNeedsReview(sourceKey, brokenSelectors);
+      console.warn(`[SelectorHealth] > 3 broken selectors detected for ${sourceKey} on recursive scrape page. Senders will evaluate final status after run.`);
     }
 
     // Click expand buttons
@@ -733,10 +857,30 @@ async function scrapePageRecursively(
         for (const button of allButtons) {
           if (await button.isVisible()) {
             try {
-              const tagName = await button.evaluate(node => node.tagName.toLowerCase());
-              if (tagName === 'nav' || tagName === 'header' || tagName === 'footer') {
+              const isNavLayout = await button.evaluate(el => {
+                let current = el;
+                while (current) {
+                  const tag = current.tagName?.toLowerCase();
+                  if (['nav', 'header', 'footer', 'aside', 'menu'].includes(tag)) {
+                    return true;
+                  }
+                  const id = current.id?.toLowerCase() || '';
+                  const className = typeof current.className === 'string' ? current.className.toLowerCase() : '';
+                  if (
+                    id.includes('nav') || id.includes('header') || id.includes('footer') || id.includes('sidebar') || id.includes('menu') ||
+                    className.includes('nav') || className.includes('header') || className.includes('footer') || className.includes('sidebar') || className.includes('menu')
+                  ) {
+                    return true;
+                  }
+                  current = current.parentElement;
+                }
+                return false;
+              }).catch(() => false);
+
+              if (isNavLayout) {
                 continue;
               }
+
               await button.scrollIntoViewIfNeeded();
               await page.waitForTimeout(getRandomDelay(300, 800));
               await button.click({ timeout: 8000 });
@@ -909,37 +1053,47 @@ export async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyU
 
   const resolvedProxyUrl = proxyUrl || PROXY_CONFIG.getProxyUrl();
   const userAgent = getRandomDesktopUserAgent();
-  const contextOptions = {
-    userAgent,
-    viewport: { width: 1920, height: 1080 },
-    extraHTTPHeaders: {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-User': '?1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Ch-Ua-Mobile': '?0',
-      'Sec-Ch-Ua-Platform': '"Windows"'
-    }
-  };
-
-  const proxyOptions = parseProxyUrl(resolvedProxyUrl);
-  if (proxyOptions) {
-    contextOptions.proxy = proxyOptions;
-    console.log(`🔒 Using proxy for ${sourceKey || source.key}: ${proxyOptions.server}`);
-  }
+  const contextOptions = getStealthContextOptions(userAgent, resolvedProxyUrl);
 
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
 
+  // Set up request interceptor to override request headers on every outgoing HTTP request
+  // to guarantee consistency with the randomly generated user agent and client hints.
   await page.route('**/*', (route) => {
-    const type = route.request().resourceType();
-    if (['image', 'font', 'media'].includes(type)) {
-      route.abort();
-    } else {
-      route.continue();
+    try {
+      const originalHeaders = route.request().headers();
+      const headers = {};
+      
+      // Filter out HTTP/2 pseudo-headers (keys starting with ':')
+      for (const [key, value] of Object.entries(originalHeaders)) {
+        if (!key.startsWith(':') && value !== undefined && value !== null) {
+          headers[key] = String(value);
+        }
+      }
+
+      // Enforce the user-agent
+      headers['user-agent'] = userAgent;
+      headers['User-Agent'] = userAgent;
+
+      // Extract client hints safely
+      const secChUa = contextOptions.extraHTTPHeaders?.['Sec-Ch-Ua'];
+      const secChUaMobile = contextOptions.extraHTTPHeaders?.['Sec-Ch-Ua-Mobile'];
+      const secChUaPlatform = contextOptions.extraHTTPHeaders?.['Sec-Ch-Ua-Platform'];
+
+      if (secChUa) headers['sec-ch-ua'] = secChUa;
+      if (secChUaMobile) headers['sec-ch-ua-mobile'] = secChUaMobile;
+      if (secChUaPlatform) headers['sec-ch-ua-platform'] = secChUaPlatform;
+
+      // Remove Upgrade-Insecure-Requests for sub-resources (like fonts, scripts) to prevent CORS preflight blocking
+      const resourceType = route.request().resourceType();
+      if (resourceType !== 'document' && headers['upgrade-insecure-requests']) {
+        delete headers['upgrade-insecure-requests'];
+      }
+
+      route.continue({ headers }).catch(() => {});
+    } catch (e) {
+      route.continue().catch(() => {});
     }
   });
 
@@ -986,7 +1140,7 @@ export async function scrapeSourceWithBrowser(browser, source, sourceKey, proxyU
     });
     await page.waitForTimeout(1000);
 
-    await performInteractiveSearch(page, sourceKey, criteria);
+    await performInteractiveSearch(page, sourceKey, criteria, brokenSelectors);
 
     if (sourceKey === 'google-maps') {
       try {
@@ -1064,6 +1218,13 @@ export async function scrapeSource(sourceKey, proxyUrl = null) {
         ]);
       } catch (err) {
         console.error('[Scraper] Error closing browser in scrapeSource:', err.message);
+        try {
+          const childProcess = browser.process?.();
+          if (childProcess) {
+            console.warn(`[Scraper] Force-killing browser process ${childProcess.pid} in scrapeSource...`);
+            childProcess.kill('SIGKILL');
+          }
+        } catch (killErr) { /* ignore */ }
       }
     }
   }
@@ -1075,7 +1236,6 @@ export async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhook
   try {
     const BROWSER_ARGS = [
       '--disable-blink-features=AutomationControlled',
-      '--disable-web-resources',
       '--disable-features=IsolateOrigins,site-per-process',
       '--no-sandbox',
       '--disable-setuid-sandbox'
@@ -1175,39 +1335,6 @@ export async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhook
         });
         console.log(`✅ ${sourceKey}: ${content.pagesScraped} pages, ${content.contentLength} bytes`);
 
-        // Update database source selector health status
-        const uniqueIssues = [...new Set(sourceBrokenSelectors)];
-        if (uniqueIssues.length > 0) {
-          console.warn(`[SelectorHealth] Broken selectors detected for ${sourceKey}:`, uniqueIssues);
-          try {
-            await prisma.sourceConfig.update({
-              where: { key: sourceKey },
-              data: {
-                verificationStatus: 'needs_review',
-                interactionsPassed: false,
-                verificationNotes: `Automatic health check failed during scrape: ${uniqueIssues.join('; ')}`
-              }
-            });
-          } catch (dbErr) {
-            console.error(`[SelectorHealth] Failed to update sourceConfig DB:`, dbErr.message);
-          }
-        } else {
-          try {
-            const config = await prisma.sourceConfig.findUnique({ where: { key: sourceKey } });
-            if (config && config.verificationStatus === 'needs_review') {
-              await prisma.sourceConfig.update({
-                where: { key: sourceKey },
-                data: {
-                  verificationStatus: 'verified',
-                  interactionsPassed: true,
-                  verificationNotes: 'Automatic health check passed successfully.'
-                }
-              });
-              console.log(`[SelectorHealth] Restored DB status for ${sourceKey} to verified.`);
-            }
-          } catch (dbErr) { /* ignore */ }
-        }
-
         // Call Gemini
         let enrichedLeads = [];
         let enrichedProjects = [];
@@ -1234,6 +1361,57 @@ export async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhook
               console.error(`[ScraperAI] Lead enrichment failed for ${sourceKey}:`, aiErr.message);
             }
           }
+        }
+
+        // Update database source selector health status with smart verification / fallback checks
+        const uniqueIssues = [...new Set(sourceBrokenSelectors)];
+        const itemsFoundCount = isProjectSource ? enrichedProjects.length : enrichedLeads.length;
+
+        if (uniqueIssues.length > 0) {
+          if (itemsFoundCount > 0) {
+            console.log(`[SelectorHealth] Broken selectors detected for ${sourceKey}, but successfully enriched ${itemsFoundCount} items. Keeping/restoring verified status.`);
+            try {
+              await prisma.sourceConfig.update({
+                where: { key: sourceKey },
+                data: {
+                  verificationStatus: 'verified',
+                  interactionsPassed: true,
+                  verificationNotes: `Automatic health check warning (some selectors failed, but data extraction succeeded): ${uniqueIssues.join('; ')}`
+                }
+              });
+            } catch (dbErr) {
+              console.error(`[SelectorHealth] Failed to update sourceConfig DB for success-with-warnings:`, dbErr.message);
+            }
+          } else {
+            console.warn(`[SelectorHealth] Broken selectors detected for ${sourceKey} and 0 items enriched. Flagging as needs_review:`, uniqueIssues);
+            try {
+              await prisma.sourceConfig.update({
+                where: { key: sourceKey },
+                data: {
+                  verificationStatus: 'needs_review',
+                  interactionsPassed: false,
+                  verificationNotes: `Automatic health check failed during scrape: ${uniqueIssues.join('; ')}`
+                }
+              });
+            } catch (dbErr) {
+              console.error(`[SelectorHealth] Failed to update sourceConfig DB:`, dbErr.message);
+            }
+          }
+        } else {
+          try {
+            const config = await prisma.sourceConfig.findUnique({ where: { key: sourceKey } });
+            if (config && config.verificationStatus === 'needs_review') {
+              await prisma.sourceConfig.update({
+                where: { key: sourceKey },
+                data: {
+                  verificationStatus: 'verified',
+                  interactionsPassed: true,
+                  verificationNotes: 'Automatic health check passed successfully.'
+                }
+              });
+              console.log(`[SelectorHealth] Restored DB status for ${sourceKey} to verified.`);
+            }
+          } catch (dbErr) { /* ignore */ }
         }
 
         // Post Webhook
@@ -1282,6 +1460,13 @@ export async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhook
               ]);
             } catch (e) {
               console.error('[MemoryMonitor] Error closing browser:', e.message);
+              try {
+                const childProcess = browser.process?.();
+                if (childProcess) {
+                  console.warn(`[MemoryMonitor] Force-killing browser process ${childProcess.pid}...`);
+                  childProcess.kill('SIGKILL');
+                }
+              } catch (killErr) { /* ignore */ }
             }
           }
           browser = await launchBrowser({ args: BROWSER_ARGS });
@@ -1336,6 +1521,13 @@ export async function scrapeMultipleSources(sourceKeys, proxyUrl = null, webhook
         console.log('[Scraper] Browser closed successfully.');
       } catch (err) {
         console.error('[Scraper] Error closing browser:', err.message);
+        try {
+          const childProcess = browser.process?.();
+          if (childProcess) {
+            console.warn(`[Scraper] Force-killing browser process ${childProcess.pid} in scrapeMultipleSources...`);
+            childProcess.kill('SIGKILL');
+          }
+        } catch (killErr) { /* ignore */ }
       }
     }
   }

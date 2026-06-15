@@ -147,7 +147,7 @@ export default function ScraperSettingsPage() {
       // To keep it simple, we hit /api/scrape which we can re-route to use the cron logic.
 
       const res = await fetch('/api/cron/scrape', {
-        method: 'GET'
+        method: 'POST'
       });
 
       if (!res.ok) throw new Error(await res.text());

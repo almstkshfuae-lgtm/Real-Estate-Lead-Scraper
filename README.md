@@ -117,7 +117,7 @@ signal_bonus:
 ### Scraper
 - Sources: Bayut, Dubizzle, Zawya Invest, Bloomberg MENA, Forbes ME, ADGM/DIFC Registry, DED Registry, Private Banking directories, Family Office networks, Elite Lifestyle/Concierge, News & Press, Canadian Doctors Directory, Physician Directory - CPSA, aHUS Canada Doctors List
 - Playwright (Node.js) — headless, proxy-rotated
-- Selector Stability & DOM Change Detection — Resolves pagination, expand buttons, and links using robust semantic/bilingual fallbacks and case-insensitive class matches. Checks selectors against loaded DOM during crawls. If a selector is broken, updates source status to `needs_review` and creates a system warning notification.
+- Selector Stability & DOM Change Detection — Resolves pagination, expand buttons, and links using robust semantic/bilingual fallbacks and case-insensitive class matches. Checks selectors against loaded DOM during crawls. If a selector is broken and no data is successfully extracted, updates the source status to `needs_review` and creates a system warning notification. If data extraction succeeds despite selector issues, the source remains `verified` with warnings logged in the verification notes.
 - Incremental scrape — new leads appended, previous data never overwritten
 - Optional: save selected leads only (agent manually flags before committing to DB)
 - Vercel Cron: daily at 02:00 GST
@@ -275,6 +275,10 @@ WHATSAPP_PHONE_NUMBER_ID=
 # Scraper
 SCRAPER_SERVICE_URL=
 SCRAPER_SECRET=
+
+# Web Search Enrichment (Phase 3 Grounding)
+ENABLE_WEB_ENRICHMENT=false
+WEB_ENRICHMENT_BATCH_SIZE=5
 
 # Webhook & Local testing overrides
 APP_URL=

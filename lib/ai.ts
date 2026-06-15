@@ -667,9 +667,9 @@ TIER ASSIGNMENT:
 
 ${criteriaPrompt}
 
-Return a JSON array. ONLY include leads with complete name, company, and role.
+Return a JSON array. ONLY include leads with complete name.
 For any missing Arabic translations, translate from English context.
-For missing location, default to "Abu Dhabi".
+For missing location, default to "".
 For missing email/phone, set to null.
 For missing budget values, set budgetMin and budgetMax to null.
 For missing relocation context, set relocated to null.
@@ -755,7 +755,7 @@ Output ONLY the JSON array. No other text.`,
   return Array.isArray(leads)
     ? leads
       .filter((lead: any) =>
-        lead.name && lead.company && lead.role && lead.tier && lead.score !== undefined && lead.location
+        lead.name && lead.company !== undefined && lead.company !== null && lead.role !== undefined && lead.role !== null && lead.tier && lead.score !== undefined && lead.location !== undefined && lead.location !== null
         && filterLeadByCriteria(lead, criteria)
         && verifyLeadInSource(lead.name, lead.nameAr, cleanedContent, lead.company, lead.companyAr)
       )

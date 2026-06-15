@@ -26,15 +26,32 @@ export class ScrapeQueueManager {
     this.executeFn = null;
   }
 
-  enqueueJob(job, executeFn) {
+  async enqueueJob(job, executeFn) {
     if (!this.executeFn) {
       this.executeFn = executeFn;
     }
-    
+
     // Check if already in queue to prevent duplicate runs
     if (this.jobsState.has(job.runId)) {
       console.warn(`[Queue] Job ${job.runId} is already queued/running. Ignoring duplicate.`);
-      return;
+      return false;
+    }
+
+    // Check database status to prevent duplicate execution in case of restarts / distributed systems
+    if (job.runId && this.prisma && this.prisma.scrapeRun) {
+      try {
+        const dbRun = await this.prisma.scrapeRun.findUnique({
+          where: { id: job.runId }
+        });
+        if (dbRun) {
+          if (dbRun.status === 'PROCESSING' || dbRun.status === 'COMPLETED' || dbRun.status === 'FAILED') {
+            console.warn(`[Queue] Job ${job.runId} status in database is ${dbRun.status}. Ignoring duplicate.`);
+            return false;
+          }
+        }
+      } catch (dbErr) {
+        console.error(`[Queue] Database check failed for job ${job.runId}:`, dbErr.message);
+      }
     }
 
     this.queue.push(job);
@@ -46,6 +63,7 @@ export class ScrapeQueueManager {
 
     console.log(`[Queue] Job ${job.runId} added to queue. Queue size: ${this.queue.length}`);
     this.processQueue().catch(err => console.error('[Queue] processQueue error:', err));
+    return true;
   }
 
   async processQueue() {
@@ -72,6 +90,27 @@ export class ScrapeQueueManager {
       this.queue.splice(nextJobIdx, 1);
       this.processQueue().catch(err => console.error('[Queue] processQueue post-skip error:', err));
       return;
+    }
+
+    // Double-check database status before actually starting execution
+    if (currentJob.runId && this.prisma && this.prisma.scrapeRun) {
+      try {
+        const dbRun = await this.prisma.scrapeRun.findUnique({
+          where: { id: currentJob.runId }
+        });
+        if (dbRun && dbRun.status !== 'PENDING') {
+          console.warn(`[Queue] Job ${currentJob.runId} status in DB is "${dbRun.status}" (expected "PENDING"). Skipping execution.`);
+          this.jobsState.delete(currentJob.runId);
+          const idx = this.queue.findIndex(j => j.runId === currentJob.runId);
+          if (idx !== -1) {
+            this.queue.splice(idx, 1);
+          }
+          this.processQueue().catch(err => console.error('[Queue] processQueue next job trigger error:', err));
+          return;
+        }
+      } catch (dbErr) {
+        console.error(`[Queue] Database pre-run check failed for job ${currentJob.runId}:`, dbErr.message);
+      }
     }
 
     stateObj.status = 'running';
@@ -102,8 +141,8 @@ export class ScrapeQueueManager {
     stateObj.watchdogTimer = setTimeout(async () => {
       console.error(`[Watchdog] Job ${currentJob.runId} exceeded ${ZOMBIE_KILL_MS / 60000}min hard limit. Force-killing.`);
       await this.cleanupJob(
-        currentJob.runId, 
-        'timeout', 
+        currentJob.runId,
+        'timeout',
         `Job timeout: exceeded ${ZOMBIE_KILL_MS / 60000}-minute hard limit. Zombie process killed.`
       );
     }, ZOMBIE_KILL_MS);
@@ -126,8 +165,8 @@ export class ScrapeQueueManager {
   async cancelJob(runId, agentId = null) {
     console.warn(`[Queue] Explicit cancellation requested for job ${runId}`);
     await this.cleanupJob(
-      runId, 
-      'cancelled', 
+      runId,
+      'cancelled',
       'Job execution was force-cancelled by background watchdog.',
       agentId
     );
@@ -167,6 +206,16 @@ export class ScrapeQueueManager {
         console.log(`[Queue] Active browser instance closed successfully.`);
       } catch (err) {
         console.error(`[Queue] Failed to close active browser instance:`, err.message);
+        try {
+          const childProcess = browser.process?.();
+          if (childProcess) {
+            console.warn(`[Queue] Attempting to force-kill browser child process ${childProcess.pid}...`);
+            childProcess.kill('SIGKILL');
+            console.log(`[Queue] Browser process force-killed.`);
+          }
+        } catch (killErr) {
+          console.error(`[Queue] Failed to kill browser process:`, killErr.message);
+        }
       }
     }
 

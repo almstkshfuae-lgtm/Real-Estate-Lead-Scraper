@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     const run = await prisma.scrapeRun.create({
       data: {
         triggeredBy: session.name || "System Simulator",
-        sources: JSON.stringify(["Historical Outlets", "Registry Archive", "Elite Concierge"]),
-        criteria: JSON.stringify({ emirates: ["Dubai", "Abu Dhabi", "Sharjah"] }),
+        sources: ["Historical Outlets", "Registry Archive", "Elite Concierge"],
+        criteria: { emirates: ["Dubai", "Abu Dhabi", "Sharjah"] },
         status: "COMPLETED",
         leadsFound: 550,
         completedAt: new Date()

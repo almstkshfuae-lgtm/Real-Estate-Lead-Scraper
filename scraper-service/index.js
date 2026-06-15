@@ -111,7 +111,7 @@ app.post('/scrape', async (req, res) => {
     jobDiagnostics
   };
 
-  queueManager.enqueueJob(job, (j) => scrapeMultipleSources(
+  const enqueued = await queueManager.enqueueJob(job, (j) => scrapeMultipleSources(
     j.sources,
     j.proxyUrl,
     j.webhookUrl,
@@ -121,6 +121,16 @@ app.post('/scrape', async (req, res) => {
     j.uaeComplianceMode,
     j.globalRateLimitDelay
   ));
+
+  if (!enqueued) {
+    return res.json({
+      message: 'Scrape job is already running or completed. Duplicate request ignored.',
+      status: 'already_queued',
+      sources: sources,
+      runId: runId,
+      queuePosition: queueManager.queue.length
+    });
+  }
 
   res.json({
     message: 'Scrape job queued',

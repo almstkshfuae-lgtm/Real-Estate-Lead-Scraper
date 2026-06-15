@@ -6,12 +6,7 @@ import { encryptJson } from '../lib/crypto';
 const prisma = new PrismaClient();
 
 async function main() {
-  if (process.env.NODE_ENV === 'production' || process.env.PRISMA_MIGRATE_DEPLOY === '1') {
-    console.log('Skipping seed script in production/deployment environment.');
-    return;
-  }
-
-  // Seed/Sync default sources config
+  // 1. Sync default scraper sources config (safe upserts)
   console.log('Syncing default scraper sources...');
   for (const source of DEFAULT_SCRAPER_SOURCES) {
     await prisma.sourceConfig.upsert({
@@ -44,22 +39,13 @@ async function main() {
   }
   console.log(`Synced ${DEFAULT_SCRAPER_SOURCES.length} default sources.`);
 
-  // Double protection: skip if the database already has leads
-  const existingCount = await prisma.lead.count();
-  if (existingCount > 0) {
-    console.log(`Database already contains ${existingCount} leads. Skipping mock data seeding.`);
-    return;
-  }
-
-  // 1. Admin User
+  // 2. Upsert Admin User (Create if not exists; do not overwrite password if already exists)
   const adminEmail = 'admin@brilliance-lead.uk';
   const hashedPassword = await bcrypt.hash('almstkshf@2030', 10);
 
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: {
-      passwordHash: hashedPassword,
-    },
+    update: {}, // Safe: do not overwrite password if the admin exists
     create: {
       email: adminEmail,
       passwordHash: hashedPassword,
@@ -70,7 +56,29 @@ async function main() {
     },
   });
 
-  console.log('Seeded admin user:', admin.email);
+  console.log('Seeded/verified admin user:', admin.email);
+
+  // 3. Check if we are running against a production/external database to skip mock leads seeding
+  const dbUrl = process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL || '';
+  const isProductionDb = 
+    process.env.NODE_ENV === 'production' ||
+    process.env.PRISMA_MIGRATE_DEPLOY === '1' ||
+    dbUrl.includes('rlwy.net') || 
+    dbUrl.includes('railway.app') || 
+    dbUrl.includes('railway.internal') ||
+    (!dbUrl.includes('localhost') && !dbUrl.includes('127.0.0.1') && !dbUrl.includes('mysql://root:root@'));
+
+  if (isProductionDb) {
+    console.log('⚠️ Skipping mock leads data seeding on production/external database.');
+    return;
+  }
+
+  // Double protection: skip if the database already has leads
+  const existingCount = await prisma.lead.count();
+  if (existingCount > 0) {
+    console.log(`Database already contains ${existingCount} leads. Skipping mock data seeding.`);
+    return;
+  }
 
   // 2. Realistic UAE Leads
   const scrapeRun = await prisma.scrapeRun.create({

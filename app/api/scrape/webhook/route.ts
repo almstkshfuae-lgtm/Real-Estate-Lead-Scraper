@@ -92,8 +92,8 @@ function mergeLeadData(existingLead: any, lead: any, adjustedScore: number, lead
     !l || l.toLowerCase() === "abu dhabi" || l.trim() === "";
 
   const cleanSignals = deduplicateSignals(lead.signals || []);
-  const leadCompany = lead.company || "Not Specified";
-  const leadCompanyAr = lead.companyAr || (lead.company ? null : "غير محدد");
+  const leadCompany = lead.company || "";
+  const leadCompanyAr = lead.companyAr || null;
 
   let mergedSource = existingLead.source;
   if (!mergedSource.includes(leadSource)) {
@@ -504,31 +504,47 @@ export async function POST(request: NextRequest) {
     // Process selector issues if reported
     if (selectorIssues && Array.isArray(selectorIssues) && selectorIssues.length > 0) {
       console.warn(`[Webhook] Selector issues reported for source ${sourceKey}:`, selectorIssues);
+      const payloadLeads = Array.isArray(enrichedLeads) ? enrichedLeads : [];
+      const payloadProjects = Array.isArray(enrichedProjects) ? enrichedProjects : [];
+      const dataExtracted = payloadLeads.length > 0 || payloadProjects.length > 0;
+
       try {
         const sourceObj = await prisma.sourceConfig.findUnique({ where: { key: sourceKey } });
         const sourceName = sourceObj?.name || sourceKey;
 
-        // Update SourceConfig in DB
-        await prisma.sourceConfig.update({
-          where: { key: sourceKey },
-          data: {
-            verificationStatus: "needs_review",
-            interactionsPassed: false,
-            verificationNotes: `Automatic health check failed: ${selectorIssues.join('; ')}`
-          }
-        });
+        if (dataExtracted) {
+          console.info(`[Webhook] Selector issues detected for ${sourceName}, but data was successfully extracted (${payloadLeads.length || payloadProjects.length} items). Keeping verified status.`);
+          await prisma.sourceConfig.update({
+            where: { key: sourceKey },
+            data: {
+              verificationStatus: "verified",
+              interactionsPassed: true,
+              verificationNotes: `Automatic health check warning (some selectors failed, but data extraction succeeded): ${selectorIssues.join('; ')}`
+            }
+          });
+        } else {
+          // Update SourceConfig in DB to needs_review since zero items were extracted
+          await prisma.sourceConfig.update({
+            where: { key: sourceKey },
+            data: {
+              verificationStatus: "needs_review",
+              interactionsPassed: false,
+              verificationNotes: `Automatic health check failed: ${selectorIssues.join('; ')}`
+            }
+          });
 
-        // Create alert notification for developer
-        await prisma.notification.create({
-          data: {
-            agentId: agentId,
-            title: `Scraper Alert: Broken Selectors in ${sourceName}`,
-            body: `The system detected that some selectors for "${sourceName}" are no longer matching the DOM: ${selectorIssues.join(', ')}. Please check and update them in settings.`,
-            type: "warning",
-            data: JSON.stringify({ sourceKey, issues: selectorIssues })
-          }
-        });
-        console.info(`[Webhook] Alert notification created for selector issues in ${sourceName}`);
+          // Create alert notification for developer
+          await prisma.notification.create({
+            data: {
+              agentId: agentId,
+              title: `Scraper Alert: Broken Selectors in ${sourceName}`,
+              body: `The system detected that some selectors for "${sourceName}" are no longer matching the DOM and no data was extracted: ${selectorIssues.join(', ')}. Please check and update them in settings.`,
+              type: "warning",
+              data: JSON.stringify({ sourceKey, issues: selectorIssues })
+            }
+          });
+          console.info(`[Webhook] Alert notification created for selector issues in ${sourceName}`);
+        }
       } catch (err: any) {
         console.error(`[Webhook] Failed to process selector issues for ${sourceKey}:`, err?.message || err);
       }
@@ -724,8 +740,8 @@ export async function POST(request: NextRequest) {
         }
 
         const cleanSignals = deduplicateSignals(lead.signals || []);
-        const leadCompany = lead.company || "Not Specified";
-        const leadCompanyAr = lead.companyAr || (lead.company ? null : "غير محدد");
+        const leadCompany = lead.company || "";
+        const leadCompanyAr = lead.companyAr || null;
 
         // Apply ML score adjustment
         const baseScore = lead.score || 50;
@@ -792,14 +808,14 @@ export async function POST(request: NextRequest) {
                 nameAr: lead.nameAr || null,
                 company: leadCompany,
                 companyAr: leadCompanyAr,
-                role: lead.role || "Professional",
+                role: lead.role || "",
                 roleAr: lead.roleAr || null,
                 source: leadSource,
-                sourceType: lead.sourceType || "Unknown",
+                sourceType: lead.sourceType || "",
                 tier: lead.tier || 2,
                 phone: lead.phone ? cleanPhone(lead.phone) : null,
                 email: lead.email ? cleanEmail(lead.email) : null,
-                location: lead.location || "Abu Dhabi",
+                location: lead.location || "",
                 latitude: lead.latitude ?? null,
                 longitude: lead.longitude ?? null,
                 score: adjustedScore,

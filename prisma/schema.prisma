@@ -121,8 +121,8 @@ model SourceConfig {
 model ScrapeRun {
   id          String    @id @default(cuid())
   triggeredBy String
-  sources     String    @db.Text
-  criteria    String    @db.Text
+  sources     Json
+  criteria    Json
   status      String
   leadsFound  Int       @default(0)
   startedAt   DateTime  @default(now())

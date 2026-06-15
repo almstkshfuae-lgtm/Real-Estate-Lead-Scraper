@@ -200,14 +200,24 @@ export async function callGemini(opts: GeminiCallOptions): Promise<GeminiCallRes
   const inputChars = combinedPrompt.length;
   const isProjectBased = Boolean(config.projectId);
 
+  const hasThinkingConfig = config.model.toLowerCase().startsWith('gemini-2.');
+  const parameters: any = { temperature, maxOutputTokens, topP, topK };
+  if (hasThinkingConfig) {
+    parameters.thinkingConfig = { thinkingBudget: 0 };
+  }
+  const generationConfig: any = { temperature, maxOutputTokens, topP, topK };
+  if (hasThinkingConfig) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
   const body = isProjectBased
     ? {
         instances: [{ content: combinedPrompt }],
-        parameters: { temperature, maxOutputTokens, topP, topK },
+        parameters,
       }
     : {
         contents: [{ parts: [{ text: combinedPrompt }] }],
-        generationConfig: { temperature, maxOutputTokens, topP, topK },
+        generationConfig,
       };
 
   const endpoint = isProjectBased
@@ -276,7 +286,7 @@ export async function callGemini(opts: GeminiCallOptions): Promise<GeminiCallRes
     // Log failed calls too and await to ensure it is written before Vercel terminates the execution context
     await logUsage({
       taskType: opts.taskType,
-      model: config.model,
+      model: config?.model || "unknown",
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       estimatedCostUsd: 0,
       inputChars,

@@ -54,6 +54,36 @@ async function dismissGoogleConsent(page) {
   return false;
 }
 
+export function getRandomDesktopUserAgent() {
+  const chromeMajor = 100 + Math.floor(Math.random() * 30);
+  const chromeBuild = Math.floor(1000 + Math.random() * 9000);
+  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.${chromeBuild}.0 Safari/537.36`;
+}
+
+export function getStealthContextOptions(userAgent, proxyUrl = null) {
+  const match = userAgent.match(/Chrome\/(\d+)\./);
+  const chromeVersion = match ? match[1] : '125';
+  
+  const options = {
+    userAgent,
+    viewport: { width: 1920, height: 1080 },
+    extraHTTPHeaders: {
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+      'Sec-Ch-Ua': `"Not/A)Brand";v="8", "Chromium";v="${chromeVersion}", "Google Chrome";v="${chromeVersion}"`,
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"'
+    }
+  };
+  
+  const proxyOptions = parseProxyUrl(proxyUrl);
+  if (proxyOptions) {
+    options.proxy = proxyOptions;
+  }
+  
+  return options;
+}
+
 // ─── Advanced Stealth Overrides ───────────────────────────────────────────────
 // Applied to every new page context to defeat Cloudflare/Turnstile bot detection.
 // Covers: webdriver flag, chrome runtime object, permissions API, plugins,
@@ -367,44 +397,52 @@ function getPlaywrightProxyOptions(proxyUrl) {
   return parseProxyUrl(proxyUrl);
 }
 
-/**
- * Creates a browser context and page with top-tier stealth overrides and HTTP headers.
- */
 async function createStealthContextAndPage(browser, proxyUrl = null) {
-  const proxyOptions = getPlaywrightProxyOptions(proxyUrl);
-  const contextOptions = {
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 800 },
-    extraHTTPHeaders: {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-      'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-User': '?1',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Ch-Ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
-      'Sec-Ch-Ua-Mobile': '?0',
-      'Sec-Ch-Ua-Platform': '"Windows"'
-    }
-  };
-  if (proxyOptions) {
-    contextOptions.proxy = proxyOptions;
-  }
+  const userAgent = getRandomDesktopUserAgent();
+  const contextOptions = getStealthContextOptions(userAgent, proxyUrl);
+  
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
   
   // Apply stealth overrides
   await applyStealthOverrides(page);
 
-  // Block heavy assets to prevent timeouts
+  // Set up request interceptor to override request headers on every outgoing HTTP request
+  // to guarantee consistency with the randomly generated user agent and client hints.
   await page.route('**/*', (route) => {
-    const type = route.request().resourceType();
-    const blockedTypes = ['image', 'font', 'media'];
-    if (blockedTypes.includes(type)) {
-      route.abort();
-    } else {
-      route.continue();
+    try {
+      const originalHeaders = route.request().headers();
+      const headers = {};
+      
+      // Filter out HTTP/2 pseudo-headers (keys starting with ':')
+      for (const [key, value] of Object.entries(originalHeaders)) {
+        if (!key.startsWith(':') && value !== undefined && value !== null) {
+          headers[key] = String(value);
+        }
+      }
+
+      // Enforce the user-agent
+      headers['user-agent'] = userAgent;
+      headers['User-Agent'] = userAgent;
+
+      // Extract client hints safely
+      const secChUa = contextOptions.extraHTTPHeaders?.['Sec-Ch-Ua'];
+      const secChUaMobile = contextOptions.extraHTTPHeaders?.['Sec-Ch-Ua-Mobile'];
+      const secChUaPlatform = contextOptions.extraHTTPHeaders?.['Sec-Ch-Ua-Platform'];
+
+      if (secChUa) headers['sec-ch-ua'] = secChUa;
+      if (secChUaMobile) headers['sec-ch-ua-mobile'] = secChUaMobile;
+      if (secChUaPlatform) headers['sec-ch-ua-platform'] = secChUaPlatform;
+
+      // Remove Upgrade-Insecure-Requests for sub-resources (like fonts, scripts) to prevent CORS preflight blocking
+      const resourceType = route.request().resourceType();
+      if (resourceType !== 'document' && headers['upgrade-insecure-requests']) {
+        delete headers['upgrade-insecure-requests'];
+      }
+
+      route.continue({ headers }).catch(() => {});
+    } catch (e) {
+      route.continue().catch(() => {});
     }
   });
 

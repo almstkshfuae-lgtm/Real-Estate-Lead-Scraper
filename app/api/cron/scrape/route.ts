@@ -6,33 +6,13 @@ import { put } from "@vercel/blob";
 import { getSessionWithDBVerify, isAdmin } from "@/lib/auth";
 import { notifyScrapeRunUpdate } from "@/lib/scrape-events";
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  let isAuthorized = false;
-  
-  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
-    isAuthorized = true;
-  } else {
-    try {
-      const session = await getSessionWithDBVerify();
-      if (session && isAdmin(session.role)) {
-        isAuthorized = true;
-      }
-    } catch (e) {
-      // Ignore
-    }
-  }
-
-  if (!isAuthorized) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
+async function runScraper(request: Request, triggeredBy: string) {
   try {
     const scrapeRun = await prisma.scrapeRun.create({
       data: {
-        triggeredBy: "cron",
-        sources: JSON.stringify(["InternalScraper", "Decoupled Registries"]),
-        criteria: JSON.stringify({ type: "daily_sync" }),
+        triggeredBy,
+        sources: ["InternalScraper", "Decoupled Registries"],
+        criteria: { type: "daily_sync" },
         status: "PENDING",
       }
     });
@@ -105,4 +85,40 @@ export async function GET(request: Request) {
     console.error("Cron scrape error:", errorMsg);
     return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  const authHeader = request.headers.get('authorization');
+  
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new NextResponse('Method Not Allowed: Please trigger scrape runs via POST request.', { status: 405 });
+  }
+
+  return runScraper(request, "cron");
+}
+
+export async function POST(request: Request) {
+  const authHeader = request.headers.get('authorization');
+  let isAuthorized = false;
+  let triggeredBy = "cron";
+  
+  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+    isAuthorized = true;
+  } else {
+    try {
+      const session = await getSessionWithDBVerify();
+      if (session && isAdmin(session.role)) {
+        isAuthorized = true;
+        triggeredBy = session.id;
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  if (!isAuthorized) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
+  return runScraper(request, triggeredBy);
 }

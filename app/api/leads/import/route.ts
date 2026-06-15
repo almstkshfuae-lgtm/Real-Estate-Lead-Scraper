@@ -344,8 +344,8 @@ export async function POST(request: Request) {
         importRun = await prisma.scrapeRun.create({
           data: {
             triggeredBy: session.id,
-            sources: JSON.stringify(["CSV"]),
-            criteria: JSON.stringify({ type: "manual_import" }),
+            sources: ["CSV"],
+            criteria: { type: "manual_import" },
             status: "MANUAL_IMPORT",
           },
         });
@@ -370,9 +370,9 @@ export async function POST(request: Request) {
         const name = (row.name || "").trim() || "Unknown Contact";
         const email = cleanEmail(row.email || "");
         const phone = cleanPhone(row.phone || "");
-        const company = (row.company || "").trim() || "Manual Entry";
-        const role = (row.role || "").trim() || "Imported Lead";
-        const locationRaw = (row.location || "").trim() || "Abu Dhabi";
+        const company = (row.company || "").trim();
+        const role = (row.role || "").trim();
+        const locationRaw = (row.location || "").trim();
         const location = normalizeLocation(locationRaw);
         const coords = resolveCoords(location);
 
@@ -380,7 +380,7 @@ export async function POST(request: Request) {
           name !== "Unknown Contact" ||
           email !== null ||
           phone !== null ||
-          company !== "Manual Entry";
+          company !== "";
 
         if (!hasIdentity) {
           skippedCount++;
@@ -492,11 +492,11 @@ export async function POST(request: Request) {
 
       const existingByName = searchNames.length > 0
         ? await prisma.lead.findMany({
-            where: {
-              name: { in: searchNames },
-              ...(!isAdmin ? { agentId: session.id, source: "Manual Import" } : {})
-            }
-          })
+          where: {
+            name: { in: searchNames },
+            ...(!isAdmin ? { agentId: session.id, source: "Manual Import" } : {})
+          }
+        })
         : [];
 
       const uniqueMap = new Map();
@@ -507,11 +507,11 @@ export async function POST(request: Request) {
 
       const existingByEmailList = searchEmails.length > 0
         ? await prisma.lead.findMany({
-            where: {
-              email: { in: searchEmails },
-              ...(!isAdmin ? { agentId: session.id } : {})
-            }
-          })
+          where: {
+            email: { in: searchEmails },
+            ...(!isAdmin ? { agentId: session.id } : {})
+          }
+        })
         : [];
 
       const emailMap = new Map();
@@ -603,7 +603,7 @@ export async function POST(request: Request) {
                 deletedAt: null // Restore if soft deleted
               },
               auditAction: wasDeleted ? "MERGE" : "UPDATE",
-              auditDetails: wasDeleted 
+              auditDetails: wasDeleted
                 ? `Restored and merged soft-deleted lead via CSV import`
                 : `Updated lead details via CSV import`
             });
@@ -731,7 +731,7 @@ export async function POST(request: Request) {
             skipDuplicates: true
           });
           savedCount += createResult.count;
-          
+
           // Calculate if any were skipped due to P2002 duplicates caught by skipDuplicates
           const skippedCreationsCount = leadsToCreate.length - createResult.count;
           if (skippedCreationsCount > 0) {

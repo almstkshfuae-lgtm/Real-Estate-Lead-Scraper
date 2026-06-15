@@ -7,6 +7,12 @@ const mockPrisma = {
       console.log(`[MockPrisma] Notification created: "${data.title}" for agent ${data.agentId}`);
       return { id: 'mock-notif-id' };
     }
+  },
+  scrapeRun: {
+    findUnique: async ({ where }) => {
+      console.log(`[MockPrisma] findUnique called for run ${where.id}`);
+      return { id: where.id, status: 'PENDING' };
+    }
   }
 };
 
@@ -16,6 +22,7 @@ const SECRET = 'mock-secret';
 async function testSequential() {
   console.log('\n--- Test 1: Sequential Execution ---');
   const qm = new ScrapeQueueManager(mockPrisma, SECRET);
+  qm.MAX_CONCURRENT_SCRAPES = 1;
   
   const order = [];
   
@@ -40,8 +47,8 @@ async function testSequential() {
     order.push(`finish-${job.runId}`);
   };
 
-  qm.enqueueJob(job1, executeJob);
-  qm.enqueueJob(job2, executeJob);
+  await qm.enqueueJob(job1, executeJob);
+  await qm.enqueueJob(job2, executeJob);
 
   // Wait for both to complete
   await new Promise(r => setTimeout(r, 1500));
@@ -88,8 +95,8 @@ async function testWatchdogTimeout() {
     order.push(`finish-${job.runId}`);
   };
 
-  qm.enqueueJob(job1, executeJob);
-  qm.enqueueJob(job2, executeJob);
+  await qm.enqueueJob(job1, executeJob);
+  await qm.enqueueJob(job2, executeJob);
 
   // Wait for execution
   await new Promise(r => setTimeout(r, 2500));
@@ -142,8 +149,8 @@ async function testDbCancellation() {
     order.push(`finish-${job.runId}`);
   };
 
-  qm.enqueueJob(job1, executeJob);
-  qm.enqueueJob(job2, executeJob);
+  await qm.enqueueJob(job1, executeJob);
+  await qm.enqueueJob(job2, executeJob);
 
   // Trigger DB cancellation after 300ms
   setTimeout(() => {

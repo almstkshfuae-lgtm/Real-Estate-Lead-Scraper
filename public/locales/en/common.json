@@ -102,6 +102,20 @@
         "defaultTitle": "Follow-up Meeting",
         "success": "Follow-up scheduled in Bitrix24",
         "scheduleBtn": "Schedule in Bitrix24"
+      },
+      "webEnrichment": {
+        "title": "AI Online Research Profile",
+        "linkedin": "LinkedIn Profile",
+        "news": "Recent Press & News",
+        "investments": "Known Investments & Interests",
+        "summary": "Online Profile Summary",
+        "confidence": "Search Confidence",
+        "enrichedAt": "Last Researched",
+        "levels": {
+          "high": "High",
+          "medium": "Medium",
+          "low": "Low"
+        }
       }
     },
     "importCsv": "Import CSV",

@@ -47,8 +47,8 @@ export async function POST(request: NextRequest) {
     const scrapeRun = await prisma.scrapeRun.create({
       data: {
         triggeredBy: session.id,
-        sources: JSON.stringify(requestedSources),
-        criteria: JSON.stringify(finalCriteria),
+        sources: requestedSources,
+        criteria: finalCriteria,
         status: "PENDING",
       }
     });

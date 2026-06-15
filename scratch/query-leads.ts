@@ -1,15 +1,31 @@
-import prisma from '../lib/prisma.ts';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 async function main() {
-  const leads = await prisma.lead.findMany({
-    take: 20,
-    orderBy: { createdAt: 'desc' }
+  const countManualEntry = await prisma.lead.count({
+    where: {
+      OR: [
+        { company: "Manual Entry" },
+        { role: "Imported Lead" }
+      ]
+    }
   });
-  console.log(JSON.stringify(leads, null, 2));
-  await prisma.$disconnect();
+
+  const sample = await prisma.lead.findMany({
+    where: {
+      OR: [
+        { company: "Manual Entry" },
+        { role: "Imported Lead" }
+      ]
+    },
+    take: 5
+  });
+
+  console.log(`Leads with "Manual Entry" company or "Imported Lead" role: ${countManualEntry}`);
+  console.log("Sample leads:", JSON.stringify(sample, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());

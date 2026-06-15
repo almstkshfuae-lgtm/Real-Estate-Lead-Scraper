@@ -661,17 +661,98 @@ export default function LeadSidebar({ lead: initialLead, userRole, onClose, onUp
                   </div>
                 )}
 
+                {/* AI Web Search Enrichment Profile */}
+                {lead.metadata && typeof lead.metadata === 'object' && (lead.metadata as any).webEnrichment && (
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">
+                      {t("leads.sidebar.webEnrichment.title", "AI Online Research Profile")}
+                    </h3>
+                    <div className="p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/30 dark:bg-blue-950/10 text-start space-y-3">
+                      
+                      {/* Search Grounding Confidence Header */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">
+                          {t("leads.sidebar.webEnrichment.confidence", "Search Confidence")}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                          (lead.metadata as any).webEnrichment.searchConfidence === 'high' 
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                            : (lead.metadata as any).webEnrichment.searchConfidence === 'medium'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                        }`}>
+                          {String(t(`leads.sidebar.webEnrichment.levels.${(lead.metadata as any).webEnrichment.searchConfidence}`, (lead.metadata as any).webEnrichment.searchConfidence))}
+                        </span>
+                      </div>
+
+                      {/* Online Profile Summary */}
+                      {(lead.metadata as any).webEnrichment.onlineSummary && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider block">
+                            {t("leads.sidebar.webEnrichment.summary", "Online Profile Summary")}
+                          </span>
+                          <p className="text-xs text-[var(--color-text-primary)] leading-relaxed italic">
+                            &ldquo;{(lead.metadata as any).webEnrichment.onlineSummary}&rdquo;
+                          </p>
+                        </div>
+                      )}
+
+                      {/* LinkedIn URL Link */}
+                      {(lead.metadata as any).webEnrichment.linkedinUrl && (
+                        <div className="pt-1">
+                          <a
+                            href={(lead.metadata as any).webEnrichment.linkedinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0077B5] hover:bg-[#006295] text-white text-xs font-bold transition-all shadow-sm"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            {t("leads.sidebar.webEnrichment.linkedin", "LinkedIn Profile")}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* news/press activity */}
+                      {(lead.metadata as any).webEnrichment.recentNews && (
+                        <div className="space-y-1 pt-1 border-t border-[var(--color-border)]/50">
+                          <span className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider block">
+                            {t("leads.sidebar.webEnrichment.news", "Recent Press & News")}
+                          </span>
+                          <p className="text-xs text-[var(--color-text-primary)] leading-relaxed">
+                            {(lead.metadata as any).webEnrichment.recentNews}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* investment activity */}
+                      {(lead.metadata as any).webEnrichment.investmentActivity && (
+                        <div className="space-y-1 pt-1 border-t border-[var(--color-border)]/50">
+                          <span className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider block">
+                            {t("leads.sidebar.webEnrichment.investments", "Known Investments & Interests")}
+                          </span>
+                          <p className="text-xs text-[var(--color-text-primary)] leading-relaxed">
+                            {(lead.metadata as any).webEnrichment.investmentActivity}
+                          </p>
+                        </div>
+                      )}
+
+                    </div>
+                  </div>
+                )}
+
                 {/* Metadata (Unstructured CSV extra data) */}
-                {lead.metadata && typeof lead.metadata === 'object' && Object.keys(lead.metadata as Record<string, any>).length > 0 && (
+                {lead.metadata && typeof lead.metadata === 'object' && Object.keys(lead.metadata as Record<string, any>).filter(k => k !== 'webEnrichment').length > 0 && (
                   <div className="space-y-3">
                     <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-disabled)] text-start">{t("leads.sidebar.additionalData", "Additional Data")}</h3>
                     <div className="p-4 rounded-2xl bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-start space-y-2">
-                      {Object.entries(lead.metadata as Record<string, any>).map(([key, val]) => (
-                        <div key={key} className="flex justify-between text-xs border-b border-[var(--color-border)]/50 pb-1.5 last:border-0 last:pb-0">
-                          <span className="font-bold text-[var(--color-text-secondary)]">{key}:</span>
-                          <span className="text-[var(--color-text-primary)] truncate max-w-[200px]" title={String(val)}>{String(val)}</span>
-                        </div>
-                      ))}
+                      {Object.entries(lead.metadata as Record<string, any>)
+                        .filter(([key]) => key !== 'webEnrichment')
+                        .map(([key, val]) => (
+                          <div key={key} className="flex justify-between text-xs border-b border-[var(--color-border)]/50 pb-1.5 last:border-0 last:pb-0">
+                            <span className="font-bold text-[var(--color-text-secondary)]">{key}:</span>
+                            <span className="text-[var(--color-text-primary)] truncate max-w-[200px]" title={String(val)}>{String(val)}</span>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 )}
